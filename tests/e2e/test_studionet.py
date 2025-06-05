@@ -1,13 +1,14 @@
 from genlayer_py import create_client, create_account
 from genlayer_py.chains import studionet
 from genlayer_py.types import TransactionStatus
+from genlayer_py.assertions import tx_execution_succeeded
 
 
 def test_storage_interaction():
     account = create_account()
     client = create_client(chain=studionet, account=account)
 
-    with open("storage.py", "r") as f:
+    with open("contracts/storage.py", "r") as f:
         code = f.read()
 
     initial_storage = "initial storage"
@@ -17,7 +18,7 @@ def test_storage_interaction():
     deploy_receipt = client.wait_for_transaction_receipt(
         transaction_hash=deploy_tx_hash, status=TransactionStatus.FINALIZED
     )
-
+    assert tx_execution_succeeded(deploy_receipt)
     contract_address = deploy_receipt["data"]["contract_address"]
 
     storage = client.read_contract(
@@ -37,6 +38,7 @@ def test_storage_interaction():
     write_receipt = client.wait_for_transaction_receipt(
         transaction_hash=write_tx_hash, status=TransactionStatus.FINALIZED
     )
+    assert tx_execution_succeeded(write_receipt)
 
     storage = client.read_contract(
         address=contract_address,

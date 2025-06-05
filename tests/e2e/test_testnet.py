@@ -1,15 +1,20 @@
 from genlayer_py import create_client, create_account
 from genlayer_py.chains import testnet_asimov
 from genlayer_py.types import TransactionStatus
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+account_private_key = os.getenv("ACCOUNT_PRIVATE_KEY")
 
 
 def test_storage_interaction():
-    account = create_account(
-        account_private_key=""  # Add a private key with a funded account
-    )
+    account = create_account(account_private_key=account_private_key)
     client = create_client(chain=testnet_asimov, account=account)
 
-    with open("storage.py", "r") as f:
+    with open("contracts/storage.py", "r") as f:
         code = f.read()
 
     initial_storage = "initial storage"
@@ -19,7 +24,6 @@ def test_storage_interaction():
     deploy_receipt = client.wait_for_transaction_receipt(
         transaction_hash=deploy_tx_hash, status=TransactionStatus.FINALIZED, retries=40
     )
-
     # Different than localnet
     contract_address = deploy_receipt["tx_data_decoded"]["contract_address"]
 

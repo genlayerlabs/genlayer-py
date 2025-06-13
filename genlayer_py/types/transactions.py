@@ -411,35 +411,48 @@ class GenLayerRawTransaction:
                         "status": RESULT_CODES.get(result_kind, "<unknown>"),
                     },
                     "eq_outputs": self._decode_eq_outputs(rlp_decoded_array[1]),
-                    "pending_transactions": self._decode_pending_transactions(execution_result[1]),
+                    "pending_transactions": self._decode_pending_transactions(
+                        execution_result[1]
+                    ),
                     "pending_eth_transactions": execution_result[2],
                     "storage_proof": Web3.to_hex(execution_result[3]),
                 }
             ]
 
         except Exception as e:
-            print(
-                "[decode_leader_result] Error decoding RLP:",
+            logging.warning(
+                "[decode_leader_result] Error decoding RLP: %s Raw RLP App Data: %s",
                 str(e),
-                "Raw RLP App Data:",
                 self.tx_receipt,
             )
-        return None
+            return None
 
-    def _decode_pending_transactions(self, pending_transactions: List[bytes]) -> List[Dict[str, Any]]:
+    def _decode_pending_transactions(
+        self, pending_transactions: List[bytes]
+    ) -> List[Dict[str, Any]]:
         decoded_pending_transactions = []
         for pending_transaction in pending_transactions:
-            decoded_pending_transactions.append({
-                "account": pending_transaction[0],
-                "calldata": calldata.to_str(calldata.decode(pending_transaction[1])),
-                "value": int.from_bytes(pending_transaction[2], byteorder="big"),
-                "on": "accepted" if int.from_bytes(pending_transaction[3], byteorder="big") == 0 else "finalized",
-                "code": Web3.to_hex(pending_transaction[4]),
-                "salt_nonce": int.from_bytes(pending_transaction[5], byteorder="big"),
-            })
+            decoded_pending_transactions.append(
+                {
+                    "account": pending_transaction[0],
+                    "calldata": calldata.to_str(
+                        calldata.decode(pending_transaction[1])
+                    ),
+                    "value": int.from_bytes(pending_transaction[2], byteorder="big"),
+                    "on": (
+                        "accepted"
+                        if int.from_bytes(pending_transaction[3], byteorder="big") == 0
+                        else "finalized"
+                    ),
+                    "code": Web3.to_hex(pending_transaction[4]),
+                    "salt_nonce": int.from_bytes(
+                        pending_transaction[5], byteorder="big"
+                    ),
+                }
+            )
         return decoded_pending_transactions
 
-    def _decode_eq_outputs(self, eq_outputs: List[bytes]) -> List[Dict[str, Any]]:
+    def _decode_eq_outputs(self, eq_outputs: List[bytes]) -> Dict[int, str]:
         decoded_eq_outputs = {}
         for eq_output in eq_outputs:
             key = int.from_bytes(eq_output[0], byteorder="big")

@@ -18,8 +18,7 @@ def initialize_consensus_smart_contract(
     if not force_reset and self.chain.consensus_main_contract is not None:
         return
 
-    response = self.provider.make_request(
+    result = self.provider.make_request(
         method="sim_getConsensusContract", params=["ConsensusMain"]
-    )
-    result = response["result"]
+    )["result"]
     self.chain.consensus_main_contract = result

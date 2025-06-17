@@ -1,11 +1,13 @@
 import logging
 import rlp
+import base64
 from genlayer_py.abi import calldata
 from enum import Enum
 from typing import Dict, Optional, Any, TypedDict, List, Tuple, Literal, Union
 from eth_typing import Address, HexStr
 from web3 import Web3
 from dataclasses import dataclass
+from genlayer_py.utils.jsonifier import RESULT_CODES
 
 
 class TransactionStatus(str, Enum):
@@ -363,6 +365,9 @@ class GenLayerRawTransaction:
             "result": str(self.result),
             "tx_data": self.tx_data,
             "tx_receipt": self.tx_receipt,
+            "consensus_data": {
+                "leader_receipt": self._decode_leader_receipt(),
+            },
             "messages": self.messages,
             "queue_type": str(self.queue_type),
             "queue_position": str(self.queue_position),
@@ -376,7 +381,83 @@ class GenLayerRawTransaction:
             "tx_data_decoded": self._decode_input_data(),
             "status_name": TRANSACTION_STATUS_NUMBER_TO_NAME[str(self.status)].value,
             "result_name": TRANSACTION_RESULT_NUMBER_TO_NAME[str(self.result)].value,
+            "triggered_transactions": [],
         }
+
+    def _decode_leader_receipt(self) -> Dict[str, Any]:
+        if not self.tx_receipt or self.tx_receipt == "0x" or len(self.tx_receipt) <= 2:
+            return None
+        try:
+            rlp_bytes = Web3.to_bytes(hexstr=self.tx_receipt)
+            rlp_decoded_array = rlp.decode(rlp_bytes, strict=False)
+            if len(rlp_decoded_array) != 2:
+                raise Exception(
+                    f"[decode_leader_receipt] Unexpected number of elements in RLP data: Got {len(rlp_decoded_array)}, expected 2"
+                )
+            execution_result = rlp_decoded_array[0]
+            if len(execution_result) != 4:
+                raise Exception(
+                    f"[decode_leader_receipt] Unexpected number of elements in Execution Result data: Got {len(execution_result)}, expected 4"
+                )
+            if len(execution_result[0]) != 2:
+                raise Exception(
+                    f"[decode_leader_receipt] Unexpected number of elements in Execution Result [0] data: Got {len(execution_result[0])}, expected 2"
+                )
+            result_kind = int.from_bytes(execution_result[0][0], byteorder="big")
+            return [
+                {
+                    "execution_result": "SUCCESS" if result_kind == 0 else "ERROR",
+                    "result": {
+                        "status": RESULT_CODES.get(result_kind, "<unknown>"),
+                    },
+                    "eq_outputs": self._decode_eq_outputs(rlp_decoded_array[1]),
+                    "pending_transactions": self._decode_pending_transactions(
+                        execution_result[1]
+                    ),
+                    "pending_eth_transactions": execution_result[2],
+                    "storage_proof": Web3.to_hex(execution_result[3]),
+                }
+            ]
+
+        except Exception as e:
+            logging.warning(
+                "[decode_leader_result] Error decoding RLP: %s Raw RLP App Data: %s",
+                str(e),
+                self.tx_receipt,
+            )
+            return None
+
+    def _decode_pending_transactions(
+        self, pending_transactions: List[bytes]
+    ) -> List[Dict[str, Any]]:
+        decoded_pending_transactions = []
+        for pending_transaction in pending_transactions:
+            decoded_pending_transactions.append(
+                {
+                    "account": pending_transaction[0],
+                    "calldata": calldata.to_str(
+                        calldata.decode(pending_transaction[1])
+                    ),
+                    "value": int.from_bytes(pending_transaction[2], byteorder="big"),
+                    "on": (
+                        "accepted"
+                        if int.from_bytes(pending_transaction[3], byteorder="big") == 0
+                        else "finalized"
+                    ),
+                    "code": Web3.to_hex(pending_transaction[4]),
+                    "salt_nonce": int.from_bytes(
+                        pending_transaction[5], byteorder="big"
+                    ),
+                }
+            )
+        return decoded_pending_transactions
+
+    def _decode_eq_outputs(self, eq_outputs: List[bytes]) -> Dict[int, str]:
+        decoded_eq_outputs = {}
+        for eq_output in eq_outputs:
+            key = int.from_bytes(eq_output[0], byteorder="big")
+            decoded_eq_outputs[key] = base64.b64encode(eq_output[1][1]).decode("utf-8")
+        return decoded_eq_outputs
 
     def _decode_input_data(self) -> Union[DecodedDeployData, DecodedCallData, None]:
         if not self.tx_data or self.tx_data == "0x" or len(self.tx_data) <= 2:

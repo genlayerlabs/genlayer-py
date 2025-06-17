@@ -89,11 +89,10 @@ def read_contract(
         "data": serialized_data,
         "transaction_hash_variant": transaction_hash_variant.value,
     }
-    response = self.provider.make_request(
+    enc_result = self.provider.make_request(
         method="gen_call",
         params=[request_params],
-    )
-    enc_result = response["result"]
+    )["result"]
     prefixed_result = "0x" + enc_result
     if raw_return:
         return prefixed_result
@@ -267,14 +266,9 @@ def _prepare_transaction(
         **fee_data,
         "chainId": self.chain.id,
     }
-    estimated_gas_response = self.provider.make_request(
+    transaction["gas"] = self.provider.make_request(
         "eth_estimateGas", params=[transaction]
-    )
-    if estimated_gas_response.get("error") is not None:
-        raise GenLayerError(
-            f"Error eth_estimateGas endpoint: {estimated_gas_response['error']['message']}"
-        )
-    transaction["gas"] = estimated_gas_response["result"]
+    )["result"]
     return transaction
 
 
@@ -303,7 +297,6 @@ def _send_transaction(
     )
     signed_transaction = sender_account.sign_transaction(transaction)
     serialized_transaction = self.w3.to_hex(signed_transaction.raw_transaction)
-
     tx_hash = self.provider.make_request(
         method="eth_sendRawTransaction", params=[serialized_transaction]
     )["result"]

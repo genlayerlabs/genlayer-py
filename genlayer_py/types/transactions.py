@@ -381,6 +381,7 @@ class GenLayerRawTransaction:
             "tx_data_decoded": self._decode_input_data(),
             "status_name": TRANSACTION_STATUS_NUMBER_TO_NAME[str(self.status)].value,
             "result_name": TRANSACTION_RESULT_NUMBER_TO_NAME[str(self.result)].value,
+            "triggered_transactions": [],
         }
 
     def _decode_leader_receipt(self) -> Dict[str, Any]:

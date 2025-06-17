@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v0.5.0 (2025-06-17)
+
+### Features
+
+- **testnet**: Decode leader receipt
+  ([`deff097`](https://github.com/genlayerlabs/genlayer-py/commit/deff09794ede3449aabe0d41d17007b66fed189b))
+
+- **testnet**: Decode triggered transactions
+  ([`5d74293`](https://github.com/genlayerlabs/genlayer-py/commit/5d742932b418c6b025d84329be99fc5550acfc4b))
+
+### Refactoring
+
+- Raise error on genlayer provider and simplify logic
+  ([`d86cb7c`](https://github.com/genlayerlabs/genlayer-py/commit/d86cb7cd227ee0411d55c2602b07bc8fb847d592))
+
+
 ## v0.4.1 (2025-06-17)
 
 ### Bug Fixes

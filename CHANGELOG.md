@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.4.1 (2025-06-17)
+
+### Bug Fixes
+
+- Update testnet chain data
+  ([`e852c94`](https://github.com/genlayerlabs/genlayer-py/commit/e852c941dfbdbabe36700f607bee267a778f6630))
+
+
 ## v0.4.0 (2025-06-10)
 
 ### Chores

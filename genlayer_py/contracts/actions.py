@@ -15,24 +15,10 @@ from genlayer_py.abi.transactions import serialize
 from genlayer_py.chains import localnet
 from web3.constants import ADDRESS_ZERO
 from web3.logs import DISCARD
+from genlayer_py.contracts.utils import make_calldata_object
 
 if TYPE_CHECKING:
     from genlayer_py.client import GenLayerClient
-
-
-def make_calldata_object(
-    method: Optional[str] = None,
-    args: Optional[List[CalldataEncodable]] = None,
-    kwargs: Optional[Dict[str, CalldataEncodable]] = None,
-) -> CalldataEncodable:
-    ret: Dict[str, CalldataEncodable] = {}
-    if method is not None:
-        ret["method"] = method
-    if args is not None and len(args) > 0:
-        ret["args"] = args
-    if kwargs is not None and isinstance(kwargs, dict) and kwargs:
-        ret["kwargs"] = kwargs
-    return ret
 
 
 def get_contract_schema(

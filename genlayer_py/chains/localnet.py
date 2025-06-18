@@ -1,5 +1,5 @@
 from genlayer_py.types import GenLayerChain, NativeCurrency
-from .abi import CONSENSUS_MAIN_ABI, CONSENSUS_DATA_ABI
+from genlayer_py.consensus.abi import CONSENSUS_MAIN_ABI, CONSENSUS_DATA_ABI
 
 SIMULATOR_JSON_RPC_URL = "http://127.0.0.1:4000/api"
 

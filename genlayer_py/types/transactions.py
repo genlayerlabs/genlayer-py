@@ -8,6 +8,7 @@ from eth_typing import Address, HexStr
 from web3 import Web3
 from dataclasses import dataclass
 from genlayer_py.utils.jsonifier import RESULT_CODES
+from genlayer_py.consensus.consensus_main import decode_tx_data
 
 
 class TransactionStatus(str, Enum):
@@ -464,43 +465,23 @@ class GenLayerRawTransaction:
             return None
 
         try:
-            rlp_bytes = Web3.to_bytes(hexstr=self.tx_data)
-            rlp_decoded_array = rlp.decode(rlp_bytes)
-            if len(rlp_decoded_array) == 3:
-                code = Web3.to_hex(rlp_decoded_array[0])
-                constructor_args = rlp_decoded_array[1]
-                if rlp_decoded_array[1] and rlp_decoded_array[2] != "0x":
-                    constructor_args = calldata.decode(rlp_decoded_array[1])
-                else:
-                    constructor_args = None
-                leader_only = rlp_decoded_array[2] == b"\x01"
+            decoded_data = decode_tx_data(self.tx_data)
+            if decoded_data is None:
+                return None
+            if decoded_data["type"] == "deploy":
                 return {
-                    "code": code,
-                    "constructor_args": constructor_args,
-                    "leader_only": leader_only,
+                    "code": decoded_data["code"],
+                    "constructor_args": decoded_data["constructor_args"],
+                    "leader_only": decoded_data["leader_only"],
                     "type": "deploy",
                     "contract_address": self.recipient,
                 }
-            elif len(rlp_decoded_array) == 2:
-                if rlp_decoded_array[0] and rlp_decoded_array[0] != "0x":
-                    call_data = calldata.decode(rlp_decoded_array[0])
-                else:
-                    call_data = None
-                leader_only = rlp_decoded_array[1] == b"\x01"
-
+            if decoded_data["type"] == "call":
                 return {
-                    "call_data": call_data,
-                    "leader_only": leader_only,
+                    "call_data": decoded_data["call_data"],
+                    "leader_only": decoded_data["leader_only"],
                     "type": "call",
                 }
-
-            else:
-                logging.warning(
-                    "[decode_input_data] Unexpected RLP array length: %s %s",
-                    len(rlp_decoded_array),
-                    rlp_decoded_array,
-                )
-                return None
         except Exception as e:
             logging.warning(
                 "[decode_input_data] Error decoding RLP: %s Raw RLP App Data: %s",

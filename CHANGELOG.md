@@ -2,6 +2,32 @@
 
 <!-- version list -->
 
+## v0.6.0 (2025-06-26)
+
+### Bug Fixes
+
+- Improve reliability
+  ([`3206154`](https://github.com/genlayerlabs/genlayer-py/commit/32061544214ac3f9af59720dd4197adcc06ce8aa))
+
+### Features
+
+- Implement consensus module
+  ([`9cfa9db`](https://github.com/genlayerlabs/genlayer-py/commit/9cfa9dba22d5d2a8615c7caa57ce89f55676413e))
+
+### Refactoring
+
+- Move files to consensus and utils
+  ([`12e7caf`](https://github.com/genlayerlabs/genlayer-py/commit/12e7caf953c0868e2a3c59fa733cb8963182cc18))
+
+- Use decoding functions
+  ([`feb7a51`](https://github.com/genlayerlabs/genlayer-py/commit/feb7a51a01b8e8c2130d60ce562af8eb456acdcd))
+
+### Testing
+
+- Organize and test consensus main functions
+  ([`4fff277`](https://github.com/genlayerlabs/genlayer-py/commit/4fff277c427d676ebabf926de5a6500aa8abe692))
+
+
 ## v0.5.0 (2025-06-17)
 
 ### Features

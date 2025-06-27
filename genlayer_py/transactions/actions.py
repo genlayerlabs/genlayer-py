@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import json
 from typing import List
 from web3.types import _Hash32
 from eth_typing import HexStr
@@ -42,6 +43,7 @@ def wait_for_transaction_receipt(
         if transaction is None:
             raise GenLayerError(f"Transaction {transaction_hash} not found")
         transaction_status = str(transaction["status"])
+        last_status = TRANSACTION_STATUS_NUMBER_TO_NAME[transaction_status]
         finalized_status = TRANSACTION_STATUS_NAME_TO_NUMBER[
             TransactionStatus.FINALIZED
         ]
@@ -55,7 +57,12 @@ def wait_for_transaction_receipt(
         time.sleep(interval / 1000)
         attempts += 1
     raise GenLayerError(
-        f"Transaction {transaction_hash} not finalized after {retries} retries"
+        f"Transaction {transaction_hash} did not reach desired status '{status.value}' after {retries} attempts "
+        f"(polling every {interval}ms for a total of {retries * interval / 1000:.1f}s). "
+        f"Last observed status: '{last_status.value}'. "
+        f"This may indicate the transaction is still processing, or the network is experiencing delays. "
+        f"Consider increasing 'retries' or 'interval' parameters.\n"
+        f"Transaction object: {json.dumps(transaction, indent=2, default=str)}"
     )
 
 

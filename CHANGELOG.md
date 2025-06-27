@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.6.1 (2025-06-27)
+
+### Bug Fixes
+
+- Improve error message
+  ([`9a0bd96`](https://github.com/genlayerlabs/genlayer-py/commit/9a0bd96eec879b7461e57aa1214cca3437287500))
+
+
 ## v0.6.0 (2025-06-26)
 
 ### Bug Fixes

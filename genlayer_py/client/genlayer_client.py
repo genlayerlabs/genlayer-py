@@ -12,6 +12,7 @@ from genlayer_py.types import (
     GenLayerTransaction,
     ContractSchema,
     TransactionHashVariant,
+    SimConfig,
 )
 from genlayer_py.provider import GenLayerProvider
 from typing import Optional, Union, List, Dict
@@ -23,6 +24,7 @@ from genlayer_py.contracts.actions import (
     appeal_transaction,
     get_contract_schema,
     get_contract_schema_for_code,
+    simulate_write_contract,
 )
 from genlayer_py.chains.actions import initialize_consensus_smart_contract
 from genlayer_py.transactions.actions import (
@@ -111,6 +113,27 @@ class GenLayerClient(Eth):
             leader_only=leader_only,
             args=args,
             kwargs=kwargs,
+        )
+
+    def simulate_write_contract(
+        self,
+        address: Union[Address, ChecksumAddress],
+        function_name: str,
+        account: Optional[LocalAccount] = None,
+        args: Optional[List[CalldataEncodable]] = None,
+        kwargs: Optional[Dict[str, CalldataEncodable]] = None,
+        sim_config: Optional[SimConfig] = None,
+        transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_FINAL,
+    ):
+        return simulate_write_contract(
+            self=self,
+            address=address,
+            function_name=function_name,
+            args=args,
+            kwargs=kwargs,
+            account=account,
+            sim_config=sim_config,
+            transaction_hash_variant=transaction_hash_variant,
         )
 
     def deploy_contract(

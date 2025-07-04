@@ -8,6 +8,7 @@ from genlayer_py.types import (
     CalldataEncodable,
     ContractSchema,
     TransactionHashVariant,
+    SimConfig,
 )
 from genlayer_py.exceptions import GenLayerError
 from genlayer_py.abi import calldata
@@ -170,6 +171,44 @@ def appeal_transaction(
         sender_account=sender_account,
         value=value,
     )
+
+
+def simulate_write_contract(
+    self: GenLayerClient,
+    address: Union[Address, ChecksumAddress],
+    function_name: str,
+    account: Optional[LocalAccount] = None,
+    args: Optional[List[CalldataEncodable]] = None,
+    kwargs: Optional[Dict[str, CalldataEncodable]] = None,
+    sim_config: Optional[SimConfig] = None,
+    transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_FINAL,
+) -> CalldataEncodable:
+    if self.chain.id != localnet.id:
+        raise GenLayerError("Client is not connected to the localnet")
+    if account is None and self.local_account is None:
+        raise GenLayerError("No account provided and no account is connected")
+    sender_address = self.local_account.address if account is None else account.address
+    data = [
+        calldata.encode(
+            make_calldata_object(method=function_name, args=args, kwargs=kwargs)
+        ),
+        b"\x00",
+    ]
+    serialized_data = serialize(data)
+    request_params = {
+        "type": "write",
+        "to": address,
+        "from": sender_address,
+        "data": serialized_data,
+        "transaction_hash_variant": transaction_hash_variant.value,
+    }
+    if sim_config is not None:
+        request_params["sim_config"] = sim_config
+    receipt = self.provider.make_request(
+        method="sim_call",
+        params=[request_params],
+    )["result"]
+    return receipt
 
 
 def _encode_submit_appeal_data(

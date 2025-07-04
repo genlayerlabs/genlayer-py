@@ -14,3 +14,11 @@ class ContractMethod:
 class ContractSchema(TypedDict):
     ctor: ContractMethodBase
     methods: Dict[str, ContractMethod]
+
+
+class SimConfig(TypedDict):
+    provider: str
+    model: str
+    config: Dict[str, Any]
+    plugin: str
+    plugin_config: Dict[str, Any]

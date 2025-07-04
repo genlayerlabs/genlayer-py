@@ -12,4 +12,4 @@ from .transactions import (
     VOTE_TYPE_NUMBER_TO_NAME,
 )
 from .chain import Chain, NativeCurrency, ContractInfo, GenLayerChain
-from .contracts import ContractSchema
+from .contracts import ContractSchema, SimConfig

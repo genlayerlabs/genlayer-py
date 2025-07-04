@@ -184,7 +184,7 @@ def simulate_write_contract(
     transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_FINAL,
 ) -> CalldataEncodable:
     if self.chain.id != localnet.id:
-        raise GenLayerError("Client is not connected to the localhost")
+        raise GenLayerError("Client is not connected to the localnet")
     if account is None and self.local_account is None:
         raise GenLayerError("No account provided and no account is connected")
     sender_address = self.local_account.address if account is None else account.address

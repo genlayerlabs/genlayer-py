@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v0.7.0 (2025-07-04)
+
+### Bug Fixes
+
+- Typo
+  ([`037f4b1`](https://github.com/genlayerlabs/genlayer-py/commit/037f4b113de2cc1b485a469568724f5f8c1620ae))
+
+### Features
+
+- Add simulate write contract action
+  ([`0c0503f`](https://github.com/genlayerlabs/genlayer-py/commit/0c0503f7031a51631825e8f748606a955b32e5b5))
+
+### Testing
+
+- Merge and add e2e tests by contract
+  ([`b15be35`](https://github.com/genlayerlabs/genlayer-py/commit/b15be35c5c9162266f1a42ac1ab0d51adc351ce9))
+
+
 ## v0.6.1 (2025-06-27)
 
 ### Bug Fixes

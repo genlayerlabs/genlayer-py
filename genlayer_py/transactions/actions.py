@@ -17,7 +17,6 @@ from genlayer_py.exceptions import GenLayerError
 from typing import TYPE_CHECKING
 from genlayer_py.types import GenLayerTransaction, GenLayerRawTransaction
 import time
-import base64
 from genlayer_py.chains import localnet
 from genlayer_py.utils.jsonifier import (
     calldata_to_user_friendly_json,
@@ -177,11 +176,8 @@ def _decode_localnet_transaction(tx: GenLayerTransaction) -> GenLayerTransaction
                     decoded_outputs = {}
                     for key, value in receipt["eq_outputs"].items():
                         try:
-                            decoded_value = base64.b64decode(value).decode("utf-8")
-                            decoded_outputs[key] = result_to_user_friendly_json(
-                                decoded_value
-                            )
-                        except (ValueError, UnicodeDecodeError) as e:
+                            decoded_outputs[key] = result_to_user_friendly_json(value)
+                        except Exception as e:
                             logging.warning(f"Error decoding eq_output {key}: {str(e)}")
                             decoded_outputs[key] = value
                     receipt["eq_outputs"] = decoded_outputs

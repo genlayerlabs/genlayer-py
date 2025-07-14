@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.7.1 (2025-07-14)
+
+### Bug Fixes
+
+- Error decoding eq output
+  ([`0258e7b`](https://github.com/genlayerlabs/genlayer-py/commit/0258e7b566023e845a58b782746278d5fabfbaad))
+
+
 ## v0.7.0 (2025-07-04)
 
 ### Bug Fixes

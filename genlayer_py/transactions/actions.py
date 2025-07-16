@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import logging
+from genlayer_py.logging import logger
 import json
 from typing import List
 from web3.types import _Hash32
@@ -178,7 +178,7 @@ def _decode_localnet_transaction(tx: GenLayerTransaction) -> GenLayerTransaction
                         try:
                             decoded_outputs[key] = result_to_user_friendly_json(value)
                         except Exception as e:
-                            logging.warning(f"Error decoding eq_output {key}: {str(e)}")
+                            logger.warning(f"Error decoding eq_output {key}: {str(e)}")
                             decoded_outputs[key] = value
                     receipt["eq_outputs"] = decoded_outputs
 
@@ -189,5 +189,5 @@ def _decode_localnet_transaction(tx: GenLayerTransaction) -> GenLayerTransaction
             }
 
     except Exception as e:
-        logging.warning(f"Error decoding transaction: {str(e)}")
+        logger.warning(f"Error decoding transaction: {str(e)}")
     return tx

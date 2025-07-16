@@ -1,4 +1,4 @@
-import logging
+from genlayer_py.logging import logger
 import rlp
 from web3 import Web3
 from eth_abi import decode as abi_decode
@@ -36,14 +36,14 @@ def decode_tx_data(encoded_data_bytes: bytes):
             return decode_tx_data_deploy(encoded_data_bytes)
         if len(deserialized_data) == 2:
             return decode_tx_data_call(encoded_data_bytes)
-        logging.warning(
+        logger.warning(
             "[decode_tx_data] Unexpected RLP array length: %s Raw RLP App Data: %s",
             len(deserialized_data),
             Web3.to_hex(encoded_data_bytes),
         )
         return None
     except Exception as e:
-        logging.warning(
+        logger.warning(
             "[decode_tx_data] Error decoding RLP: %s Raw RLP App Data: %s",
             e,
             Web3.to_hex(encoded_data_bytes),
@@ -54,7 +54,7 @@ def decode_tx_data(encoded_data_bytes: bytes):
 def decode_tx_data_call(encoded_data_bytes: bytes):
     deserialized_data = rlp.decode(encoded_data_bytes)
     if len(deserialized_data) != 2:
-        logging.warning(
+        logger.warning(
             "[decode_tx_data_call] Unexpected RLP array length: %s Raw RLP App Data: %s",
             len(deserialized_data),
             Web3.to_hex(encoded_data_bytes),
@@ -72,7 +72,7 @@ def decode_tx_data_call(encoded_data_bytes: bytes):
 def decode_tx_data_deploy(encoded_data_bytes: bytes):
     deserialized_data = rlp.decode(encoded_data_bytes)
     if len(deserialized_data) != 3:
-        logging.warning(
+        logger.warning(
             "[decode_tx_data_deploy] Unexpected RLP array length: %s Raw RLP App Data: %s",
             len(deserialized_data),
             Web3.to_hex(encoded_data_bytes),

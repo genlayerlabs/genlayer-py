@@ -1,4 +1,4 @@
-import logging
+from genlayer_py.logging import logger
 import rlp
 import base64
 from genlayer_py.abi import calldata
@@ -421,7 +421,7 @@ class GenLayerRawTransaction:
             ]
 
         except Exception as e:
-            logging.warning(
+            logger.warning(
                 "[decode_leader_result] Error decoding RLP: %s Raw RLP App Data: %s",
                 str(e),
                 self.tx_receipt,
@@ -483,7 +483,7 @@ class GenLayerRawTransaction:
                     "type": "call",
                 }
         except Exception as e:
-            logging.warning(
+            logger.warning(
                 "[decode_input_data] Error decoding RLP: %s Raw RLP App Data: %s",
                 e,
                 self.tx_data,

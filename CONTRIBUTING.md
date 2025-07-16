@@ -150,6 +150,54 @@ The project uses automated semantic versioning based on commit messages:
 
 **Important**: Never manually edit version numbers in `pyproject.toml` or other files. The release automation will handle all version updates automatically when PRs are merged to the main branch.
 
+## Logging Configuration
+
+The GenLayerPY SDK uses a dedicated logger (`"genlayer_py"`) that is disabled by default to prevent unwanted log output when used as a dependency in other projects.
+
+### For SDK Users
+
+#### Enable Logs for Development in Your Application
+```python
+import logging
+
+# Enable debug logging with console output
+logger = logging.getLogger("genlayer_py")
+logger.disabled = False
+logger.setLevel(logging.DEBUG) # setup the logging level
+
+# Add console handler to see output
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(logging.Formatter('%(name)s - %(levelname)s - %(message)s'))
+logger.addHandler(console_handler)
+```
+
+
+### For SDK Developers
+
+When developing the SDK, you can enable logging by modifying `genlayer_py/logging.py`:
+
+```python
+# For development, change the setup_logger function:
+def setup_logger() -> logging.Logger:
+    logger = logging.getLogger("genlayer_py")
+    
+    # Enable logging for development
+    logger.setLevel(logging.DEBUG)
+    logger.disabled = False
+    
+    # Add console handler for development
+    if not logger.handlers:
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(
+            logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+        )
+        logger.addHandler(console_handler)
+    
+    return logger
+```
+
+**Note**: Remember to revert logging changes before submitting PRs to maintain the default silent behavior.
+
 ### Improving Documentation
 
 To contribute to our docs, visit our [Documentation Repository](https://github.com/yeagerai/genlayer-docs) to create new issues or contribute to existing issues.

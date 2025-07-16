@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.7.2 (2025-07-16)
+
+### Bug Fixes
+
+- Disable log messages by default
+  ([`711b1e2`](https://github.com/genlayerlabs/genlayer-py/commit/711b1e23c3a8400d8761305401256ba95e1abb71))
+
+### Documentation
+
+- **CONTRIBUTING**: Added log configuration
+  ([`d2ca2c5`](https://github.com/genlayerlabs/genlayer-py/commit/d2ca2c56ccdb614e1454d713fb768fa13889752b))
+
+
 ## v0.7.1 (2025-07-14)
 
 ### Bug Fixes

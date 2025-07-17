@@ -28,17 +28,30 @@ jobs:
       commit_sha: ${{ steps.get-commit.outputs.commit_sha }}
 
     steps:
+      - name: Setup | Get CI Bot Token
+        uses: tibdex/github-app-token@v1
+        id: ci_bot_token
+        with:
+          app_id: ${{ secrets.CI_BOT_APP_ID }}
+          private_key: ${{ secrets.CI_BOT_SECRET }}
+
       - name: Setup | Checkout Repository
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
+          token: ${{ steps.ci_bot_token.outputs.token }}
 
       - name: Check | Verify Upstream Unchanged
         shell: bash
         run: |
           chmod +x scripts/verify-upstream.sh
           ./scripts/verify-upstream.sh ${{ github.sha }}
+
+      - name: Setup | Initialize Git User
+        run: |
+          git config --global user.email "github-actions[bot]@genlayerlabs.com"
+          git config --global user.name "github-actions[bot]"
 
       - name: Setup | Install Python
         uses: actions/setup-python@v5
@@ -53,7 +66,7 @@ jobs:
       - name: Action | Semantic Version Release
         id: release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.ci_bot_token.outputs.token }}
         run: |
           chmod +x scripts/semantic-version-release.sh
           ./scripts/semantic-version-release.sh releaserc.toml

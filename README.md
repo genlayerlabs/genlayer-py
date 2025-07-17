@@ -94,7 +94,7 @@ _* under development_
 
 ## 📖 Documentation
 
-For detailed information on how to use GenLayerPY SDK, please refer to our [documentation](https://docs.genlayer.com/).
+For detailed information on how to use GenLayerPY SDK, please refer to our [documentation](https://docs.genlayer.com/api-references/genlayer-py).
 
 
 ## Contributing

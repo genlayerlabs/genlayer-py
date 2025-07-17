@@ -57,7 +57,7 @@ def read_contract(
     kwargs: Optional[Dict[str, CalldataEncodable]] = None,
     account: Optional[LocalAccount] = None,
     raw_return: bool = False,
-    transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_FINAL,
+    transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_NONFINAL,
 ) -> CalldataEncodable:
     if account is None and self.local_account is None:
         raise GenLayerError("No account provided and no account is connected")
@@ -181,7 +181,7 @@ def simulate_write_contract(
     args: Optional[List[CalldataEncodable]] = None,
     kwargs: Optional[Dict[str, CalldataEncodable]] = None,
     sim_config: Optional[SimConfig] = None,
-    transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_FINAL,
+    transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_NONFINAL,
 ) -> CalldataEncodable:
     if self.chain.id != localnet.id:
         raise GenLayerError("Client is not connected to the localnet")

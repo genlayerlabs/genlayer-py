@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v0.7.3 (2025-07-21)
+
+### Bug Fixes
+
+- Default transaction hash variant ([#47](https://github.com/genlayerlabs/genlayer-py/pull/47),
+  [`d73f1bd`](https://github.com/genlayerlabs/genlayer-py/commit/d73f1bd1b6c62e1f635cc08ef9d70ae941b0e5fd))
+
+### Chores
+
+- Add ci bot to bypass branch protection
+  ([`a112f41`](https://github.com/genlayerlabs/genlayer-py/commit/a112f412e81599dab236f34e8adad202fa344e8a))
+
+### Documentation
+
+- Update readme docs link ([#46](https://github.com/genlayerlabs/genlayer-py/pull/46),
+  [`0d4c7a0`](https://github.com/genlayerlabs/genlayer-py/commit/0d4c7a065181f2057451a64b7ac27f3348feae23))
+
+
 ## v0.7.2 (2025-07-16)
 
 ### Bug Fixes

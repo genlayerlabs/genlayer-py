@@ -79,7 +79,7 @@ class GenLayerClient(Eth):
         kwargs: Optional[Dict[str, CalldataEncodable]] = None,
         account: Optional[LocalAccount] = None,
         raw_return: bool = False,
-        transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_FINAL,
+        transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_NONFINAL,
     ):
         return read_contract(
             self=self,
@@ -123,7 +123,7 @@ class GenLayerClient(Eth):
         args: Optional[List[CalldataEncodable]] = None,
         kwargs: Optional[Dict[str, CalldataEncodable]] = None,
         sim_config: Optional[SimConfig] = None,
-        transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_FINAL,
+        transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_NONFINAL,
     ):
         return simulate_write_contract(
             self=self,

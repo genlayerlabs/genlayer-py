@@ -40,6 +40,29 @@ transaction = client.get_transaction(hash=transaction_hash)
 
 ```
 
+### Waiting for Transaction Receipt
+```python
+from genlayer_py import create_client
+from genlayer_py.chains import localnet
+from genlayer_py.types import TransactionStatus
+
+client = create_client(chain=localnet)
+
+# Get simplified receipt (default - removes binary data, keeps execution results)
+receipt = client.wait_for_transaction_receipt(
+    transaction_hash="0x...",
+    status=TransactionStatus.FINALIZED,
+    full_transaction=False  # Default - simplified for readability
+)
+
+# Get complete receipt with all fields
+full_receipt = client.wait_for_transaction_receipt(
+    transaction_hash="0x...",
+    status=TransactionStatus.FINALIZED,
+    full_transaction=True  # Complete receipt with all internal data
+)
+```
+
 ### Reading a contract
 ```python
 from genlayer_py import create_client
@@ -78,7 +101,8 @@ transaction_hash = client.write_contract(
 )
 receipt = client.wait_for_transaction_receipt(
     hash=transaction_hash,
-    status=TransactionStatus.FINALIZED // or ACCEPTED
+    status=TransactionStatus.FINALIZED, // or ACCEPTED
+    full_transaction=False  // False by default - returns simplified receipt for better readability
 )
 ```
 

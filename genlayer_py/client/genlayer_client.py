@@ -180,6 +180,7 @@ class GenLayerClient(Eth):
         status: TransactionStatus = TransactionStatus.ACCEPTED,
         interval: int = transaction_config.wait_interval,
         retries: int = transaction_config.retries,
+        full_transaction: bool = False,
     ) -> GenLayerTransaction:
         return wait_for_transaction_receipt(
             self=self,
@@ -187,6 +188,7 @@ class GenLayerClient(Eth):
             status=status,
             interval=interval,
             retries=retries,
+            full_transaction=full_transaction,
         )
 
     def get_transaction(

@@ -2,6 +2,29 @@
 
 <!-- version list -->
 
+## v0.8.0 (2025-07-23)
+
+### Documentation
+
+- Full transaction param
+  ([`b55f45c`](https://github.com/genlayerlabs/genlayer-py/commit/b55f45c33e428cfa1615e1e0ba8626edca8f738d))
+
+### Features
+
+- Add full transaction param
+  ([`0640683`](https://github.com/genlayerlabs/genlayer-py/commit/06406838fc93fa006a44e021d2fa405430dfc4b2))
+
+### Refactoring
+
+- Improve maintainability
+  ([`a095976`](https://github.com/genlayerlabs/genlayer-py/commit/a0959766e714eb057450f6ac69cd346d0be317d6))
+
+### Testing
+
+- Wait for transaction receipt with real sample data
+  ([`ec63e77`](https://github.com/genlayerlabs/genlayer-py/commit/ec63e77245fb2a12d992b0af7e26136a4bc4d8f2))
+
+
 ## v0.7.3 (2025-07-21)
 
 ### Bug Fixes

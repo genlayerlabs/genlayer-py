@@ -24,6 +24,42 @@ from genlayer_py.utils.jsonifier import (
     b64_to_array,
 )
 
+# Fields to remove from simplified transaction receipts
+FIELDS_TO_REMOVE = {
+    "raw",
+    "contract_state",
+    "base64",
+    "consensus_history",
+    "tx_data",
+    "eq_blocks_outputs",
+    "r",
+    "s",
+    "v",
+    "created_timestamp",
+    "current_timestamp",
+    "tx_execution_hash",
+    "random_seed",
+    "states",
+    "contract_code",
+    "appeal_failed",
+    "appeal_leader_timeout",
+    "appeal_processing_time",
+    "appeal_undetermined",
+    "appealed",
+    "timestamp_appeal",
+    "config_rotation_rounds",
+    "rotation_count",
+    "queue_position",
+    "queue_type",
+    "leader_timeout_validators",
+    "triggered_by",
+    "num_of_initial_validators",
+    "timestamp_awaiting_finalization",
+    "last_vote_timestamp",
+    "read_state_block_range",
+    "tx_slot",
+}
+
 if TYPE_CHECKING:
     from genlayer_py.client import GenLayerClient
 
@@ -169,42 +205,7 @@ def _simplify_transaction_receipt(tx: GenLayerTransaction) -> GenLayerTransactio
                 current_path = f"{path}.{key}" if path else key
 
                 # Always remove these fields
-                if key in [
-                    "raw",
-                    "contract_state",
-                    "base64",
-                    "consensus_history",
-                    "tx_data",
-                    "eq_blocks_outputs",
-                    "r",
-                    "s",
-                    "v",
-                    "created_timestamp",
-                    "current_timestamp",
-                    "tx_execution_hash",
-                    "random_seed",
-                    "states",
-                    "contract_code",
-                    # Remove appeal fields that are usually defaults
-                    "appeal_failed",
-                    "appeal_leader_timeout",
-                    "appeal_processing_time",
-                    "appeal_undetermined",
-                    "appealed",
-                    "timestamp_appeal",
-                    # Remove internal processing fields
-                    "config_rotation_rounds",
-                    "rotation_count",
-                    "queue_position",
-                    "queue_type",
-                    "leader_timeout_validators",
-                    "triggered_by",
-                    "num_of_initial_validators",
-                    "timestamp_awaiting_finalization",
-                    "last_vote_timestamp",
-                    "read_state_block_range",
-                    "tx_slot",
-                ]:
+                if key in FIELDS_TO_REMOVE:
                     continue
 
                 # Remove node_config only from top level (keep it in consensus_data)
@@ -244,13 +245,14 @@ def _simplify_transaction_receipt(tx: GenLayerTransaction) -> GenLayerTransactio
                                     "node_config"
                                 ]
                             # Keep readable calldata
-                            if "calldata" in receipt and isinstance(
-                                receipt["calldata"], dict
+                            if (
+                                "calldata" in receipt
+                                and isinstance(receipt["calldata"], dict)
+                                and "readable" in receipt["calldata"]
                             ):
-                                if "readable" in receipt["calldata"]:
-                                    simplified_receipt["calldata"] = {
-                                        "readable": receipt["calldata"]["readable"]
-                                    }
+                                simplified_receipt["calldata"] = {
+                                    "readable": receipt["calldata"]["readable"]
+                                }
                             # Keep readable outputs
                             if "eq_outputs" in receipt:
                                 simplified_receipt["eq_outputs"] = (

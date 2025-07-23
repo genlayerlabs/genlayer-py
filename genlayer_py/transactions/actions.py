@@ -24,6 +24,42 @@ from genlayer_py.utils.jsonifier import (
     b64_to_array,
 )
 
+# Fields to remove from simplified transaction receipts
+FIELDS_TO_REMOVE = {
+    "raw",
+    "contract_state",
+    "base64",
+    "consensus_history",
+    "tx_data",
+    "eq_blocks_outputs",
+    "r",
+    "s",
+    "v",
+    "created_timestamp",
+    "current_timestamp",
+    "tx_execution_hash",
+    "random_seed",
+    "states",
+    "contract_code",
+    "appeal_failed",
+    "appeal_leader_timeout",
+    "appeal_processing_time",
+    "appeal_undetermined",
+    "appealed",
+    "timestamp_appeal",
+    "config_rotation_rounds",
+    "rotation_count",
+    "queue_position",
+    "queue_type",
+    "leader_timeout_validators",
+    "triggered_by",
+    "num_of_initial_validators",
+    "timestamp_awaiting_finalization",
+    "last_vote_timestamp",
+    "read_state_block_range",
+    "tx_slot",
+}
+
 if TYPE_CHECKING:
     from genlayer_py.client import GenLayerClient
 
@@ -34,6 +70,7 @@ def wait_for_transaction_receipt(
     status: TransactionStatus = TransactionStatus.ACCEPTED,
     interval: int = transaction_config.wait_interval,
     retries: int = transaction_config.retries,
+    full_transaction: bool = False,
 ) -> GenLayerTransaction:
 
     attempts = 0
@@ -52,6 +89,8 @@ def wait_for_transaction_receipt(
             status == TransactionStatus.ACCEPTED
             and transaction_status == finalized_status
         ):
+            if not full_transaction:
+                return _simplify_transaction_receipt(transaction)
             return transaction
         time.sleep(interval / 1000)
         attempts += 1
@@ -148,6 +187,128 @@ def _decode_triggered_txs(
         triggered_txs.extend(process_events_for_status(TransactionStatus.FINALIZED))
 
     return triggered_txs
+
+
+def _simplify_transaction_receipt(tx: GenLayerTransaction) -> GenLayerTransaction:
+    """
+    Simplify transaction receipt by removing non-essential fields while preserving functionality.
+
+    Removes: Binary data, internal timestamps, appeal fields, processing details, historical data
+    Preserves: Transaction IDs, status, execution results, node configs, readable data
+    """
+    simplified_tx = tx.copy()
+
+    def remove_non_readable_fields(obj, path=""):
+        if isinstance(obj, dict):
+            filtered_dict = {}
+            for key, value in obj.items():
+                current_path = f"{path}.{key}" if path else key
+
+                # Always remove these fields
+                if key in FIELDS_TO_REMOVE:
+                    continue
+
+                # Remove node_config only from top level (keep it in consensus_data)
+                if key == "node_config" and "consensus_data" not in path:
+                    continue
+
+                # Special handling for consensus_data - keep execution results and votes
+                if key == "consensus_data" and isinstance(value, dict):
+                    simplified_consensus = {}
+
+                    # Keep votes
+                    if "votes" in value:
+                        simplified_consensus["votes"] = value["votes"]
+
+                    # Process leader_receipt to keep only essential fields
+                    if "leader_receipt" in value and isinstance(
+                        value["leader_receipt"], list
+                    ):
+                        simplified_receipts = []
+                        for receipt in value["leader_receipt"]:
+                            simplified_receipt = {}
+                            # Keep essential execution info
+                            if "execution_result" in receipt:
+                                simplified_receipt["execution_result"] = receipt[
+                                    "execution_result"
+                                ]
+                            if "genvm_result" in receipt:
+                                simplified_receipt["genvm_result"] = receipt[
+                                    "genvm_result"
+                                ]
+                            if "mode" in receipt:
+                                simplified_receipt["mode"] = receipt["mode"]
+                            if "vote" in receipt:
+                                simplified_receipt["vote"] = receipt["vote"]
+                            if "node_config" in receipt:
+                                simplified_receipt["node_config"] = receipt[
+                                    "node_config"
+                                ]
+                            # Keep readable calldata
+                            if (
+                                "calldata" in receipt
+                                and isinstance(receipt["calldata"], dict)
+                                and "readable" in receipt["calldata"]
+                            ):
+                                simplified_receipt["calldata"] = {
+                                    "readable": receipt["calldata"]["readable"]
+                                }
+                            # Keep readable outputs
+                            if "eq_outputs" in receipt:
+                                simplified_receipt["eq_outputs"] = (
+                                    remove_non_readable_fields(
+                                        receipt["eq_outputs"], current_path
+                                    )
+                                )
+                            if "result" in receipt:
+                                simplified_receipt["result"] = (
+                                    remove_non_readable_fields(
+                                        receipt["result"], current_path
+                                    )
+                                )
+                            simplified_receipts.append(simplified_receipt)
+                        simplified_consensus["leader_receipt"] = simplified_receipts
+
+                    # Process validators to keep execution results
+                    if "validators" in value and isinstance(value["validators"], list):
+                        simplified_validators = []
+                        for validator in value["validators"]:
+                            simplified_validator = {}
+                            if "execution_result" in validator:
+                                simplified_validator["execution_result"] = validator[
+                                    "execution_result"
+                                ]
+                            if "genvm_result" in validator:
+                                simplified_validator["genvm_result"] = validator[
+                                    "genvm_result"
+                                ]
+                            if "mode" in validator:
+                                simplified_validator["mode"] = validator["mode"]
+                            if "vote" in validator:
+                                simplified_validator["vote"] = validator["vote"]
+                            if "node_config" in validator:
+                                simplified_validator["node_config"] = validator[
+                                    "node_config"
+                                ]
+                            simplified_validators.append(simplified_validator)
+                        if simplified_validators:
+                            simplified_consensus["validators"] = simplified_validators
+
+                    filtered_dict[key] = simplified_consensus
+                    continue
+                elif isinstance(value, (dict, list)):
+                    result = remove_non_readable_fields(value, current_path)
+                    if result:  # Only include if not empty after filtering
+                        filtered_dict[key] = result
+                else:
+                    filtered_dict[key] = value
+            return filtered_dict
+        elif isinstance(obj, list):
+            return [remove_non_readable_fields(item, path) for item in obj if item]
+        else:
+            return obj
+
+    return remove_non_readable_fields(simplified_tx)
 
 
 def _decode_localnet_transaction(tx: GenLayerTransaction) -> GenLayerTransaction:

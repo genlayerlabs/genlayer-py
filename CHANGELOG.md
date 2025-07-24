@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.8.1 (2025-07-24)
+
+### Bug Fixes
+
+- Return simplified transaction object on error
+  ([#50](https://github.com/genlayerlabs/genlayer-py/pull/50),
+  [`3b8ed07`](https://github.com/genlayerlabs/genlayer-py/commit/3b8ed070c49e511bf062db5d40ea29250413490b))
+
+
 ## v0.8.0 (2025-07-23)
 
 ### Documentation

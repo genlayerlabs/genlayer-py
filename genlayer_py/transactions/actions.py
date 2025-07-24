@@ -100,7 +100,7 @@ def wait_for_transaction_receipt(
         f"Last observed status: '{last_status.value}'. "
         f"This may indicate the transaction is still processing, or the network is experiencing delays. "
         f"Consider increasing 'retries' or 'interval' parameters.\n"
-        f"Transaction object: {json.dumps(transaction, indent=2, default=str)}"
+        f"Transaction object simplified: {json.dumps(_simplify_transaction_receipt(transaction), indent=2, default=str)}"
     )
 
 

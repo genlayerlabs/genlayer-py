@@ -111,7 +111,7 @@ receipt = client.wait_for_transaction_receipt(
 
 * **Client Creation**: Easily create and configure a client to connect to GenLayer’s network.
 * **Transaction Handling**: Send and manage transactions on the GenLayer network.
-* **Gas Estimation***: Estimate gas fees for executing transactions on GenLayer.
+* **Gas Estimation**: Estimate gas fees for executing transactions on GenLayer.
 
 _* under development_
 

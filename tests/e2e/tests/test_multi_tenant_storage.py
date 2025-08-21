@@ -17,12 +17,16 @@ account_private_key_3 = os.getenv("ACCOUNT_PRIVATE_KEY_3")
 
 CONTRACTS_DIR = "tests/e2e/contracts"
 
-def wait_for_triggered_transactions(client: GenLayerClient, tx_receipt: GenLayerTransaction) -> None:
+
+def wait_for_triggered_transactions(
+    client: GenLayerClient, tx_receipt: GenLayerTransaction
+) -> None:
     for triggered_transaction in tx_receipt["triggered_transactions"]:
         client.wait_for_transaction_receipt(
             transaction_hash=triggered_transaction,
             status=TransactionStatus.FINALIZED,
         )
+
 
 @pytest.mark.parametrize(
     "chain_config",
@@ -48,7 +52,9 @@ def wait_for_triggered_transactions(client: GenLayerClient, tx_receipt: GenLayer
         pytest.param(
             {
                 "chain": testnet_asimov,
-                "account_kwargs_deployer": {"account_private_key": account_private_key_3},
+                "account_kwargs_deployer": {
+                    "account_private_key": account_private_key_3
+                },
                 "account_kwargs_1": {"account_private_key": account_private_key_1},
                 "account_kwargs_2": {"account_private_key": account_private_key_2},
                 "contract_address_path": ["tx_data_decoded", "contract_address"],
@@ -83,14 +89,16 @@ def test_multi_tenant_storage(chain_config):
         user_account_a = create_account()
         user_account_b = create_account()
 
-    deployer_client = create_client(chain=chain_config["chain"], account=deployer_account)
+    deployer_client = create_client(
+        chain=chain_config["chain"], account=deployer_account
+    )
     client_a = create_client(chain=chain_config["chain"], account=user_account_a)
     client_b = create_client(chain=chain_config["chain"], account=user_account_b)
 
     # Load contract codes
     with open(f"{CONTRACTS_DIR}/storage.py", "r") as f:
         storage_code = f.read()
-    
+
     with open(f"{CONTRACTS_DIR}/multi_tenant_storage.py", "r") as f:
         multi_tenant_storage_code = f.read()
 
@@ -107,7 +115,9 @@ def test_multi_tenant_storage(chain_config):
     if chain_config["retries"]:
         first_storage_wait_kwargs["retries"] = chain_config["retries"]
 
-    first_storage_deploy_receipt = deployer_client.wait_for_transaction_receipt(**first_storage_wait_kwargs)
+    first_storage_deploy_receipt = deployer_client.wait_for_transaction_receipt(
+        **first_storage_wait_kwargs
+    )
     assert tx_execution_succeeded(first_storage_deploy_receipt)
 
     # Extract first storage contract address
@@ -128,7 +138,9 @@ def test_multi_tenant_storage(chain_config):
     if chain_config["retries"]:
         second_storage_wait_kwargs["retries"] = chain_config["retries"]
 
-    second_storage_deploy_receipt = deployer_client.wait_for_transaction_receipt(**second_storage_wait_kwargs)
+    second_storage_deploy_receipt = deployer_client.wait_for_transaction_receipt(
+        **second_storage_wait_kwargs
+    )
     assert tx_execution_succeeded(second_storage_deploy_receipt)
 
     # Extract second storage contract address
@@ -138,9 +150,9 @@ def test_multi_tenant_storage(chain_config):
 
     # Deploy Multi Tenant Storage Contract
     multi_tenant_storage_deploy_tx_hash = deployer_client.deploy_contract(
-        code=multi_tenant_storage_code, 
-        account=deployer_account, 
-        args=[[first_storage_contract_address, second_storage_contract_address]]
+        code=multi_tenant_storage_code,
+        account=deployer_account,
+        args=[[first_storage_contract_address, second_storage_contract_address]],
     )
 
     # Wait for multi-tenant storage deployment
@@ -151,13 +163,17 @@ def test_multi_tenant_storage(chain_config):
     if chain_config["retries"]:
         multi_tenant_storage_wait_kwargs["retries"] = chain_config["retries"]
 
-    multi_tenant_storage_deploy_receipt = deployer_client.wait_for_transaction_receipt(**multi_tenant_storage_wait_kwargs)
+    multi_tenant_storage_deploy_receipt = deployer_client.wait_for_transaction_receipt(
+        **multi_tenant_storage_wait_kwargs
+    )
     assert tx_execution_succeeded(multi_tenant_storage_deploy_receipt)
 
     # Extract multi-tenant storage contract address
     multi_tenant_storage_contract_address = multi_tenant_storage_deploy_receipt
     for key in chain_config["contract_address_path"]:
-        multi_tenant_storage_contract_address = multi_tenant_storage_contract_address[key]
+        multi_tenant_storage_contract_address = multi_tenant_storage_contract_address[
+            key
+        ]
 
     # Update storage for first user
     update_storage_a_tx_hash = client_a.write_contract(
@@ -174,7 +190,9 @@ def test_multi_tenant_storage(chain_config):
     if chain_config["retries"]:
         update_storage_a_wait_kwargs["retries"] = chain_config["retries"]
 
-    update_storage_a_receipt = client_a.wait_for_transaction_receipt(**update_storage_a_wait_kwargs)
+    update_storage_a_receipt = client_a.wait_for_transaction_receipt(
+        **update_storage_a_wait_kwargs
+    )
     wait_for_triggered_transactions(client_a, update_storage_a_receipt)
 
     assert tx_execution_succeeded(update_storage_a_receipt)
@@ -194,7 +212,9 @@ def test_multi_tenant_storage(chain_config):
     if chain_config["retries"]:
         update_storage_b_wait_kwargs["retries"] = chain_config["retries"]
 
-    update_storage_b_receipt = client_b.wait_for_transaction_receipt(**update_storage_b_wait_kwargs)    
+    update_storage_b_receipt = client_b.wait_for_transaction_receipt(
+        **update_storage_b_wait_kwargs
+    )
     wait_for_triggered_transactions(client_b, update_storage_b_receipt)
 
     assert tx_execution_succeeded(update_storage_b_receipt)

@@ -46,7 +46,7 @@ def wait_for_contract_deployment(client, contract_address, max_retries=10, delay
         ),
         pytest.param(
             {
-                "chain": studionet, 
+                "chain": studionet,
                 "account_kwargs": {},
                 "contract_address_path": ["data", "contract_address"],
             },
@@ -74,7 +74,7 @@ def test_intelligent_oracle_factory_pattern(chain_config):
     # Load contract codes
     with open(f"{CONTRACTS_DIR}/intelligent_oracle.py", "r") as f:
         intelligent_oracle_code = f.read()
-    
+
     with open(f"{CONTRACTS_DIR}/intelligent_oracle_factory.py", "r") as f:
         registry_code = f.read()
 
@@ -90,7 +90,9 @@ def test_intelligent_oracle_factory_pattern(chain_config):
         "retries": 80,
     }
 
-    registry_deploy_receipt = client.wait_for_transaction_receipt(**registry_wait_kwargs)
+    registry_deploy_receipt = client.wait_for_transaction_receipt(
+        **registry_wait_kwargs
+    )
     assert tx_execution_succeeded(registry_deploy_receipt)
 
     # Extract registry contract address

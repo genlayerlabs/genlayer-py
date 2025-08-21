@@ -13,7 +13,7 @@ GenLayerPY SDK is a python library designed for developers building decentralize
 
 Before installing GenLayerPY SDK, ensure you have the following prerequisites installed:
 
-- Python (>=3.8)
+- Python (>=3.12)
 
 
 ## 🛠️ Installation and Usage

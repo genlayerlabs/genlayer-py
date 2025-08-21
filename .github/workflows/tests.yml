@@ -7,17 +7,20 @@ on:
 
 jobs:
   run-unit-tests:
-    name: Run Unit Tests
+    name: Test with Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.12, 3.13]
 
     steps:
       - name: Setup | Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup | Install Python
+      - name: Setup | Install Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
 
       - name: Setup | Install Dependencies
         run: |

@@ -116,7 +116,9 @@ def test_user_storage(chain_config):
     if chain_config["retries"]:
         update_storage_a_wait_kwargs["retries"] = chain_config["retries"]
 
-    update_storage_a_receipt = client_a.wait_for_transaction_receipt(**update_storage_a_wait_kwargs)
+    update_storage_a_receipt = client_a.wait_for_transaction_receipt(
+        **update_storage_a_wait_kwargs
+    )
     assert tx_execution_succeeded(update_storage_a_receipt)
 
     # Get Updated State
@@ -149,7 +151,9 @@ def test_user_storage(chain_config):
     if chain_config["retries"]:
         update_storage_b_wait_kwargs["retries"] = chain_config["retries"]
 
-    update_storage_b_receipt = client_b.wait_for_transaction_receipt(**update_storage_b_wait_kwargs)
+    update_storage_b_receipt = client_b.wait_for_transaction_receipt(
+        **update_storage_b_wait_kwargs
+    )
     assert tx_execution_succeeded(update_storage_b_receipt)
 
     # Get Updated State
@@ -175,7 +179,9 @@ def test_user_storage(chain_config):
     if chain_config["retries"]:
         update_storage_a2_wait_kwargs["retries"] = chain_config["retries"]
 
-    update_storage_a2_receipt = client_a.wait_for_transaction_receipt(**update_storage_a2_wait_kwargs)
+    update_storage_a2_receipt = client_a.wait_for_transaction_receipt(
+        **update_storage_a2_wait_kwargs
+    )
     assert tx_execution_succeeded(update_storage_a2_receipt)
 
     # Get Updated State

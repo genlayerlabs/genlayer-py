@@ -73,14 +73,16 @@ def test_multi_read_erc20(chain_config):
         from_account_shiba = create_account()
 
     client_doge = create_client(chain=chain_config["chain"], account=from_account_doge)
-    client_shiba = create_client(chain=chain_config["chain"], account=from_account_shiba)
+    client_shiba = create_client(
+        chain=chain_config["chain"], account=from_account_shiba
+    )
 
     TOKEN_TOTAL_SUPPLY = 1000
 
     # Load contract codes
     with open(f"{CONTRACTS_DIR}/llm_erc20.py", "r") as f:
         llm_erc20_code = f.read()
-    
+
     with open(f"{CONTRACTS_DIR}/multi_read_erc20.py", "r") as f:
         multi_read_erc20_code = f.read()
 
@@ -118,7 +120,9 @@ def test_multi_read_erc20(chain_config):
     if chain_config["retries"]:
         shiba_wait_kwargs["retries"] = chain_config["retries"]
 
-    shiba_deploy_receipt = client_shiba.wait_for_transaction_receipt(**shiba_wait_kwargs)
+    shiba_deploy_receipt = client_shiba.wait_for_transaction_receipt(
+        **shiba_wait_kwargs
+    )
     assert tx_execution_succeeded(shiba_deploy_receipt)
 
     # Extract shiba contract address
@@ -139,7 +143,9 @@ def test_multi_read_erc20(chain_config):
     if chain_config["retries"]:
         multi_read_wait_kwargs["retries"] = chain_config["retries"]
 
-    multi_read_deploy_receipt = client_doge.wait_for_transaction_receipt(**multi_read_wait_kwargs)
+    multi_read_deploy_receipt = client_doge.wait_for_transaction_receipt(
+        **multi_read_wait_kwargs
+    )
     assert tx_execution_succeeded(multi_read_deploy_receipt)
 
     # Extract multi-read contract address
@@ -151,7 +157,10 @@ def test_multi_read_erc20(chain_config):
     update_balances_doge_tx_hash = client_doge.write_contract(
         address=multi_read_contract_address,
         function_name="update_token_balances",
-        args=[from_account_doge.address, [doge_contract_address, shiba_contract_address]],
+        args=[
+            from_account_doge.address,
+            [doge_contract_address, shiba_contract_address],
+        ],
     )
 
     # Wait for update_token_balances transaction
@@ -162,7 +171,9 @@ def test_multi_read_erc20(chain_config):
     if chain_config["retries"]:
         update_balances_doge_wait_kwargs["retries"] = chain_config["retries"]
 
-    update_balances_doge_receipt = client_doge.wait_for_transaction_receipt(**update_balances_doge_wait_kwargs)
+    update_balances_doge_receipt = client_doge.wait_for_transaction_receipt(
+        **update_balances_doge_wait_kwargs
+    )
     assert tx_execution_succeeded(update_balances_doge_receipt)
 
     # Check balances
@@ -181,7 +192,10 @@ def test_multi_read_erc20(chain_config):
     update_balances_shiba_tx_hash = client_shiba.write_contract(
         address=multi_read_contract_address,
         function_name="update_token_balances",
-        args=[from_account_shiba.address, [doge_contract_address, shiba_contract_address]],
+        args=[
+            from_account_shiba.address,
+            [doge_contract_address, shiba_contract_address],
+        ],
     )
 
     # Wait for update_token_balances transaction
@@ -192,7 +206,9 @@ def test_multi_read_erc20(chain_config):
     if chain_config["retries"]:
         update_balances_shiba_wait_kwargs["retries"] = chain_config["retries"]
 
-    update_balances_shiba_receipt = client_shiba.wait_for_transaction_receipt(**update_balances_shiba_wait_kwargs)
+    update_balances_shiba_receipt = client_shiba.wait_for_transaction_receipt(
+        **update_balances_shiba_wait_kwargs
+    )
     assert tx_execution_succeeded(update_balances_shiba_receipt)
 
     # Check balances

@@ -63,9 +63,7 @@ def test_log_indexer(chain_config):
         code = f.read()
 
     # Deploy Contract
-    deploy_tx_hash = client.deploy_contract(
-        code=code, account=account, args=[]
-    )
+    deploy_tx_hash = client.deploy_contract(code=code, account=account, args=[])
 
     print("deploy_tx_hash", deploy_tx_hash)
     # Wait for transaction with retries if specified
@@ -75,7 +73,7 @@ def test_log_indexer(chain_config):
     }
     if chain_config["retries"]:
         wait_kwargs["retries"] = chain_config["retries"]
-    
+
     deploy_receipt = client.wait_for_transaction_receipt(**wait_kwargs)
     print("deploy_receipt", deploy_receipt)
     # Handle assertion style differences
@@ -90,7 +88,7 @@ def test_log_indexer(chain_config):
     closest_vector_log_0 = client.read_contract(
         address=contract_address,
         function_name="get_closest_vector",
-        args=["I like mango"]
+        args=["I like mango"],
     )
     assert closest_vector_log_0 is None
 
@@ -117,7 +115,7 @@ def test_log_indexer(chain_config):
     closest_vector_log_0 = client.read_contract(
         address=contract_address,
         function_name="get_closest_vector",
-        args=["I like mango"]
+        args=["I like mango"],
     )
     assert float(closest_vector_log_0["similarity"]) > 0.94
     assert float(closest_vector_log_0["similarity"]) < 0.95
@@ -145,7 +143,7 @@ def test_log_indexer(chain_config):
     closest_vector_log_1 = client.read_contract(
         address=contract_address,
         function_name="get_closest_vector",
-        args=["I like carrots"]
+        args=["I like carrots"],
     )
     assert float(closest_vector_log_1["similarity"]) == 1
 
@@ -164,7 +162,9 @@ def test_log_indexer(chain_config):
     if chain_config["retries"]:
         update_log_0_wait_kwargs["retries"] = chain_config["retries"]
 
-    update_log_0_receipt = client.wait_for_transaction_receipt(**update_log_0_wait_kwargs)
+    update_log_0_receipt = client.wait_for_transaction_receipt(
+        **update_log_0_wait_kwargs
+    )
     print("update_log_0_receipt", update_log_0_receipt)
     assert tx_execution_succeeded(update_log_0_receipt)
 
@@ -172,7 +172,7 @@ def test_log_indexer(chain_config):
     closest_vector_log_0_2 = client.read_contract(
         address=contract_address,
         function_name="get_closest_vector",
-        args=["I like mango a lot"]
+        args=["I like mango a lot"],
     )
     assert float(closest_vector_log_0_2["similarity"]) > 0.94
     assert float(closest_vector_log_0_2["similarity"]) < 0.95
@@ -192,14 +192,16 @@ def test_log_indexer(chain_config):
     if chain_config["retries"]:
         remove_log_0_wait_kwargs["retries"] = chain_config["retries"]
 
-    remove_log_0_receipt = client.wait_for_transaction_receipt(**remove_log_0_wait_kwargs)
+    remove_log_0_receipt = client.wait_for_transaction_receipt(
+        **remove_log_0_wait_kwargs
+    )
     assert tx_execution_succeeded(remove_log_0_receipt)
 
     # Get closest vector to log 0
     closest_vector_log_0_3 = client.read_contract(
         address=contract_address,
         function_name="get_closest_vector",
-        args=["I like to eat mango"]
+        args=["I like to eat mango"],
     )
     assert float(closest_vector_log_0_3["similarity"]) > 0.67
     assert float(closest_vector_log_0_3["similarity"]) < 0.68
@@ -226,7 +228,7 @@ def test_log_indexer(chain_config):
     closest_vector_log_2 = client.read_contract(
         address=contract_address,
         function_name="get_closest_vector",
-        args=["This is the third log"]
+        args=["This is the third log"],
     )
     assert float(closest_vector_log_2["similarity"]) > 0.99
     assert closest_vector_log_2["id"] == 3

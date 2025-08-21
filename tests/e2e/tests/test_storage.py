@@ -109,7 +109,6 @@ def test_storage_interaction(chain_config):
     # Handle assertion style differences
     assert tx_execution_succeeded(write_receipt)
 
-
     storage = client.read_contract(
         address=contract_address,
         function_name="get_storage",

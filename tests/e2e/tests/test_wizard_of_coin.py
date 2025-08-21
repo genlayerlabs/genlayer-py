@@ -60,9 +60,7 @@ def test_wizard_of_coin(chain_config):
         code = f.read()
 
     # Deploy Contract
-    deploy_tx_hash = client.deploy_contract(
-        code=code, account=account, args=[True]
-    )
+    deploy_tx_hash = client.deploy_contract(code=code, account=account, args=[True])
 
     # Wait for transaction with retries if specified
     wait_kwargs = {
@@ -97,5 +95,7 @@ def test_wizard_of_coin(chain_config):
     if chain_config["retries"]:
         ask_for_coin_wait_kwargs["retries"] = chain_config["retries"]
 
-    ask_for_coin_receipt = client.wait_for_transaction_receipt(**ask_for_coin_wait_kwargs)
+    ask_for_coin_receipt = client.wait_for_transaction_receipt(
+        **ask_for_coin_wait_kwargs
+    )
     assert tx_execution_succeeded(ask_for_coin_receipt)

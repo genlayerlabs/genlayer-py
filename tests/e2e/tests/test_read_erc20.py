@@ -70,7 +70,7 @@ def test_read_erc20(chain_config):
     # Load contract codes
     with open(f"{CONTRACTS_DIR}/llm_erc20.py", "r") as f:
         llm_erc20_code = f.read()
-    
+
     with open(f"{CONTRACTS_DIR}/read_erc20.py", "r") as f:
         read_erc20_code = f.read()
 
@@ -87,7 +87,9 @@ def test_read_erc20(chain_config):
     if chain_config["retries"]:
         llm_erc20_wait_kwargs["retries"] = chain_config["retries"]
 
-    llm_erc20_deploy_receipt = client.wait_for_transaction_receipt(**llm_erc20_wait_kwargs)
+    llm_erc20_deploy_receipt = client.wait_for_transaction_receipt(
+        **llm_erc20_wait_kwargs
+    )
     assert tx_execution_succeeded(llm_erc20_deploy_receipt)
 
     # Extract LLM ERC20 contract address
@@ -114,7 +116,9 @@ def test_read_erc20(chain_config):
         if chain_config["retries"]:
             read_erc20_wait_kwargs["retries"] = chain_config["retries"]
 
-        read_erc20_deploy_receipt = client.wait_for_transaction_receipt(**read_erc20_wait_kwargs)
+        read_erc20_deploy_receipt = client.wait_for_transaction_receipt(
+            **read_erc20_wait_kwargs
+        )
         assert tx_execution_succeeded(read_erc20_deploy_receipt)
 
         # Extract read_erc20 contract address

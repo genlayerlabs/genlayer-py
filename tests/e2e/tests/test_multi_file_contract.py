@@ -22,27 +22,27 @@ def compute_multi_file_contract_code(contract_dir_path: Path) -> bytes:
     """Compute the contract code for multi-file contracts by creating a zip file."""
     main_file_path = contract_dir_path / "__init__.py"
     runner_file_path = contract_dir_path / "runner.json"
-    
+
     if not main_file_path.exists():
         raise FileNotFoundError(f"Main contract file not found at: {main_file_path}")
-    
+
     buffer = io.BytesIO()
-    
+
     with zipfile.ZipFile(buffer, mode="w") as zip_file:
         # Add main contract file as contract/__init__.py
         zip_file.write(main_file_path, "contract/__init__.py")
-        
+
         # Add all other files in the directory
         for file_path in contract_dir_path.rglob("*"):
             if file_path.name in ["runner.json", "__init__.py"] or file_path.is_dir():
                 continue
             rel_path = file_path.relative_to(contract_dir_path)
             zip_file.write(file_path, f"contract/{rel_path}")
-        
+
         # Add runner.json if it exists
         if runner_file_path.exists():
             zip_file.write(runner_file_path, "runner.json")
-    
+
     buffer.flush()
     return buffer.getvalue()
 
@@ -79,7 +79,7 @@ def compute_multi_file_contract_code(contract_dir_path: Path) -> bytes:
         ),
     ],
 )
-def test_multi_file_contract(chain_config):    
+def test_multi_file_contract(chain_config):
     # Create account based on chain requirements
     if chain_config["account_kwargs"]:
         account = create_account(**chain_config["account_kwargs"])
@@ -91,8 +91,10 @@ def test_multi_file_contract(chain_config):
     # Load multi-file contract code
     contract_dir_path = Path(CONTRACTS_DIR) / "multi_file_contract"
     if not contract_dir_path.exists():
-        raise FileNotFoundError(f"Multi-file contract directory not found at: {contract_dir_path}")
-    
+        raise FileNotFoundError(
+            f"Multi-file contract directory not found at: {contract_dir_path}"
+        )
+
     contract_code = compute_multi_file_contract_code(contract_dir_path)
 
     # Deploy Contract

@@ -80,6 +80,7 @@ class GenLayerClient(Eth):
         account: Optional[LocalAccount] = None,
         raw_return: bool = False,
         transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_NONFINAL,
+        sim_config: Optional[SimConfig] = None,
     ):
         return read_contract(
             self=self,
@@ -90,6 +91,7 @@ class GenLayerClient(Eth):
             account=account,
             raw_return=raw_return,
             transaction_hash_variant=transaction_hash_variant,
+            sim_config=sim_config,
         )
 
     def write_contract(
@@ -102,6 +104,7 @@ class GenLayerClient(Eth):
         leader_only: bool = False,
         args: Optional[List[CalldataEncodable]] = None,
         kwargs: Optional[Dict[str, CalldataEncodable]] = None,
+        sim_config: Optional[SimConfig] = None,
     ):
         return write_contract(
             self=self,
@@ -113,6 +116,7 @@ class GenLayerClient(Eth):
             leader_only=leader_only,
             args=args,
             kwargs=kwargs,
+            sim_config=sim_config,
         )
 
     def simulate_write_contract(
@@ -144,6 +148,7 @@ class GenLayerClient(Eth):
         kwargs: Optional[Dict[str, CalldataEncodable]] = None,
         consensus_max_rotations: Optional[int] = None,
         leader_only: bool = False,
+        sim_config: Optional[SimConfig] = None,
     ):
         return deploy_contract(
             self=self,
@@ -153,6 +158,7 @@ class GenLayerClient(Eth):
             kwargs=kwargs,
             consensus_max_rotations=consensus_max_rotations,
             leader_only=leader_only,
+            sim_config=sim_config,
         )
 
     def get_contract_schema(

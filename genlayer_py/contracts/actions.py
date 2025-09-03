@@ -58,6 +58,7 @@ def read_contract(
     account: Optional[LocalAccount] = None,
     raw_return: bool = False,
     transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_NONFINAL,
+    sim_config: Optional[SimConfig] = None,
 ) -> CalldataEncodable:
     if account is None and self.local_account is None:
         raise GenLayerError("No account provided and no account is connected")
@@ -76,6 +77,8 @@ def read_contract(
         "data": serialized_data,
         "transaction_hash_variant": transaction_hash_variant.value,
     }
+    if sim_config is not None:
+        request_params["sim_config"] = sim_config
     enc_result = self.provider.make_request(
         method="gen_call",
         params=[request_params],
@@ -97,6 +100,7 @@ def write_contract(
     leader_only: bool = False,
     args: Optional[List[CalldataEncodable]] = None,
     kwargs: Optional[Dict[str, CalldataEncodable]] = None,
+    sim_config: Optional[SimConfig] = None,
 ):
     if consensus_max_rotations is None:
         consensus_max_rotations = self.chain.default_consensus_max_rotations
@@ -120,6 +124,7 @@ def write_contract(
         encoded_data=encoded_data,
         sender_account=sender_account,
         value=value,
+        sim_config=sim_config,
     )
 
 
@@ -131,6 +136,7 @@ def deploy_contract(
     kwargs: Optional[Dict[str, CalldataEncodable]] = None,
     consensus_max_rotations: Optional[int] = None,
     leader_only: bool = False,
+    sim_config: Optional[SimConfig] = None,
 ):
     if consensus_max_rotations is None:
         consensus_max_rotations = self.chain.default_consensus_max_rotations
@@ -153,6 +159,7 @@ def deploy_contract(
         self=self,
         encoded_data=encoded_data,
         sender_account=sender_account,
+        sim_config=sim_config,
     )
 
 
@@ -302,6 +309,7 @@ def _send_transaction(
     encoded_data: HexStr,
     sender_account: Optional[LocalAccount] = None,
     value: int = 0,
+    sim_config: Optional[SimConfig] = None,
 ):
     if sender_account is None:
         raise GenLayerError(
@@ -322,8 +330,11 @@ def _send_transaction(
     )
     signed_transaction = sender_account.sign_transaction(transaction)
     serialized_transaction = self.w3.to_hex(signed_transaction.raw_transaction)
+    params = [serialized_transaction]
+    if sim_config is not None:
+        params.append(sim_config)
     tx_hash = self.provider.make_request(
-        method="eth_sendRawTransaction", params=[serialized_transaction]
+        method="eth_sendRawTransaction", params=params
     )["result"]
     tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
 

@@ -17,6 +17,7 @@ class ContractSchema(TypedDict):
 
 
 class SimValidatorConfig(TypedDict):
+    stake: int
     provider: str
     model: str
     config: Dict[str, Any]

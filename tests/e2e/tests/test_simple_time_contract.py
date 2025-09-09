@@ -77,13 +77,13 @@ def test_simple_time_contract(chain_config):
     # Test 2: Try to activate before start date (simulate going back in time)
     before_start_date = now - timedelta(days=15)  # 5 days before start
     before_start_date_tx_hash = client.write_contract(
-            address=contract_address,
-            function_name="activate",
-            args=[],
-            sim_config={
-                "genvm_datetime": before_start_date.isoformat(),
-            },
-        )
+        address=contract_address,
+        function_name="activate",
+        args=[],
+        sim_config={
+            "genvm_datetime": before_start_date.isoformat(),
+        },
+    )
     before_start_date_receipt = client.wait_for_transaction_receipt(
         transaction_hash=before_start_date_tx_hash,
     )
@@ -156,18 +156,17 @@ def test_simple_time_contract(chain_config):
     # Test 7: Try to set data after 30 days (should fail)
     expired_date = now + timedelta(days=25)  # 35 days after start
     expired_date_tx_hash = client.write_contract(
-            address=contract_address,
-            function_name="set_data",
-            args=["Should fail - expired"],
-            sim_config={
-                "genvm_datetime": expired_date.isoformat(),
-            },
-        )
+        address=contract_address,
+        function_name="set_data",
+        args=["Should fail - expired"],
+        sim_config={
+            "genvm_datetime": expired_date.isoformat(),
+        },
+    )
     expired_date_receipt = client.wait_for_transaction_receipt(
         transaction_hash=expired_date_tx_hash,
     )
     assert tx_execution_failed(expired_date_receipt)
-
 
     # Test 8: Check status shows expired
     status = client.read_contract(

@@ -2,6 +2,43 @@
 
 <!-- version list -->
 
+## v0.9.0 (2025-09-09)
+
+### Bug Fixes
+
+- Add stake param
+  ([`4693045`](https://github.com/genlayerlabs/genlayer-py/commit/4693045c184e1cc13a67aa4b6a1141d88ce52255))
+
+### Chores
+
+- Prevent major version changes
+  ([`06abe8d`](https://github.com/genlayerlabs/genlayer-py/commit/06abe8d007699d7407a7f96dde3dd44037ac5449))
+
+### Documentation
+
+- Apply black and fix README bold formatting
+  ([#52](https://github.com/genlayerlabs/genlayer-py/pull/52),
+  [`05fb54f`](https://github.com/genlayerlabs/genlayer-py/commit/05fb54f2c038e7a3c0829b4c576c40ea06a7a32e))
+
+- Fix bold formatting for Gas Estimation in README
+  ([#52](https://github.com/genlayerlabs/genlayer-py/pull/52),
+  [`05fb54f`](https://github.com/genlayerlabs/genlayer-py/commit/05fb54f2c038e7a3c0829b4c576c40ea06a7a32e))
+
+- Update Python version requirement to >=3.12
+  ([#53](https://github.com/genlayerlabs/genlayer-py/pull/53),
+  [`fc92af2`](https://github.com/genlayerlabs/genlayer-py/commit/fc92af24d106ef94ecdeec357549b2b015912e0e))
+
+### Features
+
+- Integrate sim_config for contract actions
+  ([`437c33e`](https://github.com/genlayerlabs/genlayer-py/commit/437c33e123526721ba6608c23661c23c50c32ae0))
+
+### Testing
+
+- Add custom validators
+  ([`db3a031`](https://github.com/genlayerlabs/genlayer-py/commit/db3a031b9c33b765cad171df45c997ebf918fdb7))
+
+
 ## v0.8.1 (2025-07-24)
 
 ### Bug Fixes

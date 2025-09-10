@@ -25,6 +25,7 @@ classifiers = [
 
 [tool.setuptools.packages.find]
 where = ["."]
+exclude = ["tests*", "scripts*"]
 
 [tool.setuptools.package-data]
 "genlayer_py" = ["consensus/abi/*.json"]

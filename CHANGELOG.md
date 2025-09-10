@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.9.1 (2025-09-10)
+
+### Bug Fixes
+
+- Exclude tests and scripts directories from package build
+  ([`51986f0`](https://github.com/genlayerlabs/genlayer-py/commit/51986f0b45f87bf81546a820c31ac48ace366e6a))
+
+
 ## v0.9.0 (2025-09-09)
 
 ### Bug Fixes

@@ -10,6 +10,8 @@ from .transactions import (
     TRANSACTION_STATUS_NUMBER_TO_NAME,
     VOTE_TYPE_NAME_TO_NUMBER,
     VOTE_TYPE_NUMBER_TO_NAME,
+    DECIDED_STATES,
+    is_decided_state,
 )
 from .chain import Chain, NativeCurrency, ContractInfo, GenLayerChain
 from .contracts import ContractSchema, SimConfig

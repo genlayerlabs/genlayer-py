@@ -12,6 +12,7 @@ from genlayer_py.types import (
     TransactionStatus,
     TRANSACTION_STATUS_NAME_TO_NUMBER,
     TRANSACTION_STATUS_NUMBER_TO_NAME,
+    is_decided_state,
 )
 from genlayer_py.exceptions import GenLayerError
 from typing import TYPE_CHECKING
@@ -87,7 +88,7 @@ def wait_for_transaction_receipt(
 
         if transaction_status == requested_status or (
             status == TransactionStatus.ACCEPTED
-            and transaction_status == finalized_status
+            and is_decided_state(transaction_status)
         ):
             if not full_transaction:
                 return _simplify_transaction_receipt(transaction)

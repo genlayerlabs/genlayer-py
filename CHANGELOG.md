@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v0.9.2 (2025-09-18)
+
+### Bug Fixes
+
+- **transactions**: Handle all DECIDED states in waitForTransactionReceipt
+  ([#56](https://github.com/genlayerlabs/genlayer-py/pull/56),
+  [`ed53509`](https://github.com/genlayerlabs/genlayer-py/commit/ed53509cc09cdb7ed2617732fee10ed1687ae96f))
+
+### Testing
+
+- Add comprehensive tests for DECIDED_STATES functionality
+  ([#56](https://github.com/genlayerlabs/genlayer-py/pull/56),
+  [`ed53509`](https://github.com/genlayerlabs/genlayer-py/commit/ed53509cc09cdb7ed2617732fee10ed1687ae96f))
+
+
 ## v0.9.1 (2025-09-10)
 
 ### Bug Fixes

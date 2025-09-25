@@ -38,7 +38,10 @@ class GenLayerProvider(BaseProvider):
         try:
             resp = response.json()
         except ValueError as err:
-            raise GenLayerError(f"{method} returned invalid JSON: {err}") from err
+            response_preview = response.text[:500] if len(response.text) <= 500 else f"{response.text[:500]}..."
+            raise GenLayerError(
+                f"{method} returned invalid JSON: {err}. Response content: {response_preview}"
+            ) from err
         self._raise_on_error(resp, method)
         return resp
 

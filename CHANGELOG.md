@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.9.3 (2025-09-25)
+
+### Bug Fixes
+
+- Enhance JSON parsing error messages with response content
+  ([#58](https://github.com/genlayerlabs/genlayer-py/pull/58),
+  [`3af48cf`](https://github.com/genlayerlabs/genlayer-py/commit/3af48cf3de27f8a42e19598cecc6f258c9af3399))
+
+
 ## v0.9.2 (2025-09-18)
 
 ### Bug Fixes

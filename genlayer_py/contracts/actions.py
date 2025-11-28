@@ -42,9 +42,14 @@ def get_contract_schema_for_code(
     if self.chain.id != localnet.id:
         raise GenLayerError("Contract schema is not supported on this network")
 
+    try:
+        encoded_contract_code = eth_utils.hexadecimal.encode_hex(contract_code)
+    except:
+        encoded_contract_code = contract_code
+
     response = self.provider.make_request(
         method="gen_getContractSchemaForCode",
-        params=[eth_utils.hexadecimal.encode_hex(contract_code)],
+        params=[encoded_contract_code],
     )
     return response["result"]
 

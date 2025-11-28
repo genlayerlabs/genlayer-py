@@ -68,11 +68,14 @@ DECIDED_STATES = [
     TransactionStatus.LEADER_TIMEOUT,
     TransactionStatus.VALIDATORS_TIMEOUT,
     TransactionStatus.CANCELED,
-    TransactionStatus.FINALIZED
+    TransactionStatus.FINALIZED,
 ]
 
+
 def is_decided_state(status: str) -> bool:
-    return status in [TRANSACTION_STATUS_NAME_TO_NUMBER[state] for state in DECIDED_STATES]
+    return status in [
+        TRANSACTION_STATUS_NAME_TO_NUMBER[state] for state in DECIDED_STATES
+    ]
 
 
 class TransactionResult(str, Enum):

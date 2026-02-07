@@ -2,6 +2,30 @@
 
 <!-- version list -->
 
+## v0.9.4 (2026-02-07)
+
+### Bug Fixes
+
+- Update testnet to phase4 RPC endpoints and contract addresses
+  ([`c66406e`](https://github.com/genlayerlabs/genlayer-py/commit/c66406e5c4525e5f62940acb68cf69e56e61e53d))
+
+### Documentation
+
+- Replace yeagerai references with genlayerlabs
+  ([#61](https://github.com/genlayerlabs/genlayer-py/pull/61),
+  [`5913daa`](https://github.com/genlayerlabs/genlayer-py/commit/5913daa986af558f6feb875e571f756b8be2ca0a))
+
+- Update Discord invite links to current working link
+  ([#61](https://github.com/genlayerlabs/genlayer-py/pull/61),
+  [`5913daa`](https://github.com/genlayerlabs/genlayer-py/commit/5913daa986af558f6feb875e571f756b8be2ca0a))
+
+### Revert
+
+- Keep original Discord link in CONTRIBUTING.md
+  ([#61](https://github.com/genlayerlabs/genlayer-py/pull/61),
+  [`5913daa`](https://github.com/genlayerlabs/genlayer-py/commit/5913daa986af558f6feb875e571f756b8be2ca0a))
+
+
 ## v0.9.3 (2025-09-25)
 
 ### Bug Fixes

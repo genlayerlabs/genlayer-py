@@ -16,6 +16,7 @@ def encode_add_transaction_data(
     num_of_initial_validators: int,
     max_rotations: int,
     tx_data: HexStr,
+    valid_until: int = 0,
 ):
     w3 = Web3()
     consensus_main_contract = w3.eth.contract(abi=CONSENSUS_MAIN_ABI)
@@ -29,6 +30,7 @@ def encode_add_transaction_data(
             num_of_initial_validators,
             max_rotations,
             w3.to_bytes(hexstr=tx_data),
+            valid_until,
         ],
     )
     function_selector = eth_utils.keccak(text=contract_fn.signature)[:4].hex()

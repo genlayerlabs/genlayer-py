@@ -245,6 +245,7 @@ def _encode_add_transaction_data(
     recipient,
     consensus_max_rotations,
     data,
+    valid_until: int = 0,
 ):
     consensus_main_contract = self.w3.eth.contract(
         abi=self.chain.consensus_main_contract["abi"]
@@ -258,6 +259,7 @@ def _encode_add_transaction_data(
             self.chain.default_number_of_initial_validators,
             consensus_max_rotations,
             self.w3.to_bytes(hexstr=data),
+            valid_until,
         ],
     )
     function_selector = eth_utils.keccak(text=contract_fn.signature)[:4].hex()

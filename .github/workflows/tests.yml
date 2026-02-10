@@ -29,4 +29,4 @@ jobs:
           pip install -r requirements.test.txt
 
       - name: Action | Run Unit Tests
-        run: pytest tests/unit --disable-warnings -v
+        run: pytest tests/unit --disable-warnings -v -m "not testnet"

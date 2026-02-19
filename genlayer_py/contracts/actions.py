@@ -104,6 +104,7 @@ def write_contract(
 ):
     if consensus_max_rotations is None:
         consensus_max_rotations = self.chain.default_consensus_max_rotations
+    self.initialize_consensus_smart_contract()
     data = [
         calldata.encode(
             make_calldata_object(method=function_name, args=args, kwargs=kwargs)
@@ -140,6 +141,7 @@ def deploy_contract(
 ):
     if consensus_max_rotations is None:
         consensus_max_rotations = self.chain.default_consensus_max_rotations
+    self.initialize_consensus_smart_contract()
     data = [
         code,
         calldata.encode(make_calldata_object(method=None, args=args, kwargs=kwargs)),
@@ -251,16 +253,20 @@ def _encode_add_transaction_data(
         abi=self.chain.consensus_main_contract["abi"]
     )
     contract_fn = consensus_main_contract.get_function_by_name("addTransaction")
+
+    add_transaction_args = [
+        sender_account.address,
+        recipient,
+        self.chain.default_number_of_initial_validators,
+        consensus_max_rotations,
+        self.w3.to_bytes(hexstr=data),
+    ]
+    if len(contract_fn.argument_types) >= 6:
+        add_transaction_args.append(valid_until)
+
     params = abi_encode(
         contract_fn.argument_types,
-        [
-            sender_account.address,
-            recipient,
-            self.chain.default_number_of_initial_validators,
-            consensus_max_rotations,
-            self.w3.to_bytes(hexstr=data),
-            valid_until,
-        ],
+        add_transaction_args,
     )
     function_selector = eth_utils.keccak(text=contract_fn.signature)[:4].hex()
     encoded_data = "0x" + function_selector + params.hex()

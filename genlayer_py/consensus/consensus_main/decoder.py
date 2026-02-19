@@ -26,6 +26,7 @@ def decode_add_transaction_data(encoded_data):
             "encoded": encoded_tx_data,
             "decoded": decoded_tx_data,
         },
+        "valid_until": abi_decoded[5] if len(abi_decoded) > 5 else None,
     }
 
 

@@ -16,20 +16,25 @@ def encode_add_transaction_data(
     num_of_initial_validators: int,
     max_rotations: int,
     tx_data: HexStr,
+    valid_until: int = 0,
 ):
     w3 = Web3()
     consensus_main_contract = w3.eth.contract(abi=CONSENSUS_MAIN_ABI)
 
     contract_fn = consensus_main_contract.get_function_by_name("addTransaction")
+    add_transaction_args = [
+        sender_address,
+        recipient_address,
+        num_of_initial_validators,
+        max_rotations,
+        w3.to_bytes(hexstr=tx_data),
+    ]
+    if len(contract_fn.argument_types) >= 6:
+        add_transaction_args.append(valid_until)
+
     params = abi_encode(
         contract_fn.argument_types,
-        [
-            sender_address,
-            recipient_address,
-            num_of_initial_validators,
-            max_rotations,
-            w3.to_bytes(hexstr=tx_data),
-        ],
+        add_transaction_args,
     )
     function_selector = eth_utils.keccak(text=contract_fn.signature)[:4].hex()
     encoded_data = "0x" + function_selector + params.hex()

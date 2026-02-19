@@ -1,127 +1,60 @@
 [
   {
-    "inputs": [],
-    "name": "AccessControlBadConfirmation",
-    "type": "error"
-  },
-  {
+    "anonymous": false,
     "inputs": [
       {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      },
-      {
+        "indexed": true,
         "internalType": "bytes32",
-        "name": "neededRole",
+        "name": "txId",
         "type": "bytes32"
-      }
-    ],
-    "name": "AccessControlUnauthorizedAccount",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "CallerNotMessages",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "CanNotAppeal",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "EmptyTransaction",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "FinalizationNotAllowed",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidAddress",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidGhostContract",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidInitialization",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidVote",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "MaxNumOfIterationsInPendingQueueReached",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "numOfMessages",
-        "type": "uint256"
       },
       {
-        "internalType": "uint256",
-        "name": "maxAllocatedMessages",
-        "type": "uint256"
-      }
-    ],
-    "name": "MaxNumOfMessagesExceeded",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "NonGenVMContract",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "NotInitializing",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
+        "indexed": true,
         "internalType": "address",
-        "name": "owner",
+        "name": "oldActivator",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newActivator",
         "type": "address"
       }
     ],
-    "name": "OwnableInvalidOwner",
-    "type": "error"
+    "name": "ActivatorReplaced",
+    "type": "event"
   },
   {
+    "anonymous": false,
     "inputs": [
       {
+        "indexed": true,
         "internalType": "address",
-        "name": "account",
+        "name": "addressManager",
         "type": "address"
       }
     ],
-    "name": "OwnableUnauthorizedAccount",
-    "type": "error"
+    "name": "AddressManagerSet",
+    "type": "event"
   },
   {
-    "inputs": [],
-    "name": "ReentrancyGuardReentrantCall",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "TransactionNotAtPendingQueueHead",
-    "type": "error"
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "txId",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "enum ITransactions.TransactionStatus",
+        "name": "newStatus",
+        "type": "uint8"
+      }
+    ],
+    "name": "AllVotesCommitted",
+    "type": "event"
   },
   {
     "anonymous": false,
@@ -135,19 +68,19 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "appealer",
+        "name": "appellant",
         "type": "address"
       },
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "appealBond",
+        "name": "bond",
         "type": "uint256"
       },
       {
         "indexed": false,
         "internalType": "address[]",
-        "name": "appealValidators",
+        "name": "validators",
         "type": "address[]"
       }
     ],
@@ -158,93 +91,44 @@
     "anonymous": false,
     "inputs": [
       {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "attempted",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "succeeded",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "failed",
+        "type": "uint256"
+      }
+    ],
+    "name": "BatchFinalizationCompleted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
         "indexed": true,
         "internalType": "bytes32",
         "name": "txId",
         "type": "bytes32"
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "recipient",
-        "type": "address"
-      },
-      {
         "indexed": false,
-        "internalType": "bytes",
-        "name": "data",
-        "type": "bytes"
+        "internalType": "uint256",
+        "name": "txSlot",
+        "type": "uint256"
       }
     ],
-    "name": "ErrorMessage",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "ghostFactory",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "genManager",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "genTransactions",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "genQueue",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "genStaking",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "genMessages",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "idleness",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "tribunalAppeal",
-        "type": "address"
-      }
-    ],
-    "name": "ExternalContractsSet",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint64",
-        "name": "version",
-        "type": "uint64"
-      }
-    ],
-    "name": "Initialized",
+    "name": "CreatedTransaction",
     "type": "event"
   },
   {
@@ -284,6 +168,31 @@
       {
         "indexed": true,
         "internalType": "address",
+        "name": "oldLeader",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newLeader",
+        "type": "address"
+      }
+    ],
+    "name": "LeaderIdlenessProcessed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "txId",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
         "name": "recipient",
         "type": "address"
       },
@@ -302,112 +211,12 @@
     "inputs": [
       {
         "indexed": true,
-        "internalType": "address",
-        "name": "previousOwner",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "newOwner",
-        "type": "address"
-      }
-    ],
-    "name": "OwnershipTransferStarted",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "previousOwner",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "newOwner",
-        "type": "address"
-      }
-    ],
-    "name": "OwnershipTransferred",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
         "internalType": "bytes32",
-        "name": "role",
-        "type": "bytes32"
-      },
-      {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "previousAdminRole",
-        "type": "bytes32"
-      },
-      {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "newAdminRole",
+        "name": "txId",
         "type": "bytes32"
       }
     ],
-    "name": "RoleAdminChanged",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "role",
-        "type": "bytes32"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "sender",
-        "type": "address"
-      }
-    ],
-    "name": "RoleGranted",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "role",
-        "type": "bytes32"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "sender",
-        "type": "address"
-      }
-    ],
-    "name": "RoleRevoked",
+    "name": "ProcessIdlenessAccepted",
     "type": "event"
   },
   {
@@ -417,25 +226,6 @@
         "indexed": true,
         "internalType": "bytes32",
         "name": "txId",
-        "type": "bytes32"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "sender",
-        "type": "address"
-      }
-    ],
-    "name": "SlashAppealSubmitted",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "tx_id",
         "type": "bytes32"
       }
     ],
@@ -473,7 +263,7 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "sender",
+        "name": "cancelledBy",
         "type": "address"
       }
     ],
@@ -486,7 +276,20 @@
       {
         "indexed": true,
         "internalType": "bytes32",
-        "name": "tx_id",
+        "name": "txId",
+        "type": "bytes32"
+      }
+    ],
+    "name": "TransactionFinalizationFailed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "txId",
         "type": "bytes32"
       }
     ],
@@ -501,40 +304,9 @@
         "internalType": "bytes32",
         "name": "txId",
         "type": "bytes32"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "oldValidator",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "newValidator",
-        "type": "address"
       }
     ],
-    "name": "TransactionIdleValidatorReplaced",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "txId",
-        "type": "bytes32"
-      },
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "validatorIndex",
-        "type": "uint256"
-      }
-    ],
-    "name": "TransactionIdleValidatorReplacementFailed",
+    "name": "TransactionLeaderRevealed",
     "type": "event"
   },
   {
@@ -562,7 +334,7 @@
       {
         "indexed": true,
         "internalType": "bytes32",
-        "name": "tx_id",
+        "name": "txId",
         "type": "bytes32"
       }
     ],
@@ -575,7 +347,7 @@
       {
         "indexed": false,
         "internalType": "bytes32[]",
-        "name": "tx_ids",
+        "name": "txIds",
         "type": "bytes32[]"
       }
     ],
@@ -588,7 +360,7 @@
       {
         "indexed": true,
         "internalType": "bytes32",
-        "name": "tx_id",
+        "name": "txId",
         "type": "bytes32"
       },
       {
@@ -607,7 +379,7 @@
       {
         "indexed": true,
         "internalType": "bytes32",
-        "name": "tx_id",
+        "name": "txId",
         "type": "bytes32"
       }
     ],
@@ -624,16 +396,16 @@
         "type": "bytes32"
       },
       {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "tribunalIndex",
+        "type": "uint256"
+      },
+      {
         "indexed": true,
         "internalType": "address",
         "name": "validator",
         "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "bool",
-        "name": "isLastVote",
-        "type": "bool"
       }
     ],
     "name": "TribunalAppealVoteCommitted",
@@ -649,6 +421,12 @@
         "type": "bytes32"
       },
       {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "tribunalIndex",
+        "type": "uint256"
+      },
+      {
         "indexed": true,
         "internalType": "address",
         "name": "validator",
@@ -656,12 +434,68 @@
       },
       {
         "indexed": false,
-        "internalType": "bool",
-        "name": "isLastVote",
-        "type": "bool"
+        "internalType": "enum ITransactions.VoteType",
+        "name": "voteType",
+        "type": "uint8"
       }
     ],
     "name": "TribunalAppealVoteRevealed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "txId",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "oldValidator",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newValidator",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "validatorIndex",
+        "type": "uint256"
+      }
+    ],
+    "name": "ValidatorReplaced",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "txId",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "value",
+        "type": "uint256"
+      }
+    ],
+    "name": "ValueWithdrawalFailed",
     "type": "event"
   },
   {
@@ -727,31 +561,16 @@
     "type": "event"
   },
   {
-    "inputs": [],
-    "name": "DEFAULT_ADMIN_ROLE",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "acceptOwnership",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
         "internalType": "bytes32",
         "name": "_txId",
         "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "_operator",
+        "type": "address"
       },
       {
         "internalType": "bytes",
@@ -788,13 +607,18 @@
       },
       {
         "internalType": "bytes",
-        "name": "_txData",
+        "name": "_calldata",
         "type": "bytes"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_validUntil",
+        "type": "uint256"
       }
     ],
     "name": "addTransaction",
     "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "payable",
     "type": "function"
   },
   {
@@ -818,6 +642,11 @@
         "type": "bytes32"
       },
       {
+        "internalType": "uint256",
+        "name": "_tribunalIndex",
+        "type": "uint256"
+      },
+      {
         "internalType": "bytes32",
         "name": "_commitHash",
         "type": "bytes32"
@@ -839,6 +668,11 @@
         "internalType": "bytes32",
         "name": "_commitHash",
         "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_validatorIndex",
+        "type": "uint256"
       }
     ],
     "name": "commitVote",
@@ -847,51 +681,41 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "contracts",
-    "outputs": [
+    "inputs": [
       {
-        "internalType": "contract IGenManager",
-        "name": "genManager",
+        "internalType": "address",
+        "name": "_sender",
         "type": "address"
       },
       {
-        "internalType": "contract ITransactions",
-        "name": "genTransactions",
-        "type": "address"
+        "internalType": "uint256",
+        "name": "_numOfInitialValidators",
+        "type": "uint256"
       },
       {
-        "internalType": "contract IQueues",
-        "name": "genQueue",
-        "type": "address"
+        "internalType": "uint256",
+        "name": "_maxRotations",
+        "type": "uint256"
       },
       {
-        "internalType": "contract IGhostFactory",
-        "name": "ghostFactory",
-        "type": "address"
+        "internalType": "bytes",
+        "name": "_calldata",
+        "type": "bytes"
       },
       {
-        "internalType": "contract IGenStaking",
-        "name": "genStaking",
-        "type": "address"
+        "internalType": "uint256",
+        "name": "_saltNonce",
+        "type": "uint256"
       },
       {
-        "internalType": "contract IMessages",
-        "name": "genMessages",
-        "type": "address"
-      },
-      {
-        "internalType": "contract IIdleness",
-        "name": "idleness",
-        "type": "address"
-      },
-      {
-        "internalType": "contract ITribunalAppeal",
-        "name": "tribunalAppeal",
-        "type": "address"
+        "internalType": "uint256",
+        "name": "_validUntil",
+        "type": "uint256"
       }
     ],
-    "stateMutability": "view",
+    "name": "deploySalted",
+    "outputs": [],
+    "stateMutability": "payable",
     "type": "function"
   },
   {
@@ -926,6 +750,19 @@
   {
     "inputs": [
       {
+        "internalType": "bytes32[]",
+        "name": "_txIds",
+        "type": "bytes32[]"
+      }
+    ],
+    "name": "finalizeIdlenessTxs",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "bytes32",
         "name": "_txId",
         "type": "bytes32"
@@ -937,55 +774,26 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "_txId",
+        "type": "bytes32"
+      }
+    ],
+    "name": "flushExternalMessages",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
-    "name": "getContracts",
+    "name": "getAddressManager",
     "outputs": [
       {
-        "components": [
-          {
-            "internalType": "contract IGenManager",
-            "name": "genManager",
-            "type": "address"
-          },
-          {
-            "internalType": "contract ITransactions",
-            "name": "genTransactions",
-            "type": "address"
-          },
-          {
-            "internalType": "contract IQueues",
-            "name": "genQueue",
-            "type": "address"
-          },
-          {
-            "internalType": "contract IGhostFactory",
-            "name": "ghostFactory",
-            "type": "address"
-          },
-          {
-            "internalType": "contract IGenStaking",
-            "name": "genStaking",
-            "type": "address"
-          },
-          {
-            "internalType": "contract IMessages",
-            "name": "genMessages",
-            "type": "address"
-          },
-          {
-            "internalType": "contract IIdleness",
-            "name": "idleness",
-            "type": "address"
-          },
-          {
-            "internalType": "contract ITribunalAppeal",
-            "name": "tribunalAppeal",
-            "type": "address"
-          }
-        ],
-        "internalType": "struct IConsensusMain.ExternalContracts",
+        "internalType": "contract IAddressManager",
         "name": "",
-        "type": "tuple"
+        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -995,16 +803,16 @@
     "inputs": [
       {
         "internalType": "bytes32",
-        "name": "role",
+        "name": "txId",
         "type": "bytes32"
       }
     ],
-    "name": "getRoleAdmin",
+    "name": "getPendingTransactionValue",
     "outputs": [
       {
-        "internalType": "bytes32",
+        "internalType": "uint256",
         "name": "",
-        "type": "bytes32"
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -1018,49 +826,7 @@
         "type": "address"
       }
     ],
-    "name": "ghostContracts",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "isGhost",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "role",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      }
-    ],
-    "name": "grantRole",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "role",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      }
-    ],
-    "name": "hasRole",
+    "name": "isGhostContract",
     "outputs": [
       {
         "internalType": "bool",
@@ -1072,47 +838,109 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "initialize",
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "_txId",
+        "type": "bytes32"
+      }
+    ],
+    "name": "leaderIdleness",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "owner",
-    "outputs": [
+    "inputs": [
       {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "txId",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "uint256",
+            "name": "saltAsAValidator",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "txExecutionHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "messagesAndOtherFieldsHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "otherExecutionFieldsHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "enum ITransactions.VoteType",
+            "name": "resultValue",
+            "type": "uint8"
+          },
+          {
+            "components": [
+              {
+                "internalType": "enum IMessages.MessageType",
+                "name": "messageType",
+                "type": "uint8"
+              },
+              {
+                "internalType": "address",
+                "name": "recipient",
+                "type": "address"
+              },
+              {
+                "internalType": "uint256",
+                "name": "value",
+                "type": "uint256"
+              },
+              {
+                "internalType": "bytes",
+                "name": "data",
+                "type": "bytes"
+              },
+              {
+                "internalType": "bool",
+                "name": "onAcceptance",
+                "type": "bool"
+              },
+              {
+                "internalType": "uint256",
+                "name": "saltNonce",
+                "type": "uint256"
+              }
+            ],
+            "internalType": "struct IMessages.SubmittedMessage[]",
+            "name": "messages",
+            "type": "tuple[]"
+          }
+        ],
+        "internalType": "struct IConsensusMain.LeaderRevealVoteParams",
+        "name": "leaderRevealVoteParams",
+        "type": "tuple"
       }
     ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "pendingOwner",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
+    "name": "leaderRevealVote",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "recipient",
-        "type": "address"
+        "internalType": "bytes32",
+        "name": "_txId",
+        "type": "bytes32"
       }
     ],
-    "name": "proceedPendingQueueProcessing",
+    "name": "processIdleness",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1125,9 +953,9 @@
         "type": "bytes32"
       },
       {
-        "internalType": "bytes",
-        "name": "_txReceipt",
-        "type": "bytes"
+        "internalType": "bytes32",
+        "name": "_txExecutionHash",
+        "type": "bytes32"
       },
       {
         "internalType": "uint256",
@@ -1135,36 +963,14 @@
         "type": "uint256"
       },
       {
-        "components": [
-          {
-            "internalType": "enum IMessages.MessageType",
-            "name": "messageType",
-            "type": "uint8"
-          },
-          {
-            "internalType": "address",
-            "name": "recipient",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "value",
-            "type": "uint256"
-          },
-          {
-            "internalType": "bytes",
-            "name": "data",
-            "type": "bytes"
-          },
-          {
-            "internalType": "bool",
-            "name": "onAcceptance",
-            "type": "bool"
-          }
-        ],
-        "internalType": "struct IMessages.SubmittedMessage[]",
-        "name": "_messages",
-        "type": "tuple[]"
+        "internalType": "address",
+        "name": "_operator",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes",
+        "name": "_eqBlocksOutputs",
+        "type": "bytes"
       },
       {
         "internalType": "bytes",
@@ -1178,8 +984,14 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "renounceOwnership",
+    "inputs": [
+      {
+        "internalType": "bytes32[]",
+        "name": "_txIds",
+        "type": "bytes32[]"
+      }
+    ],
+    "name": "redButtonFinalize",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1187,17 +999,12 @@
   {
     "inputs": [
       {
-        "internalType": "bytes32",
-        "name": "role",
-        "type": "bytes32"
-      },
-      {
         "internalType": "address",
-        "name": "callerConfirmation",
+        "name": "ghost",
         "type": "address"
       }
     ],
-    "name": "renounceRole",
+    "name": "registerGhostContract",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1210,14 +1017,24 @@
         "type": "bytes32"
       },
       {
+        "internalType": "uint256",
+        "name": "_tribunalIndex",
+        "type": "uint256"
+      },
+      {
         "internalType": "bytes32",
         "name": "_voteHash",
         "type": "bytes32"
       },
       {
-        "internalType": "enum ITribunalAppeal.TribunalVoteType",
+        "internalType": "enum ITransactions.VoteType",
         "name": "_voteType",
         "type": "uint8"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "_otherExecutionFieldsHash",
+        "type": "bytes32"
       },
       {
         "internalType": "uint256",
@@ -1248,8 +1065,18 @@
         "type": "uint8"
       },
       {
+        "internalType": "bytes32",
+        "name": "_otherExecutionFieldsHash",
+        "type": "bytes32"
+      },
+      {
         "internalType": "uint256",
         "name": "_nonce",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_validatorIndex",
         "type": "uint256"
       }
     ],
@@ -1261,65 +1088,12 @@
   {
     "inputs": [
       {
-        "internalType": "bytes32",
-        "name": "role",
-        "type": "bytes32"
-      },
-      {
         "internalType": "address",
-        "name": "account",
+        "name": "_addressManager",
         "type": "address"
       }
     ],
-    "name": "revokeRole",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_ghostFactory",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_genManager",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_genTransactions",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_genQueue",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_genStaking",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_genMessages",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_idleness",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_tribunalAppeal",
-        "type": "address"
-      }
-    ],
-    "name": "setExternalContracts",
+    "name": "setAddressManager",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1335,51 +1109,6 @@
     "name": "submitAppeal",
     "outputs": [],
     "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "_txId",
-        "type": "bytes32"
-      }
-    ],
-    "name": "submitSlashAppeal",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes4",
-        "name": "interfaceId",
-        "type": "bytes4"
-      }
-    ],
-    "name": "supportsInterface",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "newOwner",
-        "type": "address"
-      }
-    ],
-    "name": "transferOwnership",
-    "outputs": [],
-    "stateMutability": "nonpayable",
     "type": "function"
   }
 ]

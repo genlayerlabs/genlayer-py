@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.9.5 (2026-02-19)
+
+### Bug Fixes
+
+- Support addTransaction ABI v5/v6 compatibility
+  ([`cfdd5c3`](https://github.com/genlayerlabs/genlayer-py/commit/cfdd5c35a7328691fea73bff2989dd7fda63f1a7))
+
+
 ## v0.9.4 (2026-02-07)
 
 ### Bug Fixes

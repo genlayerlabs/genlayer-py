@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genlayer-py"
-version = "0.9.4"
+version = "0.9.5"
 description = "GenLayer Python SDK"
 authors = [
     { name = "GenLayer" }

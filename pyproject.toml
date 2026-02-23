@@ -29,3 +29,9 @@ exclude = ["tests*", "scripts*"]
 
 [tool.setuptools.package-data]
 "genlayer_py" = ["consensus/abi/*.json"]
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.3",
+    "python-dotenv==1.1.0",
+]

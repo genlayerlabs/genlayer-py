@@ -13,7 +13,7 @@ echo "Checking for new release using config: $CONFIG_FILE"
 # Run semantic-release version with selective error handling
 # Exit code 0: release created, 1: no release needed, >1: genuine error
 set +e
-RELEASE_OUTPUT=$(semantic-release -c "$CONFIG_FILE" -vv version 2>&1)
+RELEASE_OUTPUT=$(uvx --from 'python-semantic-release==10.0.2' semantic-release -c "$CONFIG_FILE" -vv version 2>&1)
 RC=$?
 set -e
 

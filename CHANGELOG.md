@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.10.0 (2026-03-01)
+
+### Features
+
+- **ci**: Migrate build, test, and publish pipelines to uv
+  ([#66](https://github.com/genlayerlabs/genlayer-py/pull/66),
+  [`3c09b90`](https://github.com/genlayerlabs/genlayer-py/commit/3c09b90d792d58ed8654a245762a77346c9e475a))
+
+
 ## v0.9.5 (2026-02-19)
 
 ### Bug Fixes

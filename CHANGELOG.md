@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.10.1 (2026-03-01)
+
+### Bug Fixes
+
+- Replace broken Discord badge with shields.io badge
+  ([#67](https://github.com/genlayerlabs/genlayer-py/pull/67),
+  [`928126b`](https://github.com/genlayerlabs/genlayer-py/commit/928126bd2cf1b6ed641a9f8be72cfaf89bc779c7))
+
+
 ## v0.10.0 (2026-03-01)
 
 ### Features

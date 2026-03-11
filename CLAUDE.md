@@ -32,7 +32,7 @@ GenLayerPY is a Python SDK for interacting with the GenLayer blockchain protocol
    - Handles consensus smart contract initialization automatically
 
 2. **Chain Configuration** (`genlayer_py/chains/`)
-   - Pre-configured chain objects (localnet, studionet, testnet_asimov)
+   - Pre-configured chain objects (localnet, studionet, testnet_asimov, testnet_bradbury)
    - Each chain includes RPC URLs, contract addresses, and consensus parameters
    - Consensus contracts: CONSENSUS_MAIN and CONSENSUS_DATA with their ABIs
 

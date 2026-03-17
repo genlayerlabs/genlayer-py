@@ -17,7 +17,7 @@ class TestBradburyConfig:
     """Verify Bradbury chain configuration values."""
 
     def test_rpc_url(self):
-        assert TESTNET_JSON_RPC_URL == "https://zksync-os-testnet-genlayer.zksync.dev"
+        assert TESTNET_JSON_RPC_URL == "http://34.91.102.53:9151"
 
     def test_chain_id(self):
         assert testnet_bradbury.id == 4221

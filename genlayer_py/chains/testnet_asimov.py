@@ -2,8 +2,7 @@ from genlayer_py.types import GenLayerChain, NativeCurrency
 from genlayer_py.consensus.abi import CONSENSUS_MAIN_ABI, CONSENSUS_DATA_ABI
 
 
-TESTNET_JSON_RPC_URL = "https://zksync-os-testnet-genlayer.zksync.dev"
-TESTNET_WS_URL = "wss://zksync-os-testnet-genlayer.zksync.dev/ws"
+TESTNET_JSON_RPC_URL = "http://34.12.136.220:9151"
 EXPLORER_URL = "https://explorer-asimov.genlayer.com/"
 
 CONSENSUS_MAIN_CONTRACT = {

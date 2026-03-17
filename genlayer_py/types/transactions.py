@@ -339,6 +339,15 @@ class GenLayerRawTransaction:
 
     @classmethod
     def from_transaction_data(cls, tx_data: Tuple) -> "GenLayerRawTransaction":
+        # V06/Bradbury ABI returns 23 fields (extra txExecutionHash, eqBlocksOutputs,
+        # consumedValidators; txData split into txCalldata). Asimov returns 21 fields.
+        if len(tx_data) >= 23:
+            return cls._from_v06(tx_data)
+        return cls._from_v04(tx_data)
+
+    @classmethod
+    def _from_v04(cls, tx_data: Tuple) -> "GenLayerRawTransaction":
+        """Asimov / pre-Bradbury ABI (21 fields)."""
         return cls(
             current_timestamp=tx_data[0],
             sender=tx_data[1],
@@ -363,6 +372,40 @@ class GenLayerRawTransaction:
             ),
             num_of_rounds=tx_data[19],
             last_round=cls.LastRound.from_transaction_data(tx_data[20]),
+        )
+
+    @classmethod
+    def _from_v06(cls, tx_data: Tuple) -> "GenLayerRawTransaction":
+        """Bradbury / V06 ABI (23 fields). Fields differ at positions 9-12."""
+        # [9] txExecutionHash (bytes32) — not in v04
+        # [10] txCalldata (bytes) — equivalent to v04's txData
+        # [11] eqBlocksOutputs (bytes) — not in v04
+        # [12+] messages and rest shifted by +1 vs v04
+        # [22] consumedValidators — not in v04
+        return cls(
+            current_timestamp=tx_data[0],
+            sender=tx_data[1],
+            recipient=tx_data[2],
+            num_of_initial_validators=tx_data[3],  # initialRotations in ABI
+            tx_slot=tx_data[4],
+            created_timestamp=tx_data[5],
+            last_vote_timestamp=tx_data[6],
+            random_seed=Web3.to_hex(tx_data[7]),
+            result=tx_data[8],
+            tx_data=Web3.to_hex(tx_data[10]),  # txCalldata
+            tx_receipt="0x",  # not present in V06; txExecutionHash is at [9]
+            messages=tx_data[12],
+            queue_type=tx_data[13],
+            queue_position=tx_data[14],
+            activator=tx_data[15],
+            last_leader=tx_data[16],
+            status=tx_data[17],
+            tx_id=Web3.to_hex(tx_data[18]),
+            read_state_block_range=cls.ReadStateBlockRange.from_transaction_data(
+                tx_data[19]
+            ),
+            num_of_rounds=tx_data[20],
+            last_round=cls.LastRound.from_transaction_data(tx_data[21]),
         )
 
     def decode(self) -> GenLayerTransaction:

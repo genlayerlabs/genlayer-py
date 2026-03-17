@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v0.12.0 (2026-03-17)
+
+### Bug Fixes
+
+- Bradbury V06 ABI transaction decoding ([#70](https://github.com/genlayerlabs/genlayer-py/pull/70),
+  [`ffb5df9`](https://github.com/genlayerlabs/genlayer-py/commit/ffb5df92daa2b428a49d083f8d511017095ec476))
+
+- Handle Bradbury V06 ABI struct in transaction decoding
+  ([#70](https://github.com/genlayerlabs/genlayer-py/pull/70),
+  [`ffb5df9`](https://github.com/genlayerlabs/genlayer-py/commit/ffb5df92daa2b428a49d083f8d511017095ec476))
+
+### Features
+
+- Add testnet-bradbury chain configuration
+  ([#70](https://github.com/genlayerlabs/genlayer-py/pull/70),
+  [`ffb5df9`](https://github.com/genlayerlabs/genlayer-py/commit/ffb5df92daa2b428a49d083f8d511017095ec476))
+
+
 ## v0.11.0 (2026-03-11)
 
 ### Features

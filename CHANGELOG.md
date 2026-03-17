@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.11.0 (2026-03-11)
+
+### Features
+
+- Add testnet-bradbury chain configuration
+  ([#69](https://github.com/genlayerlabs/genlayer-py/pull/69),
+  [`28d8cc4`](https://github.com/genlayerlabs/genlayer-py/commit/28d8cc4c47cc327cfe59d900c7c4b01e12a816b2))
+
+
 ## v0.10.1 (2026-03-01)
 
 ### Bug Fixes

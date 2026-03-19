@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.12.1 (2026-03-19)
+
+### Bug Fixes
+
+- Use HTTPS domain RPC URLs for testnets
+  ([#71](https://github.com/genlayerlabs/genlayer-py/pull/71),
+  [`496cd07`](https://github.com/genlayerlabs/genlayer-py/commit/496cd0730cd5c1a96c27c4cb257a90f9bc230ee8))
+
+
 ## v0.12.0 (2026-03-17)
 
 ### Bug Fixes

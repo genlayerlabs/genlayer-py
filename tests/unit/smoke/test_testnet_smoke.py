@@ -17,7 +17,7 @@ class TestTestnetConfig:
     """Verify testnet chain configuration values."""
 
     def test_rpc_url(self):
-        assert TESTNET_JSON_RPC_URL == "http://34.12.136.220:9151"
+        assert TESTNET_JSON_RPC_URL == "https://rpc-asimov.genlayer.com"
 
     def test_chain_id(self):
         assert testnet_asimov.id == 4221

@@ -31,7 +31,10 @@ class GenLayerProvider(BaseProvider):
             response = requests.post(
                 self.url,
                 json=payload,
-                headers={"Content-Type": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                    "User-Agent": "genlayer-py",
+                },
             )
         except requests.exceptions.RequestException as err:
             raise GenLayerError(f"Request to {self.url} failed: {str(err)}") from err

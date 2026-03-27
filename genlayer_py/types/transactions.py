@@ -314,6 +314,25 @@ class GenLayerRawTransaction:
                 validator_votes=tx_data[9],
             )
 
+        @classmethod
+        def from_all_data_round(
+            cls, tx_data: Tuple
+        ) -> "GenLayerRawTransaction.LastRound":
+            return cls(
+                round=tx_data[0],
+                leader_index=tx_data[1],
+                votes_committed=tx_data[2],
+                votes_revealed=tx_data[3],
+                appeal_bond=tx_data[4],
+                rotations_left=tx_data[5],
+                result=tx_data[6],
+                round_validators=tx_data[7],
+                validator_votes=tx_data[8],
+                validator_votes_hash=[
+                    Web3.to_hex(vote_hash) for vote_hash in tx_data[9]
+                ],
+            )
+
         def decode(self) -> Dict[str, Any]:
             return {
                 "round": str(self.round),
@@ -456,7 +475,7 @@ class GenLayerRawTransaction:
             tx_id=Web3.to_hex(tx_data[12]),
             read_state_block_range=cls.ReadStateBlockRange.from_transaction_data(latest_block_range),
             num_of_rounds=len(rounds_data),
-            last_round=cls.LastRound.from_transaction_data(last_round_data) if last_round_data else cls.LastRound(
+            last_round=cls.LastRound.from_all_data_round(last_round_data) if last_round_data else cls.LastRound(
                 round=0, leader_index=0, votes_committed=0, votes_revealed=0,
                 appeal_bond=0, rotations_left=0, result=0, round_validators=[],
                 validator_votes_hash=[], validator_votes=[],

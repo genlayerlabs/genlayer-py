@@ -156,10 +156,14 @@ def _decode_triggered_txs(
     def process_events_for_status(event_status: TransactionStatus) -> List[HexStr]:
         """Helper function to process events for a given status."""
         event_signature_hash = event_hashes_by_status[event_status]
+        from_block = int(tx["read_state_block_range"]["proposal_block"])
+        max_range = 10000
+        latest_block = self.w3.eth.block_number
+        to_block = min(from_block + max_range, latest_block)
         logs = self.w3.eth.get_logs(
             {
-                "fromBlock": int(tx["read_state_block_range"]["proposal_block"]),
-                "toBlock": "latest",
+                "fromBlock": from_block,
+                "toBlock": to_block,
                 "address": self.chain.consensus_main_contract["address"],
                 "topics": [event_signature_hash, tx["tx_id"]],
             }

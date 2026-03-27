@@ -110,6 +110,19 @@ TRANSACTION_RESULT_NAME_TO_NUMBER = {
 }
 
 
+class ExecutionResult(str, Enum):
+    NOT_VOTED = "NOT_VOTED"
+    FINISHED_WITH_RETURN = "FINISHED_WITH_RETURN"
+    FINISHED_WITH_ERROR = "FINISHED_WITH_ERROR"
+
+
+EXECUTION_RESULT_NUMBER_TO_NAME = {
+    "0": ExecutionResult.NOT_VOTED,
+    "1": ExecutionResult.FINISHED_WITH_RETURN,
+    "2": ExecutionResult.FINISHED_WITH_ERROR,
+}
+
+
 class VoteType(str, Enum):
     NOT_VOTED = "NOT_VOTED"
     AGREE = "AGREE"
@@ -187,6 +200,10 @@ class GenLayerTransaction(TypedDict, total=False):
     # result: testnet
     result: Optional[int]
     result_name: Optional[TransactionResult]
+
+    # tx_execution_result: testnet (from getTransactionAllData)
+    tx_execution_result: Optional[int]
+    tx_execution_result_name: Optional[str]
 
     # data: localnet // txData: testnet
     data: Optional[Dict[str, Any]]
@@ -324,6 +341,7 @@ class GenLayerRawTransaction:
     last_vote_timestamp: int
     random_seed: HexStr
     result: int
+    tx_execution_result: int
     tx_data: HexStr
     tx_receipt: HexStr
     messages: List[Any]
@@ -358,6 +376,7 @@ class GenLayerRawTransaction:
             last_vote_timestamp=tx_data[6],
             random_seed=Web3.to_hex(tx_data[7]),
             result=tx_data[8],
+            tx_execution_result=0,
             tx_data=Web3.to_hex(tx_data[9]),
             tx_receipt=Web3.to_hex(tx_data[10]),
             messages=tx_data[11],
@@ -392,6 +411,7 @@ class GenLayerRawTransaction:
             last_vote_timestamp=tx_data[6],
             random_seed=Web3.to_hex(tx_data[7]),
             result=tx_data[8],
+            tx_execution_result=0,
             tx_data=Web3.to_hex(tx_data[10]),  # txCalldata
             tx_receipt="0x",  # not present in V06; txExecutionHash is at [9]
             messages=tx_data[12],
@@ -406,6 +426,41 @@ class GenLayerRawTransaction:
             ),
             num_of_rounds=tx_data[20],
             last_round=cls.LastRound.from_transaction_data(tx_data[21]),
+        )
+
+    @classmethod
+    def from_all_transaction_data(cls, tx_data: Tuple, rounds_data: List[Tuple]) -> "GenLayerRawTransaction":
+        """Parse getTransactionAllData response which returns (transaction, roundsData[])."""
+        last_round_data = rounds_data[-1] if rounds_data else None
+        latest_block_range = tx_data[18][-1] if tx_data[18] else (0, 0, 0)
+
+        return cls(
+            current_timestamp=0,
+            sender=tx_data[5],
+            recipient=tx_data[6],
+            num_of_initial_validators=tx_data[9],
+            tx_slot=tx_data[8],
+            created_timestamp=0,
+            last_vote_timestamp=0,
+            random_seed=Web3.to_hex(tx_data[13]),
+            result=tx_data[0],
+            tx_execution_result=tx_data[1],
+            tx_data=Web3.to_hex(tx_data[16]),
+            tx_receipt="0x",
+            messages=[],
+            queue_type=0,
+            queue_position=0,
+            activator=tx_data[7],
+            last_leader=tx_data[7],
+            status=tx_data[3],
+            tx_id=Web3.to_hex(tx_data[12]),
+            read_state_block_range=cls.ReadStateBlockRange.from_transaction_data(latest_block_range),
+            num_of_rounds=len(rounds_data),
+            last_round=cls.LastRound.from_transaction_data(last_round_data) if last_round_data else cls.LastRound(
+                round=0, leader_index=0, votes_committed=0, votes_revealed=0,
+                appeal_bond=0, rotations_left=0, result=0, round_validators=[],
+                validator_votes_hash=[], validator_votes=[],
+            ),
         )
 
     def decode(self) -> GenLayerTransaction:
@@ -437,6 +492,10 @@ class GenLayerRawTransaction:
             "tx_data_decoded": self._decode_input_data(),
             "status_name": TRANSACTION_STATUS_NUMBER_TO_NAME[str(self.status)].value,
             "result_name": TRANSACTION_RESULT_NUMBER_TO_NAME[str(self.result)].value,
+            "tx_execution_result": self.tx_execution_result,
+            "tx_execution_result_name": EXECUTION_RESULT_NUMBER_TO_NAME.get(
+                str(self.tx_execution_result), ExecutionResult.NOT_VOTED
+            ).value,
             "triggered_transactions": [],
         }
 

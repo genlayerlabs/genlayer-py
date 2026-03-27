@@ -126,10 +126,10 @@ def get_transaction(
         address=self.chain.consensus_data_contract["address"],
         abi=self.chain.consensus_data_contract["abi"],
     )
-    transaction = consensus_data_contract.functions.getTransactionData(
-        transaction_hash, int(time.time())
+    tx_all_data, rounds_data = consensus_data_contract.functions.getTransactionAllData(
+        transaction_hash
     ).call()
-    raw_transaction = GenLayerRawTransaction.from_transaction_data(transaction)
+    raw_transaction = GenLayerRawTransaction.from_all_transaction_data(tx_all_data, rounds_data)
     decoded_transaction = raw_transaction.decode()
     decoded_transaction["triggered_transactions"] = _decode_triggered_txs(
         self, decoded_transaction

@@ -121,15 +121,19 @@ def get_transaction(
         transaction["status"] = int(TRANSACTION_STATUS_NAME_TO_NUMBER[localnet_status])
         transaction["status_name"] = localnet_status
         return _decode_localnet_transaction(transaction)
-    # Decode for testnet
+    # Decode for testnet — call both to get messages + txExecutionResult
     consensus_data_contract = self.w3.eth.contract(
         address=self.chain.consensus_data_contract["address"],
         abi=self.chain.consensus_data_contract["abi"],
     )
-    transaction = consensus_data_contract.functions.getTransactionData(
+    tx_data = consensus_data_contract.functions.getTransactionData(
         transaction_hash, int(time.time())
     ).call()
-    raw_transaction = GenLayerRawTransaction.from_transaction_data(transaction)
+    tx_all_data, rounds_data = consensus_data_contract.functions.getTransactionAllData(
+        transaction_hash
+    ).call()
+    raw_transaction = GenLayerRawTransaction.from_transaction_data(tx_data)
+    raw_transaction.tx_execution_result = tx_all_data[1]
     decoded_transaction = raw_transaction.decode()
     decoded_transaction["triggered_transactions"] = _decode_triggered_txs(
         self, decoded_transaction
@@ -156,10 +160,14 @@ def _decode_triggered_txs(
     def process_events_for_status(event_status: TransactionStatus) -> List[HexStr]:
         """Helper function to process events for a given status."""
         event_signature_hash = event_hashes_by_status[event_status]
+        from_block = int(tx["read_state_block_range"]["proposal_block"])
+        max_range = 10000
+        latest_block = self.w3.eth.block_number
+        to_block = min(from_block + max_range, latest_block)
         logs = self.w3.eth.get_logs(
             {
-                "fromBlock": int(tx["read_state_block_range"]["proposal_block"]),
-                "toBlock": "latest",
+                "fromBlock": from_block,
+                "toBlock": to_block,
                 "address": self.chain.consensus_main_contract["address"],
                 "topics": [event_signature_hash, tx["tx_id"]],
             }
@@ -188,6 +196,18 @@ def _decode_triggered_txs(
         triggered_txs.extend(process_events_for_status(TransactionStatus.FINALIZED))
 
     return triggered_txs
+
+
+def get_triggered_transaction_ids(
+    self: GenLayerClient,
+    transaction_hash: _Hash32,
+) -> List[HexStr]:
+    if self.chain.id == localnet.id:
+        tx = get_transaction(self, transaction_hash)
+        return tx.get("triggered_transactions", [])
+
+    tx = get_transaction(self, transaction_hash)
+    return _decode_triggered_txs(self, tx)
 
 
 def _simplify_transaction_receipt(tx: GenLayerTransaction) -> GenLayerTransaction:

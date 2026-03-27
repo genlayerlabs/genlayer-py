@@ -30,6 +30,7 @@ from genlayer_py.chains.actions import initialize_consensus_smart_contract
 from genlayer_py.transactions.actions import (
     wait_for_transaction_receipt,
     get_transaction,
+    get_triggered_transaction_ids,
 )
 from genlayer_py.config import transaction_config
 
@@ -202,6 +203,12 @@ class GenLayerClient(Eth):
         transaction_hash: _Hash32,
     ) -> GenLayerTransaction:
         return get_transaction(self=self, transaction_hash=transaction_hash)
+
+    def get_triggered_transaction_ids(
+        self,
+        transaction_hash: _Hash32,
+    ) -> list:
+        return get_triggered_transaction_ids(self=self, transaction_hash=transaction_hash)
 
     def appeal_transaction(
         self,

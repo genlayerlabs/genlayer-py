@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.15.0 (2026-03-27)
+
+### Features
+
+- Add API reference generation and docs sync
+  ([`7d03114`](https://github.com/genlayerlabs/genlayer-py/commit/7d0311418eb1f7bf50bc6a75e8313589f5148f43))
+
+
 ## v0.14.0 (2026-03-27)
 
 ### Documentation

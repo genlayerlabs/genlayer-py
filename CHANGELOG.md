@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.16.0 (2026-03-27)
+
+### Features
+
+- **docs**: Param tables in API reference, README as index
+  ([`2f248d4`](https://github.com/genlayerlabs/genlayer-py/commit/2f248d4a79368647509ac419ad5baff42432a12c))
+
+
 ## v0.15.3 (2026-03-27)
 
 ### Bug Fixes

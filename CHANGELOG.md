@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.16.2 (2026-03-27)
+
+### Bug Fixes
+
+- **ci**: Use sibling file pattern for docs sync
+  ([`44c0811`](https://github.com/genlayerlabs/genlayer-py/commit/44c081189d7b7b4f9dc3becca51409ed60df3e42))
+
+
 ## v0.16.1 (2026-03-27)
 
 ### Bug Fixes

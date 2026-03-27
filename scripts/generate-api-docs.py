@@ -48,11 +48,13 @@ def generate_method_doc(name, method):
     lines.append(f"```python\nclient.{name}({', '.join(param_parts)})\n```\n")
 
     if params:
-        lines.append("**Parameters:**\n")
+        lines.append("| Parameter | Type | Required | Default |")
+        lines.append("|-----------|------|----------|---------|")
         for pname, type_str, required, default in params:
-            req_str = "required" if required else "optional"
-            type_info = f" (`{type_str}`)" if type_str else ""
-            lines.append(f"- **{pname}**{type_info} — {req_str}{default}")
+            req_str = "yes" if required else "no"
+            type_display = f"`{type_str}`" if type_str else ""
+            default_display = default.lstrip(" = ") if default else ""
+            lines.append(f"| {pname} | {type_display} | {req_str} | {default_display} |")
         lines.append("")
 
     if ret:
@@ -113,11 +115,16 @@ def main():
     ]:
         lines.append(generate_enum_doc(name, enum_class))
 
-    output_path = os.path.join(output_dir, "genlayer-py.md")
-    with open(output_path, "w") as f:
+    api_path = os.path.join(output_dir, "api.md")
+    with open(api_path, "w") as f:
         f.write("\n".join(lines))
+    print(f"Generated: {api_path}")
 
-    print(f"Generated: {output_path}")
+    readme_path = os.path.join(os.path.dirname(__file__), "..", "README.md")
+    index_path = os.path.join(output_dir, "index.md")
+    with open(readme_path, "r") as src, open(index_path, "w") as dst:
+        dst.write(src.read())
+    print(f"Generated: {index_path}")
 
 
 if __name__ == "__main__":

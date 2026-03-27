@@ -59,8 +59,11 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          rm -rf pages/api-references/genlayer-py
           mkdir -p pages/api-references/genlayer-py
-          cp "${{ github.workspace }}/docs/api-references/genlayer-py.md" pages/api-references/genlayer-py/index.md
+          cp "${{ github.workspace }}/README.md" pages/api-references/genlayer-py/index.md
+          cp "${{ github.workspace }}/docs/api-references/api.md" pages/api-references/genlayer-py/api.md
+          echo '{"api": "API Reference"}' > pages/api-references/genlayer-py/_meta.json
           if [ -z "$(git status --porcelain)" ]; then
             echo "No changes to commit"
             exit 0

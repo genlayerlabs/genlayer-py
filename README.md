@@ -137,6 +137,23 @@ else:
     print("Execution result not yet available")
 ```
 
+### Fetching emitted messages and triggered transactions
+
+Transactions can emit messages to other contracts. These messages create new child transactions when processed:
+
+```python
+tx = client.get_transaction(transaction_hash=tx_hash)
+
+# Messages emitted by the contract during execution
+print(tx["messages"])
+# [{"messageType": 1, "recipient": "0x...", "value": 0, "data": "0x...", "onAcceptance": True, "saltNonce": 0}, ...]
+
+# Child transaction IDs created from those messages (separate call)
+child_tx_ids = client.get_triggered_transaction_ids(transaction_hash=tx_hash)
+print(child_tx_ids)
+# ["0xabc...", "0xdef..."]
+```
+
 ## 🚀 Key Features
 
 * **Client Creation**: Easily create and configure a client to connect to GenLayer’s network.

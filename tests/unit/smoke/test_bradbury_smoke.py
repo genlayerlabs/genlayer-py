@@ -12,6 +12,7 @@ from genlayer_py.chains.testnet_bradbury import (
     CONSENSUS_DATA_CONTRACT,
 )
 from genlayer_py.types.transactions import GenLayerRawTransaction
+from genlayer_py.client import create_client
 
 
 class TestBradburyConfig:
@@ -91,25 +92,38 @@ class TestBradburyConsensusContract:
 class TestBradburyGetTransactionAllData:
     """Verify getTransactionAllData returns txExecutionResult."""
 
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        self.w3 = Web3(Web3.HTTPProvider(TESTNET_JSON_RPC_URL))
-        self.contract = self.w3.eth.contract(
-            address=Web3.to_checksum_address(CONSENSUS_DATA_CONTRACT["address"]),
-            abi=CONSENSUS_DATA_CONTRACT["abi"],
+    def test_get_transaction_returns_execution_result(self):
+        """Use the actual SDK client to fetch a known finalized tx and verify tx_execution_result."""
+        client = create_client(chain=testnet_bradbury)
+        tx = client.get_transaction(
+            transaction_hash=bytes.fromhex(
+                "563f046c187d711127c51213ca62e2e4fee52009a98f0989a73a0a0382d21890"
+            )
         )
-
-    def test_get_transaction_all_data_returns_execution_result(self):
-        """Call getTransactionAllData for a known finalized tx and verify txExecutionResult is present."""
-        tx_id = bytes.fromhex(
-            "563f046c187d711127c51213ca62e2e4fee52009a98f0989a73a0a0382d21890"
-        )
-        tx_data, rounds_data = self.contract.functions.getTransactionAllData(tx_id).call()
-        raw = GenLayerRawTransaction.from_all_transaction_data(tx_data, rounds_data)
-        decoded = raw.decode()
-        assert decoded["tx_execution_result"] in [0, 1, 2]
-        assert decoded["tx_execution_result_name"] in [
+        assert tx["tx_execution_result"] in [0, 1, 2]
+        assert tx["tx_execution_result_name"] in [
             "NOT_VOTED", "FINISHED_WITH_RETURN", "FINISHED_WITH_ERROR"
         ]
-        assert decoded["status_name"] is not None
-        assert decoded["result_name"] is not None
+        assert tx["status_name"] is not None
+        assert tx["result_name"] is not None
+
+    def test_get_transaction_includes_messages(self):
+        """Verify messages array is present on decoded transaction."""
+        client = create_client(chain=testnet_bradbury)
+        tx = client.get_transaction(
+            transaction_hash=bytes.fromhex(
+                "563f046c187d711127c51213ca62e2e4fee52009a98f0989a73a0a0382d21890"
+            )
+        )
+        assert "messages" in tx
+        assert isinstance(tx["messages"], list)
+
+    def test_get_triggered_transaction_ids_returns_list(self):
+        """Verify get_triggered_transaction_ids returns a list."""
+        client = create_client(chain=testnet_bradbury)
+        result = client.get_triggered_transaction_ids(
+            transaction_hash=bytes.fromhex(
+                "563f046c187d711127c51213ca62e2e4fee52009a98f0989a73a0a0382d21890"
+            )
+        )
+        assert isinstance(result, list)

@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.15.1 (2026-03-27)
+
+### Bug Fixes
+
+- **ci**: Use GitHub App token for docs sync
+  ([`a77cc50`](https://github.com/genlayerlabs/genlayer-py/commit/a77cc5085e2ecd8e579d41fdfa4dec7be30d73bb))
+
+
 ## v0.15.0 (2026-03-27)
 
 ### Features

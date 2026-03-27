@@ -2,6 +2,35 @@
 
 <!-- version list -->
 
+## v0.13.0 (2026-03-27)
+
+### Bug Fixes
+
+- Round data field order for getTransactionAllData, User-Agent header, block range cap
+  ([`31412c9`](https://github.com/genlayerlabs/genlayer-py/commit/31412c9fc44f9cda6b20b7df12285154fd08fb31))
+
+### Documentation
+
+- Add canonical example for checking execution results
+  ([`31412c9`](https://github.com/genlayerlabs/genlayer-py/commit/31412c9fc44f9cda6b20b7df12285154fd08fb31))
+
+### Features
+
+- Add get_triggered_transaction_ids, fix vote/hash field order
+  ([`31412c9`](https://github.com/genlayerlabs/genlayer-py/commit/31412c9fc44f9cda6b20b7df12285154fd08fb31))
+
+- Expose tx_execution_result from getTransactionAllData
+  ([`31412c9`](https://github.com/genlayerlabs/genlayer-py/commit/31412c9fc44f9cda6b20b7df12285154fd08fb31))
+
+- Expose tx_execution_result, messages, and get_triggered_transaction_ids
+  ([`31412c9`](https://github.com/genlayerlabs/genlayer-py/commit/31412c9fc44f9cda6b20b7df12285154fd08fb31))
+
+### Testing
+
+- Add smoke test for tx_execution_result on bradbury
+  ([`31412c9`](https://github.com/genlayerlabs/genlayer-py/commit/31412c9fc44f9cda6b20b7df12285154fd08fb31))
+
+
 ## v0.12.1 (2026-03-19)
 
 ### Bug Fixes

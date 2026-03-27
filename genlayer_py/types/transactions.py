@@ -12,6 +12,7 @@ from genlayer_py.consensus.consensus_main import decode_tx_data
 
 
 class TransactionStatus(str, Enum):
+    """Status of a GenLayer transaction in the consensus lifecycle."""
     UNINITIALIZED = "UNINITIALIZED"
     PENDING = "PENDING"
     PROPOSING = "PROPOSING"
@@ -76,6 +77,7 @@ def is_decided_state(status: str) -> bool:
 
 
 class TransactionResult(str, Enum):
+    """Consensus voting result across validators."""
     IDLE = "IDLE"
     AGREE = "AGREE"
     DISAGREE = "DISAGREE"
@@ -111,6 +113,7 @@ TRANSACTION_RESULT_NAME_TO_NUMBER = {
 
 
 class ExecutionResult(str, Enum):
+    """Result of contract execution by the GenVM."""
     NOT_VOTED = "NOT_VOTED"
     FINISHED_WITH_RETURN = "FINISHED_WITH_RETURN"
     FINISHED_WITH_ERROR = "FINISHED_WITH_ERROR"
@@ -171,6 +174,7 @@ class DecodedCallData(TypedDict, total=False):
 
 
 class GenLayerTransaction(TypedDict, total=False):
+    """Decoded transaction data returned by get_transaction and wait_for_transaction_receipt."""
     # currentTimestamp: testnet
     current_timestamp: Optional[str]
 

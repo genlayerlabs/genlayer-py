@@ -106,6 +106,36 @@ receipt = client.wait_for_transaction_receipt(
 )
 ```
 
+### Checking execution results
+
+A transaction can be finalized by consensus but still have a failed execution. Always check `tx_execution_result` before reading contract state:
+
+```python
+from genlayer_py import create_client, create_account
+from genlayer_py.chains import testnet_bradbury
+from genlayer_py.types import TransactionStatus, ExecutionResult
+
+client = create_client(chain=testnet_bradbury, account=create_account())
+
+receipt = client.wait_for_transaction_receipt(
+    transaction_hash=tx_hash,
+    status=TransactionStatus.FINALIZED,
+)
+
+if receipt.get("tx_execution_result_name") == ExecutionResult.FINISHED_WITH_RETURN.value:
+    # Execution succeeded — safe to read state
+    result = client.read_contract(
+        address=contract_address,
+        function_name="get_storage",
+        args=[],
+    )
+elif receipt.get("tx_execution_result_name") == ExecutionResult.FINISHED_WITH_ERROR.value:
+    # Execution failed — contract state was not modified
+    raise RuntimeError("Contract execution failed")
+else:
+    # NOT_VOTED — execution hasn't completed
+    print("Execution result not yet available")
+```
 
 ## 🚀 Key Features
 

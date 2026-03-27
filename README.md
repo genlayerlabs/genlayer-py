@@ -154,6 +154,22 @@ print(child_tx_ids)
 # ["0xabc...", "0xdef..."]
 ```
 
+### Debugging transaction execution
+
+Use `debug_trace_transaction` to inspect the full execution trace of a transaction, including return data, errors, and GenVM logs:
+
+```python
+trace = client.debug_trace_transaction(
+    transaction_hash=tx_hash,
+    round=0,  # optional, defaults to 0
+)
+
+print(trace["result_code"])   # 0=success, 1=user error, 2=VM error
+print(trace["return_data"])   # hex-encoded contract return data
+print(trace["stderr"])        # standard error output
+print(trace["genvm_log"])     # detailed GenVM execution logs
+```
+
 ## 🚀 Key Features
 
 * **Client Creation**: Easily create and configure a client to connect to GenLayer’s network.

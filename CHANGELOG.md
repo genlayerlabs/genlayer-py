@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.16.3 (2026-03-27)
+
+### Bug Fixes
+
+- **ci**: Git add sibling file in docs sync
+  ([`f8b275a`](https://github.com/genlayerlabs/genlayer-py/commit/f8b275abf83c669bc3419137bf96e8cb6419d38a))
+
+
 ## v0.16.2 (2026-03-27)
 
 ### Bug Fixes

@@ -31,6 +31,7 @@ from genlayer_py.transactions.actions import (
     wait_for_transaction_receipt,
     get_transaction,
     get_triggered_transaction_ids,
+    debug_trace_transaction,
 )
 from genlayer_py.config import transaction_config
 
@@ -209,6 +210,13 @@ class GenLayerClient(Eth):
         transaction_hash: _Hash32,
     ) -> list:
         return get_triggered_transaction_ids(self=self, transaction_hash=transaction_hash)
+
+    def debug_trace_transaction(
+        self,
+        transaction_hash: _Hash32,
+        round: int = 0,
+    ) -> dict:
+        return debug_trace_transaction(self=self, transaction_hash=transaction_hash, round=round)
 
     def appeal_transaction(
         self,

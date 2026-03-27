@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from genlayer_py.logging import logger
 import json
-from typing import List
+from typing import Any, Dict, List
+from web3 import Web3
 from web3.types import _Hash32
 from eth_typing import HexStr
 from web3.logs import DISCARD
@@ -208,6 +209,18 @@ def get_triggered_transaction_ids(
 
     tx = get_transaction(self, transaction_hash)
     return _decode_triggered_txs(self, tx)
+
+
+def debug_trace_transaction(
+    self: GenLayerClient,
+    transaction_hash: _Hash32,
+    round: int = 0,
+) -> Dict[str, Any]:
+    response = self.provider.make_request(
+        method="gen_dbg_traceTransaction",
+        params=[{"txID": Web3.to_hex(transaction_hash) if isinstance(transaction_hash, bytes) else transaction_hash, "round": round}],
+    )
+    return response.get("result", {})
 
 
 def _simplify_transaction_receipt(tx: GenLayerTransaction) -> GenLayerTransaction:

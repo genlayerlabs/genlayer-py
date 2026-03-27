@@ -11,6 +11,7 @@ from genlayer_py.chains.testnet_bradbury import (
     CONSENSUS_MAIN_CONTRACT,
     CONSENSUS_DATA_CONTRACT,
 )
+from genlayer_py.types.transactions import GenLayerRawTransaction
 
 
 class TestBradburyConfig:
@@ -84,3 +85,31 @@ class TestBradburyConsensusContract:
         result = self.contract.functions.getPendingTransactionValue(b"\x00" * 32).call()
         assert isinstance(result, int)
         assert result == 0
+
+
+@pytest.mark.testnet
+class TestBradburyGetTransactionAllData:
+    """Verify getTransactionAllData returns txExecutionResult."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.w3 = Web3(Web3.HTTPProvider(TESTNET_JSON_RPC_URL))
+        self.contract = self.w3.eth.contract(
+            address=Web3.to_checksum_address(CONSENSUS_DATA_CONTRACT["address"]),
+            abi=CONSENSUS_DATA_CONTRACT["abi"],
+        )
+
+    def test_get_transaction_all_data_returns_execution_result(self):
+        """Call getTransactionAllData for a known finalized tx and verify txExecutionResult is present."""
+        tx_id = bytes.fromhex(
+            "563f046c187d711127c51213ca62e2e4fee52009a98f0989a73a0a0382d21890"
+        )
+        tx_data, rounds_data = self.contract.functions.getTransactionAllData(tx_id).call()
+        raw = GenLayerRawTransaction.from_all_transaction_data(tx_data, rounds_data)
+        decoded = raw.decode()
+        assert decoded["tx_execution_result"] in [0, 1, 2]
+        assert decoded["tx_execution_result_name"] in [
+            "NOT_VOTED", "FINISHED_WITH_RETURN", "FINISHED_WITH_ERROR"
+        ]
+        assert decoded["status_name"] is not None
+        assert decoded["result_name"] is not None

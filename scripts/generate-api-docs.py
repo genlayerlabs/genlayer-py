@@ -4,11 +4,20 @@
 import inspect
 import importlib
 import os
+import re
 import sys
 from typing import get_type_hints
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+
+def clean_readme(content):
+    lines = content.split("\n")
+    lines = [l for l in lines if not re.match(r'^\[!\[.*\]\(https://(img\.shields\.io|dcbadge|badge\.fury)', l)]
+    content = "\n".join(lines)
+    content = re.sub(r'(## )\S*[\U0001F000-\U0001FFFF\u2600-\u27BF\u200d]+\s*', r'\1', content)
+    return content
 
 
 def format_type(annotation):
@@ -123,7 +132,7 @@ def main():
     readme_path = os.path.join(os.path.dirname(__file__), "..", "README.md")
     index_path = os.path.join(output_dir, "index.md")
     with open(readme_path, "r") as src, open(index_path, "w") as dst:
-        dst.write(src.read())
+        dst.write(clean_readme(src.read()))
     print(f"Generated: {index_path}")
 
 

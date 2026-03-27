@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.14.0 (2026-03-27)
+
+### Documentation
+
+- Add debug_trace_transaction usage to README
+  ([`719dcac`](https://github.com/genlayerlabs/genlayer-py/commit/719dcac1ecbbe91bac544d39872b3df72da61822))
+
+### Features
+
+- Add debug_trace_transaction method
+  ([`719dcac`](https://github.com/genlayerlabs/genlayer-py/commit/719dcac1ecbbe91bac544d39872b3df72da61822))
+
+
 ## v0.13.0 (2026-03-27)
 
 ### Bug Fixes

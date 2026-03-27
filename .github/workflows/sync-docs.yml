@@ -53,41 +53,18 @@ jobs:
           path: docs-repo
           fetch-depth: 0
 
-      - name: Prepare branch
+      - name: Sync and push docs
         working-directory: docs-repo
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          BRANCH="docs/py/${{ github.ref_name }}-${{ github.run_id }}"
-          git switch -c "$BRANCH"
-          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
-
-      - name: Sync docs into docs repo
-        run: |
-          set -euo pipefail
-          mkdir -p docs-repo/pages/api-references/genlayer-py
-          cp docs/api-references/genlayer-py.md docs-repo/pages/api-references/genlayer-py/index.md
-
-      - name: Commit, push, and create PR
-        working-directory: docs-repo
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          set -euo pipefail
+          mkdir -p pages/api-references/genlayer-py
+          cp "${{ github.workspace }}/docs/api-references/genlayer-py.md" pages/api-references/genlayer-py/index.md
           if [ -z "$(git status --porcelain)" ]; then
             echo "No changes to commit"
             exit 0
           fi
           git add pages/api-references/genlayer-py
           git commit -m "docs(py): sync API reference ${{ steps.version.outputs.value }}"
-          git push --set-upstream origin "$BRANCH"
-          gh pr create \
-            --repo genlayerlabs/genlayer-docs \
-            --base main \
-            --head "$BRANCH" \
-            --title "docs(py): sync PY SDK API reference ${{ steps.version.outputs.value }}" \
-            --body "Auto-generated API reference update from genlayer-py.
-
-          - Version: \`${{ steps.version.outputs.value }}\`
-          - Source commit: \`${{ github.sha }}\`"
+          git push

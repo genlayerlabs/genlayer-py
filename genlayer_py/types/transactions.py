@@ -308,10 +308,10 @@ class GenLayerRawTransaction:
                 rotations_left=tx_data[5],
                 result=tx_data[6],
                 round_validators=tx_data[7],
+                validator_votes=tx_data[8],
                 validator_votes_hash=[
-                    Web3.to_hex(vote_hash) for vote_hash in tx_data[8]
+                    Web3.to_hex(vote_hash) for vote_hash in tx_data[9]
                 ],
-                validator_votes=tx_data[9],
             )
 
         @classmethod

@@ -121,15 +121,19 @@ def get_transaction(
         transaction["status"] = int(TRANSACTION_STATUS_NAME_TO_NUMBER[localnet_status])
         transaction["status_name"] = localnet_status
         return _decode_localnet_transaction(transaction)
-    # Decode for testnet
+    # Decode for testnet — call both to get messages + txExecutionResult
     consensus_data_contract = self.w3.eth.contract(
         address=self.chain.consensus_data_contract["address"],
         abi=self.chain.consensus_data_contract["abi"],
     )
+    tx_data = consensus_data_contract.functions.getTransactionData(
+        transaction_hash, int(time.time())
+    ).call()
     tx_all_data, rounds_data = consensus_data_contract.functions.getTransactionAllData(
         transaction_hash
     ).call()
-    raw_transaction = GenLayerRawTransaction.from_all_transaction_data(tx_all_data, rounds_data)
+    raw_transaction = GenLayerRawTransaction.from_transaction_data(tx_data)
+    raw_transaction.tx_execution_result = tx_all_data[1]
     decoded_transaction = raw_transaction.decode()
     decoded_transaction["triggered_transactions"] = _decode_triggered_txs(
         self, decoded_transaction
@@ -192,6 +196,18 @@ def _decode_triggered_txs(
         triggered_txs.extend(process_events_for_status(TransactionStatus.FINALIZED))
 
     return triggered_txs
+
+
+def get_triggered_transaction_ids(
+    self: GenLayerClient,
+    transaction_hash: _Hash32,
+) -> List[HexStr]:
+    if self.chain.id == localnet.id:
+        tx = get_transaction(self, transaction_hash)
+        return tx.get("triggered_transactions", [])
+
+    tx = get_transaction(self, transaction_hash)
+    return _decode_triggered_txs(self, tx)
 
 
 def _simplify_transaction_receipt(tx: GenLayerTransaction) -> GenLayerTransaction:

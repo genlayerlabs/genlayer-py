@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.16.1 (2026-03-27)
+
+### Bug Fixes
+
+- **docs**: Strip badges and emojis from README when syncing to docs
+  ([`ccf210b`](https://github.com/genlayerlabs/genlayer-py/commit/ccf210b1318bdcd096f88729eeb17934573e63f3))
+
+
 ## v0.16.0 (2026-03-27)
 
 ### Features

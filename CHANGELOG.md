@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.15.3 (2026-03-27)
+
+### Bug Fixes
+
+- **ci**: Push docs directly to main instead of PR
+  ([`54cfb42`](https://github.com/genlayerlabs/genlayer-py/commit/54cfb420b8f4ccf292572cbfe5fa4909856f6c73))
+
+
 ## v0.15.2 (2026-03-27)
 
 ### Bug Fixes

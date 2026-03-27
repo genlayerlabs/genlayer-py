@@ -37,8 +37,10 @@ from genlayer_py.config import transaction_config
 
 
 class GenLayerClient(Eth):
-    """
-    The client to interact with GenLayer Network
+    """Client for interacting with the GenLayer network.
+
+    Provides methods for deploying and calling intelligent contracts,
+    managing transactions, and staking operations.
     """
 
     def __init__(
@@ -56,6 +58,7 @@ class GenLayerClient(Eth):
     def fund_account(
         self, address: Union[Address, ChecksumAddress, ENS], amount: int
     ) -> HexBytes:
+        """Funds an account with test tokens. Localnet only."""
         return fund_account(self, address, amount)
 
     def get_current_nonce(
@@ -63,6 +66,7 @@ class GenLayerClient(Eth):
         address: Optional[Union[Address, ChecksumAddress, ENS]] = None,
         block_identifier: Optional[BlockIdentifier] = None,
     ) -> Nonce:
+        """Returns the current nonce (transaction count) for an account."""
         return get_current_nonce(self, address, block_identifier)
 
     # Chain actions
@@ -70,6 +74,7 @@ class GenLayerClient(Eth):
         self,
         force_reset: bool = False,
     ) -> None:
+        """Initializes the consensus contract configuration from the network."""
         return initialize_consensus_smart_contract(self=self, force_reset=force_reset)
 
     # Contract actions
@@ -84,6 +89,7 @@ class GenLayerClient(Eth):
         transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_NONFINAL,
         sim_config: Optional[SimConfig] = None,
     ):
+        """Executes a read-only contract call without modifying state."""
         return read_contract(
             self=self,
             address=address,
@@ -108,6 +114,7 @@ class GenLayerClient(Eth):
         kwargs: Optional[Dict[str, CalldataEncodable]] = None,
         sim_config: Optional[SimConfig] = None,
     ):
+        """Executes a state-modifying function on a contract through consensus. Returns the transaction hash."""
         return write_contract(
             self=self,
             address=address,
@@ -131,6 +138,7 @@ class GenLayerClient(Eth):
         sim_config: Optional[SimConfig] = None,
         transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_NONFINAL,
     ):
+        """Simulates a state-modifying contract call without executing on-chain. Localnet only."""
         return simulate_write_contract(
             self=self,
             address=address,
@@ -152,6 +160,7 @@ class GenLayerClient(Eth):
         leader_only: bool = False,
         sim_config: Optional[SimConfig] = None,
     ):
+        """Deploys a new intelligent contract to GenLayer. Returns the transaction hash."""
         return deploy_contract(
             self=self,
             code=code,
@@ -167,6 +176,7 @@ class GenLayerClient(Eth):
         self,
         address: Union[Address, ChecksumAddress],
     ) -> ContractSchema:
+        """Gets the schema (methods and constructor) of a deployed contract. Localnet only."""
         return get_contract_schema(
             self=self,
             address=address,
@@ -176,6 +186,7 @@ class GenLayerClient(Eth):
         self,
         contract_code: AnyStr,
     ) -> ContractSchema:
+        """Generates a schema for contract code without deploying it. Localnet only."""
         return get_contract_schema_for_code(
             self=self,
             contract_code=contract_code,
@@ -190,6 +201,7 @@ class GenLayerClient(Eth):
         retries: int = transaction_config.retries,
         full_transaction: bool = False,
     ) -> GenLayerTransaction:
+        """Polls until a transaction reaches the specified status. Returns the transaction receipt."""
         return wait_for_transaction_receipt(
             self=self,
             transaction_hash=transaction_hash,
@@ -203,12 +215,14 @@ class GenLayerClient(Eth):
         self,
         transaction_hash: _Hash32,
     ) -> GenLayerTransaction:
+        """Fetches transaction data including status, execution result, and consensus details."""
         return get_transaction(self=self, transaction_hash=transaction_hash)
 
     def get_triggered_transaction_ids(
         self,
         transaction_hash: _Hash32,
     ) -> list:
+        """Returns transaction IDs of child transactions created from emitted messages."""
         return get_triggered_transaction_ids(self=self, transaction_hash=transaction_hash)
 
     def debug_trace_transaction(
@@ -216,6 +230,7 @@ class GenLayerClient(Eth):
         transaction_hash: _Hash32,
         round: int = 0,
     ) -> dict:
+        """Fetches the full execution trace including return data, stdout, stderr, and GenVM logs."""
         return debug_trace_transaction(self=self, transaction_hash=transaction_hash, round=round)
 
     def appeal_transaction(
@@ -224,6 +239,7 @@ class GenLayerClient(Eth):
         account: Optional[LocalAccount] = None,
         value: int = 0,
     ):
+        """Appeals a consensus transaction to trigger a new round of validation."""
         return appeal_transaction(
             self=self,
             transaction_id=transaction_id,

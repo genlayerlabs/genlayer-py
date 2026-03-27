@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.15.2 (2026-03-27)
+
+### Bug Fixes
+
+- **ci**: Replace peter-evans/create-pull-request with gh pr create
+  ([`dcc1e8f`](https://github.com/genlayerlabs/genlayer-py/commit/dcc1e8f3453bfbf84e7b9151d70bcd08c7021209))
+
+
 ## v0.15.1 (2026-03-27)
 
 ### Bug Fixes

@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.17.0 (2026-03-31)
+
+### Features
+
+- Add appeal tracking methods and fix appeal_transaction event handling
+  ([`7f6843f`](https://github.com/genlayerlabs/genlayer-py/commit/7f6843ffd23baeb80062e93b95338a5a73425ad9))
+
+
 ## v0.16.3 (2026-03-27)
 
 ### Bug Fixes

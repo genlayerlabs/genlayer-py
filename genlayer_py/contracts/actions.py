@@ -42,9 +42,10 @@ def get_contract_schema_for_code(
     if self.chain.id != localnet.id:
         raise GenLayerError("Contract schema is not supported on this network")
 
+    code_bytes = contract_code.encode("utf-8") if isinstance(contract_code, str) else contract_code
     response = self.provider.make_request(
         method="gen_getContractSchemaForCode",
-        params=[eth_utils.hexadecimal.encode_hex(contract_code)],
+        params=[eth_utils.hexadecimal.encode_hex(code_bytes)],
     )
     return response["result"]
 
@@ -170,16 +171,126 @@ def appeal_transaction(
     transaction_id: HexStr,
     account: Optional[LocalAccount] = None,
     value: int = 0,
-) -> None:
+) -> HexStr:
+    """Appeals a consensus transaction. Returns the original transaction_id.
+
+    Appeals emit AppealStarted/TransactionActivated events (not NewTransaction),
+    so we send the EVM tx directly instead of going through _send_transaction.
+    """
     sender_account = account if account is not None else self.local_account
+    if sender_account is None:
+        raise GenLayerError("No account set.")
+    if self.chain.consensus_main_contract is None:
+        raise GenLayerError("Consensus main contract not configured.")
+
     encoded_data = _encode_submit_appeal_data(self=self, transaction_id=transaction_id)
 
-    return _send_transaction(
+    transaction = _prepare_transaction(
         self=self,
-        encoded_data=encoded_data,
-        sender_account=sender_account,
+        sender=sender_account.address,
+        recipient=self.chain.consensus_main_contract["address"],
+        data=encoded_data,
         value=value,
     )
+    signed_transaction = sender_account.sign_transaction(transaction)
+    serialized_transaction = self.w3.to_hex(signed_transaction.raw_transaction)
+    tx_hash = self.provider.make_request(
+        method="eth_sendRawTransaction", params=[serialized_transaction]
+    )["result"]
+    tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+
+    if tx_receipt.status != 1:
+        raise GenLayerError(f"Appeal reverted: EVM tx {tx_hash}")
+
+    return transaction_id
+
+
+def get_round_number(
+    self: GenLayerClient,
+    transaction_id: HexStr,
+) -> int:
+    """Returns the current consensus round number for a transaction."""
+    if self.chain.rounds_storage_contract is None:
+        raise GenLayerError("rounds_storage_contract not configured for this chain")
+    contract = self.w3.eth.contract(
+        address=self.w3.to_checksum_address(self.chain.rounds_storage_contract["address"]),
+        abi=self.chain.rounds_storage_contract["abi"],
+    )
+    tx_bytes = _to_bytes32(self, transaction_id)
+    return contract.functions.getRoundNumber(tx_bytes).call()
+
+
+def get_round_data(
+    self: GenLayerClient,
+    transaction_id: HexStr,
+    round: int,
+) -> dict:
+    """Returns detailed data for a specific consensus round."""
+    if self.chain.rounds_storage_contract is None:
+        raise GenLayerError("rounds_storage_contract not configured for this chain")
+    contract = self.w3.eth.contract(
+        address=self.w3.to_checksum_address(self.chain.rounds_storage_contract["address"]),
+        abi=self.chain.rounds_storage_contract["abi"],
+    )
+    tx_bytes = _to_bytes32(self, transaction_id)
+    return contract.functions.getRoundData(tx_bytes, round).call()
+
+
+def get_last_round_data(
+    self: GenLayerClient,
+    transaction_id: HexStr,
+) -> tuple:
+    """Returns the current round number and its data."""
+    if self.chain.rounds_storage_contract is None:
+        raise GenLayerError("rounds_storage_contract not configured for this chain")
+    contract = self.w3.eth.contract(
+        address=self.w3.to_checksum_address(self.chain.rounds_storage_contract["address"]),
+        abi=self.chain.rounds_storage_contract["abi"],
+    )
+    tx_bytes = _to_bytes32(self, transaction_id)
+    return contract.functions.getLastRoundData(tx_bytes).call()
+
+
+def can_appeal(
+    self: GenLayerClient,
+    transaction_id: HexStr,
+) -> bool:
+    """Checks if a transaction can be appealed."""
+    if self.chain.appeals_contract is None:
+        raise GenLayerError("appeals_contract not configured for this chain")
+    contract = self.w3.eth.contract(
+        address=self.w3.to_checksum_address(self.chain.appeals_contract["address"]),
+        abi=self.chain.appeals_contract["abi"],
+    )
+    tx_bytes = _to_bytes32(self, transaction_id)
+    return contract.functions.canAppeal(tx_bytes).call()
+
+
+def get_min_appeal_bond(
+    self: GenLayerClient,
+    transaction_id: HexStr,
+) -> int:
+    """Calculates the minimum bond required to appeal a transaction."""
+    if self.chain.fee_manager_contract is None or self.chain.rounds_storage_contract is None:
+        raise GenLayerError("fee_manager_contract/rounds_storage_contract not configured for this chain")
+
+    round_number = get_round_number(self, transaction_id)
+    tx = self.get_transaction(transaction_id)
+    tx_status = int(tx["status"])
+
+    fee_contract = self.w3.eth.contract(
+        address=self.w3.to_checksum_address(self.chain.fee_manager_contract["address"]),
+        abi=self.chain.fee_manager_contract["abi"],
+    )
+    tx_bytes = _to_bytes32(self, transaction_id)
+    return fee_contract.functions.calculateMinAppealBond(tx_bytes, round_number, tx_status).call()
+
+
+def _to_bytes32(self: GenLayerClient, hex_str: HexStr) -> bytes:
+    """Convert a hex string to bytes32."""
+    if hex_str.startswith("0x"):
+        hex_str = hex_str[2:]
+    return self.w3.to_bytes(hexstr=hex_str)
 
 
 def simulate_write_contract(
@@ -326,7 +437,7 @@ def _send_transaction(
 
     if self.chain.consensus_main_contract is None:
         raise GenLayerError(
-            "Consensus main contract not initialized. Please ensure client is properly initialized.",
+            f"Consensus main contract address not found in chain config for \"{self.chain.name}\".",
         )
 
     transaction = _prepare_transaction(
@@ -347,15 +458,27 @@ def _send_transaction(
     tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
 
     if tx_receipt.status != 1:
-        raise GenLayerError("Transaction failed")
+        raise GenLayerError(
+            f"Transaction reverted: EVM tx {tx_hash} to consensus contract "
+            f"{self.chain.consensus_main_contract['address']} was reverted."
+        )
 
     consensus_main_contract = self.w3.eth.contract(
         abi=self.chain.consensus_main_contract["abi"]
     )
-    event = consensus_main_contract.get_event_by_name("NewTransaction")
-    events = event.process_receipt(tx_receipt, DISCARD)
 
-    if len(events) == 0:
-        raise GenLayerError("Transaction not processed by consensus")
+    # Check for NewTransaction (immediately activated) or CreatedTransaction (queued)
+    new_tx_event = consensus_main_contract.get_event_by_name("NewTransaction")
+    new_tx_events = new_tx_event.process_receipt(tx_receipt, DISCARD)
+    if len(new_tx_events) > 0:
+        return self.w3.to_hex(new_tx_events[0]["args"]["txId"])
 
-    return self.w3.to_hex(events[0]["args"]["txId"])
+    created_tx_event = consensus_main_contract.get_event_by_name("CreatedTransaction")
+    created_tx_events = created_tx_event.process_receipt(tx_receipt, DISCARD)
+    if len(created_tx_events) > 0:
+        return self.w3.to_hex(created_tx_events[0]["args"]["txId"])
+
+    raise GenLayerError(
+        f"Transaction not processed by consensus: EVM tx {tx_hash} succeeded but no "
+        f"NewTransaction or CreatedTransaction event was found in the receipt logs."
+    )

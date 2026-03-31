@@ -22,6 +22,11 @@ from genlayer_py.contracts.actions import (
     write_contract,
     deploy_contract,
     appeal_transaction,
+    get_round_number,
+    get_round_data,
+    get_last_round_data,
+    can_appeal,
+    get_min_appeal_bond,
     get_contract_schema,
     get_contract_schema_for_code,
     simulate_write_contract,
@@ -239,10 +244,31 @@ class GenLayerClient(Eth):
         account: Optional[LocalAccount] = None,
         value: int = 0,
     ):
-        """Appeals a consensus transaction to trigger a new round of validation."""
+        """Appeals a consensus transaction to trigger a new round of validation.
+        Returns the original transaction_id (appeals operate on the same tx)."""
         return appeal_transaction(
             self=self,
             transaction_id=transaction_id,
             account=account,
             value=value,
         )
+
+    def get_round_number(self, transaction_id: HexStr) -> int:
+        """Returns the current consensus round number for a transaction."""
+        return get_round_number(self=self, transaction_id=transaction_id)
+
+    def get_round_data(self, transaction_id: HexStr, round: int) -> dict:
+        """Returns detailed data for a specific consensus round."""
+        return get_round_data(self=self, transaction_id=transaction_id, round=round)
+
+    def get_last_round_data(self, transaction_id: HexStr) -> tuple:
+        """Returns the current round number and its data."""
+        return get_last_round_data(self=self, transaction_id=transaction_id)
+
+    def can_appeal(self, transaction_id: HexStr) -> bool:
+        """Checks if a transaction can be appealed."""
+        return can_appeal(self=self, transaction_id=transaction_id)
+
+    def get_min_appeal_bond(self, transaction_id: HexStr) -> int:
+        """Calculates the minimum bond required to appeal a transaction."""
+        return get_min_appeal_bond(self=self, transaction_id=transaction_id)

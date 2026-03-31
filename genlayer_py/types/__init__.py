@@ -15,5 +15,5 @@ from .transactions import (
     DECIDED_STATES,
     is_decided_state,
 )
-from .chain import Chain, NativeCurrency, ContractInfo, GenLayerChain
+from .chain import Chain, NativeCurrency, ContractInfo, SimpleContractInfo, GenLayerChain
 from .contracts import ContractSchema, SimConfig

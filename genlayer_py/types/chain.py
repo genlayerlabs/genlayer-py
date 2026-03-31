@@ -25,9 +25,17 @@ class ContractInfo(TypedDict):
     bytecode: str
 
 
+class SimpleContractInfo(TypedDict):
+    address: str
+    abi: List[Any]
+
+
 @dataclass
 class GenLayerChain(Chain):
     consensus_main_contract: Optional[ContractInfo]
     consensus_data_contract: Optional[ContractInfo]
+    fee_manager_contract: Optional[SimpleContractInfo]
+    rounds_storage_contract: Optional[SimpleContractInfo]
+    appeals_contract: Optional[SimpleContractInfo]
     default_number_of_initial_validators: int
     default_consensus_max_rotations: int

@@ -30,6 +30,9 @@ localnet: GenLayerChain = GenLayerChain(
     testnet=True,
     consensus_main_contract=CONSENSUS_MAIN_CONTRACT,
     consensus_data_contract=CONSENSUS_DATA_CONTRACT,
+    fee_manager_contract=None,
+    rounds_storage_contract=None,
+    appeals_contract=None,
     default_number_of_initial_validators=5,
     default_consensus_max_rotations=3,
 )

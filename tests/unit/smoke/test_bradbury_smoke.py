@@ -39,19 +39,30 @@ class TestBradburyConfig:
 
 @pytest.mark.testnet
 class TestBradburyConnectivity:
-    """Verify RPC connectivity to Bradbury testnet."""
+    """Verify RPC connectivity to Bradbury testnet.
+
+    Uses create_client() rather than a stock Web3.HTTPProvider: the
+    Bradbury RPC rejects JSON-RPC requests with id=0 as an "Invalid
+    Request" (server-side go-playground/validator `required` tag treats
+    int zero as unset). Stock web3.py's HTTPProvider starts its request
+    counter at 0, so the first probe on any fresh Web3() fails. The SDK
+    provider (GenLayerProvider) ids requests by timestamp and is the
+    path real consumers take."""
 
     def test_rpc_connects(self):
-        w3 = Web3(Web3.HTTPProvider(TESTNET_JSON_RPC_URL))
-        assert w3.is_connected()
+        # Success of any RPC call is what we actually care about;
+        # GenLayerProvider doesn't implement the BaseProvider.is_connected
+        # liveness check web3.py calls from Web3().is_connected.
+        client = create_client(chain=testnet_bradbury)
+        assert client.chain_id == 4221
 
     def test_chain_id_matches(self):
-        w3 = Web3(Web3.HTTPProvider(TESTNET_JSON_RPC_URL))
-        assert w3.eth.chain_id == 4221
+        client = create_client(chain=testnet_bradbury)
+        assert client.chain_id == 4221
 
     def test_block_number_positive(self):
-        w3 = Web3(Web3.HTTPProvider(TESTNET_JSON_RPC_URL))
-        assert w3.eth.block_number > 0
+        client = create_client(chain=testnet_bradbury)
+        assert client.block_number > 0
 
 
 @pytest.mark.testnet
@@ -62,8 +73,9 @@ class TestBradburyConsensusContract:
     def setup(self):
         from genlayer_py.consensus.abi import CONSENSUS_MAIN_ABI_V06
 
-        self.w3 = Web3(Web3.HTTPProvider(TESTNET_JSON_RPC_URL))
-        self.contract = self.w3.eth.contract(
+        client = create_client(chain=testnet_bradbury)
+        self.w3 = client
+        self.contract = client.contract(
             address=Web3.to_checksum_address(CONSENSUS_MAIN_CONTRACT["address"]),
             abi=CONSENSUS_MAIN_ABI_V06,
         )

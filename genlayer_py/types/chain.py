@@ -37,5 +37,6 @@ class GenLayerChain(Chain):
     fee_manager_contract: Optional[SimpleContractInfo]
     rounds_storage_contract: Optional[SimpleContractInfo]
     appeals_contract: Optional[SimpleContractInfo]
+    staking_contract: Optional[SimpleContractInfo]
     default_number_of_initial_validators: int
     default_consensus_max_rotations: int

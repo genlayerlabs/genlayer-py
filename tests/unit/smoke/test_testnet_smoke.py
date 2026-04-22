@@ -11,6 +11,7 @@ from genlayer_py.chains.testnet_asimov import (
     CONSENSUS_MAIN_CONTRACT,
     CONSENSUS_DATA_CONTRACT,
 )
+from genlayer_py.client import create_client
 
 
 class TestTestnetConfig:
@@ -37,19 +38,27 @@ class TestTestnetConfig:
 
 @pytest.mark.testnet
 class TestTestnetConnectivity:
-    """Verify RPC connectivity to testnet. Run with: pytest -m testnet"""
+    """Verify RPC connectivity to testnet. Run with: pytest -m testnet
+
+    Uses create_client() so requests go through GenLayerProvider.
+    Stock Web3.HTTPProvider starts its request counter at 0, and the
+    GenLayer RPC servers reject id=0 as an "Invalid Request" (Go-side
+    validator treats int zero as unset)."""
 
     def test_rpc_connects(self):
-        w3 = Web3(Web3.HTTPProvider(TESTNET_JSON_RPC_URL))
-        assert w3.is_connected()
+        # Success of any RPC call is what we actually care about;
+        # GenLayerProvider doesn't implement the BaseProvider.is_connected
+        # liveness check web3.py calls from Web3().is_connected.
+        client = create_client(chain=testnet_asimov)
+        assert client.chain_id == 4221
 
     def test_chain_id_matches(self):
-        w3 = Web3(Web3.HTTPProvider(TESTNET_JSON_RPC_URL))
-        assert w3.eth.chain_id == 4221
+        client = create_client(chain=testnet_asimov)
+        assert client.chain_id == 4221
 
     def test_block_number_positive(self):
-        w3 = Web3(Web3.HTTPProvider(TESTNET_JSON_RPC_URL))
-        assert w3.eth.block_number > 0
+        client = create_client(chain=testnet_asimov)
+        assert client.block_number > 0
 
 
 @pytest.mark.testnet
@@ -60,8 +69,9 @@ class TestConsensusContractReadOnly:
     def setup(self):
         from genlayer_py.consensus.abi import CONSENSUS_MAIN_ABI
 
-        self.w3 = Web3(Web3.HTTPProvider(TESTNET_JSON_RPC_URL))
-        self.contract = self.w3.eth.contract(
+        client = create_client(chain=testnet_asimov)
+        self.w3 = client
+        self.contract = client.contract(
             address=Web3.to_checksum_address(CONSENSUS_MAIN_CONTRACT["address"]),
             abi=CONSENSUS_MAIN_ABI,
         )

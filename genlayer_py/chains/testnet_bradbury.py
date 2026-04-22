@@ -134,6 +134,7 @@ testnet_bradbury: GenLayerChain = GenLayerChain(
     fee_manager_contract=FEE_MANAGER_CONTRACT,
     rounds_storage_contract=ROUNDS_STORAGE_CONTRACT,
     appeals_contract=APPEALS_CONTRACT,
+    staking_contract=None,
     default_number_of_initial_validators=5,
     default_consensus_max_rotations=3,
 )

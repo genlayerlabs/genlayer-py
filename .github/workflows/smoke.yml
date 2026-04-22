@@ -10,7 +10,11 @@ jobs:
   smoke:
     name: Testnet Smoke Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Bradbury/Asimov RPC reads occasionally stall for 2-3 minutes on
+    # single calls (testnet capacity); with 17 testnet-flagged tests
+    # even one hiccup blew past the old 5-minute ceiling. 15m gives
+    # enough slack for two slow calls without indefinite hangs.
+    timeout-minutes: 15
     continue-on-error: true
     strategy:
       matrix:

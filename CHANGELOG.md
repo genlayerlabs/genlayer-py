@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v0.18.0 (2026-04-22)
+
+### Bug Fixes
+
+- **smoke**: Route connectivity probes through GenLayerProvider
+  ([#75](https://github.com/genlayerlabs/genlayer-py/pull/75),
+  [`f25452d`](https://github.com/genlayerlabs/genlayer-py/commit/f25452d46118e58351b80da82fcd76b27d30ed58))
+
+### Continuous Integration
+
+- **smoke**: Bump timeout 5m → 15m for slow testnet reads
+  ([#75](https://github.com/genlayerlabs/genlayer-py/pull/75),
+  [`f25452d`](https://github.com/genlayerlabs/genlayer-py/commit/f25452d46118e58351b80da82fcd76b27d30ed58))
+
+### Features
+
+- **staking**: Add StakingActions to GenLayerClient
+  ([#75](https://github.com/genlayerlabs/genlayer-py/pull/75),
+  [`f25452d`](https://github.com/genlayerlabs/genlayer-py/commit/f25452d46118e58351b80da82fcd76b27d30ed58))
+
+
 ## v0.17.0 (2026-03-31)
 
 ### Features

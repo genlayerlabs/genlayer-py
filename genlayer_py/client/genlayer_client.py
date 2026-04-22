@@ -38,6 +38,27 @@ from genlayer_py.transactions.actions import (
     get_triggered_transaction_ids,
     debug_trace_transaction,
 )
+from genlayer_py.staking.actions import (
+    validator_join,
+    validator_deposit,
+    validator_exit,
+    validator_claim,
+    validator_prime,
+    set_operator,
+    set_identity,
+    delegator_join,
+    delegator_exit,
+    delegator_claim,
+    epoch as staking_epoch,
+    active_validators,
+    active_validators_count,
+    is_validator,
+    get_validator_info,
+    get_stake_info,
+    banned_validators,
+    validator_min_stake,
+    delegator_min_stake,
+)
 from genlayer_py.config import transaction_config
 
 
@@ -272,3 +293,111 @@ class GenLayerClient(Eth):
     def get_min_appeal_bond(self, transaction_id: HexStr) -> int:
         """Calculates the minimum bond required to appeal a transaction."""
         return get_min_appeal_bond(self=self, transaction_id=transaction_id)
+
+    # ── Staking actions (EVM, not consensus-layer) ────────────────────
+    # Mirrors genlayer-js StakingActions. Requires chain.staking_contract
+    # to be set — see examples/staking.py or the bradbury chain preset.
+
+    def staking_epoch(self) -> int:
+        """Returns the current staking epoch."""
+        return staking_epoch(self=self)
+
+    def active_validators(self) -> List:
+        """Returns ValidatorWallet addresses active in the current epoch."""
+        return active_validators(self=self)
+
+    def active_validators_count(self) -> int:
+        return active_validators_count(self=self)
+
+    def is_validator(self, address) -> bool:
+        return is_validator(self=self, address=address)
+
+    def get_validator_info(self, validator) -> dict:
+        """Returns the raw validatorView struct for a validator wallet."""
+        return get_validator_info(self=self, validator=validator)
+
+    def get_stake_info(self, delegator, validator) -> dict:
+        """Returns a delegator's stake position on a validator."""
+        return get_stake_info(self=self, delegator=delegator, validator=validator)
+
+    def banned_validators(self, start_index: int = 0, size: int = 100) -> List:
+        return banned_validators(self=self, start_index=start_index, size=size)
+
+    def validator_min_stake(self) -> int:
+        return validator_min_stake(self=self)
+
+    def delegator_min_stake(self) -> int:
+        return delegator_min_stake(self=self)
+
+    def validator_join(
+        self,
+        amount: int,
+        operator=None,
+        account: Optional[LocalAccount] = None,
+    ) -> HexBytes:
+        """Joins as a validator. Deploys a ValidatorWallet with msg.sender
+        as owner and `operator` (defaults to owner) as operator."""
+        return validator_join(
+            self=self, amount=amount, operator=operator, account=account
+        )
+
+    def validator_deposit(
+        self, validator, amount: int, account: Optional[LocalAccount] = None
+    ) -> HexBytes:
+        """Adds stake to an active validator. Routed via the wallet so
+        Staking sees msg.sender == wallet (required by the contract)."""
+        return validator_deposit(
+            self=self, validator=validator, amount=amount, account=account
+        )
+
+    def validator_exit(
+        self, validator, shares: int, account: Optional[LocalAccount] = None
+    ) -> HexBytes:
+        """Burns validator shares. Routed via the wallet."""
+        return validator_exit(
+            self=self, validator=validator, shares=shares, account=account
+        )
+
+    def validator_claim(
+        self, validator, account: Optional[LocalAccount] = None
+    ) -> HexBytes:
+        return validator_claim(self=self, validator=validator, account=account)
+
+    def validator_prime(
+        self, validator, account: Optional[LocalAccount] = None
+    ) -> HexBytes:
+        return validator_prime(self=self, validator=validator, account=account)
+
+    def set_operator(
+        self, validator, operator, account: Optional[LocalAccount] = None
+    ) -> HexBytes:
+        """Rotates the operator for an existing ValidatorWallet."""
+        return set_operator(
+            self=self, validator=validator, operator=operator, account=account
+        )
+
+    def set_identity(
+        self, validator, moniker: str, account: Optional[LocalAccount] = None
+    ) -> HexBytes:
+        return set_identity(
+            self=self, validator=validator, moniker=moniker, account=account
+        )
+
+    def delegator_join(
+        self, validator, amount: int, account: Optional[LocalAccount] = None
+    ) -> HexBytes:
+        return delegator_join(
+            self=self, validator=validator, amount=amount, account=account
+        )
+
+    def delegator_exit(
+        self, validator, shares: int, account: Optional[LocalAccount] = None
+    ) -> HexBytes:
+        return delegator_exit(
+            self=self, validator=validator, shares=shares, account=account
+        )
+
+    def delegator_claim(
+        self, validator, account: Optional[LocalAccount] = None
+    ) -> HexBytes:
+        return delegator_claim(self=self, validator=validator, account=account)

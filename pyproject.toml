@@ -28,7 +28,7 @@ where = ["."]
 exclude = ["tests*", "scripts*"]
 
 [tool.setuptools.package-data]
-"genlayer_py" = ["consensus/abi/*.json"]
+"genlayer_py" = ["consensus/abi/*.json", "staking/abi/*.json"]
 
 [dependency-groups]
 dev = [

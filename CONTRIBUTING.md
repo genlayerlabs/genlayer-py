@@ -36,23 +36,21 @@ Have ideas for new features or use cases? We're eager to hear them! But first:
 
 - **1.2. Create a branch**: create the branch that you will work on by using the link provided in the issue details page (right panel at the bottom - section "Development")
 
-- **1.3. Setup the SDK locally**: clone the repository
+- **1.3. Setup the SDK locally**: clone the repository and install dependencies
 
    ```sh
    $ git clone https://github.com/genlayerlabs/genlayer-py.git
+   $ cd genlayer-py
+   $ uv sync --group dev
    ```
 
-- **1.4. Add the package to your project locally**: to add the package locally, use the command:
-  - **Option 1:** Install the package in regular mode
-      ```sh
-      $ pip install path/to/genlayer-py
-      ```
-  - **Option 2:** Install the package in editable mode
+   This will install all dependencies including dev tools. You can then run tests with:
 
-      ```sh
-      $ pip install -e path/to/genlayer-py --config-settings editable_mode=strict
-      ```
-   This will allow you to use the package in your project without publishing it. With option 1 you need to re-install the package on every changes you make and with option 2 you only need to perform a re-installation if you change the project metadata. You can find more information in the pip [documentation](https://pip.pypa.io/en/stable/topics/local-project-installs/)
+   ```sh
+   $ uv run pytest
+   ```
+
+   > **Note**: This project uses [uv](https://docs.astral.sh/uv/) for dependency management. If you don't have it installed, see the [uv installation guide](https://docs.astral.sh/uv/getting-started/installation/).
 
 
 #### 2. Submit your solution

@@ -28,6 +28,28 @@ Have ideas for new features or use cases? We're eager to hear them! But first:
 - Ensure you have the SDK installed to explore existing use cases.
 - After familiarizing yourself with the SDK, contribute your unique use case and share your ideas in our [Discord channel](https://discord.gg/8Jm4v89VAu).
 
+## Branch model
+
+This repo uses a branch-per-major release model. There is no `main`.
+
+- **`v0.18`** — current stable major (semver-zero, so 0.18 IS the major; 0.19 would be a major bump that gets its own branch). PRs for bug fixes / non-breaking features target this branch.
+- **`v<next>-dev`** — when next-major (i.e. next-minor on 0.x) work is in progress, this branch is open for breaking changes. PRs introducing them target this branch, not `v0.18`.
+- **Older majors** stay on the repo for back-ports and security patches. Default branch on github.com is whichever major is current stable.
+
+When you fork or clone, the default branch is `v0.18` today. If you have a `main` branch from a previous checkout, delete it locally:
+
+```sh
+git checkout v0.18
+git branch -D main
+git remote prune origin
+```
+
+## Releases
+
+Releases are deliberate, not automatic. `scripts/release.sh` bumps the version, updates `CHANGELOG.md`, commits, tags, and pushes; CI takes over from the tag push and publishes to PyPI. See `.claude/skills/release/SKILL.md` for the full flow.
+
+**Semver-zero rule**: this package is on a 0.x line, so the MINOR component is the breaking-change boundary. `0.18 → 0.19` is a major bump and needs a new branch — the script refuses `minor`/`major` keywords without `--allow-major`.
+
 ### Bug fixing and Feature development
 
 #### 1. Set yourself up to start coding

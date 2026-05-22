@@ -1,111 +1,56 @@
-name: Continuous Delivery
+name: Publish Package to PyPI
 
+# Tag-driven publish. The release is cut by a human (or Claude via the
+# release skill) running scripts/release.sh on the target stable branch
+# — that script bumps pyproject.toml, updates CHANGELOG.md, commits,
+# tags vX.Y.Z, and pushes both the branch commit and the tag. This
+# workflow fires on the tag push, runs tests, sanity-checks the tag
+# matches pyproject.toml, builds, and publishes to PyPI. It never
+# bumps or tags by itself.
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    tags:
+      - "v*"
 
 jobs:
   run-tests:
     name: Run Tests
     uses: ./.github/workflows/tests.yml
 
-  release-and-upload:
-    name: Release and Upload Artifacts
-    runs-on: ubuntu-latest
-    needs: run-tests
-    environment: Publish
-
-    concurrency:
-      group: ${{ github.workflow }}-release-${{ github.ref_name }}
-      cancel-in-progress: false
-
-    permissions:
-      contents: write
-
-    outputs:
-      released: ${{ steps.release.outputs.released }}
-      commit_sha: ${{ steps.get-commit.outputs.commit_sha }}
-
-    steps:
-      - name: Setup | Get CI Bot Token
-        uses: actions/create-github-app-token@v3
-        id: ci_bot_token
-        with:
-          client-id: ${{ vars.PUBLISH_CI_APP_CLIENT_ID }}
-          private-key: ${{ secrets.PUBLISH_CI_APP_KEY }}
-
-      - name: Setup | Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
-          fetch-depth: 0
-          token: ${{ steps.ci_bot_token.outputs.token }}
-
-      - name: Check | Verify Upstream Unchanged
-        shell: bash
-        run: |
-          chmod +x scripts/verify-upstream.sh
-          ./scripts/verify-upstream.sh ${{ github.sha }}
-
-      - name: Setup | Initialize Git User
-        run: |
-          git config --global user.email "github-actions[bot]@genlayerlabs.com"
-          git config --global user.name "github-actions[bot]"
-
-      - name: Setup | Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Setup | Install Python
-        run: uv python install 3.12
-
-      - name: Action | Semantic Version Release
-        id: release
-        env:
-          GH_TOKEN: ${{ steps.ci_bot_token.outputs.token }}
-        run: |
-          chmod +x scripts/semantic-version-release.sh
-          ./scripts/semantic-version-release.sh releaserc.toml
-
-      - name: Get | Current Commit SHA
-        id: get-commit
-        run: echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Build | Clean Previous Builds
-        if: steps.release.outputs.released == 'true'
-        run: |
-          rm -rf -- dist build *.egg-info
-
-      - name: Build | Create Distribution Package
-        if: steps.release.outputs.released == 'true'
-        run: uv build
-
-      - name: Upload | Distribution Artifacts
-        if: steps.release.outputs.released == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: distribution-artifacts
-          path: dist
-          if-no-files-found: error
-
   publish-to-pypi:
     name: Publish Package to PyPI
-    needs: release-and-upload
+    needs: run-tests
     runs-on: ubuntu-latest
-    if: ${{ needs.release-and-upload.outputs.released == 'true' }}
 
     steps:
-      - name: Setup | Install uv
+      - name: Checkout tag
+        uses: actions/checkout@v4
+
+      - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Download | Distribution Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: distribution-artifacts
-          path: dist
+      - name: Install Python
+        run: uv python install 3.12
 
-      - name: Publish | Upload to PyPI
+      - name: Verify tag matches pyproject.toml version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="$(grep -E '^version = ' pyproject.toml | head -1 | sed -E 's/version = "([^"]+)"/\1/')"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "Tag ($TAG_VERSION) and pyproject.toml ($PKG_VERSION) disagree — refusing to publish." >&2
+            echo "Re-cut the release via scripts/release.sh so the tag and the committed version match." >&2
+            exit 1
+          fi
+          echo "Tag $GITHUB_REF_NAME matches pyproject.toml $PKG_VERSION."
+
+      - name: Clean previous builds
+        run: rm -rf -- dist build *.egg-info
+
+      - name: Build distribution
+        run: uv build
+
+      - name: Publish to PyPI
         run: |
           if [ -z "${{ secrets.PYPI_API_TOKEN }}" ]; then
             echo "Missing PyPI API token"; exit 1;
@@ -113,3 +58,19 @@ jobs:
           uv publish dist/*
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NOTES="$(awk -v ver="$GITHUB_REF_NAME" '
+            $0 ~ "^## \\[?" substr(ver, 2) {capture=1; next}
+            capture && /^## / {exit}
+            capture {print}
+          ' CHANGELOG.md)"
+          if [ -z "$NOTES" ]; then
+            NOTES="Release $GITHUB_REF_NAME"
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "$NOTES"

@@ -29,7 +29,8 @@ def encode_add_transaction_data(
         max_rotations,
         w3.to_bytes(hexstr=tx_data),
     ]
-    if len(contract_fn.argument_types) >= 6:
+    input_names = {inp.get("name", "") for inp in contract_fn.abi.get("inputs", [])}
+    if "_validUntil" in input_names or "validUntil" in input_names:
         add_transaction_args.append(valid_until)
 
     params = abi_encode(

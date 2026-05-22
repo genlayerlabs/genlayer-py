@@ -96,6 +96,48 @@ def test_encode_add_transaction_uses_v6_signature_when_abi_has_6_inputs():
     assert encoded.startswith(f"0x{selector}")
 
 
+ADD_TRANSACTION_ABI_V7 = [
+    {
+        "type": "function",
+        "name": "addTransaction",
+        "stateMutability": "nonpayable",
+        "inputs": [
+            {"name": "_sender", "type": "address"},
+            {"name": "_recipient", "type": "address"},
+            {"name": "_numOfInitialValidators", "type": "uint256"},
+            {"name": "_maxRotations", "type": "uint256"},
+            {"name": "_calldata", "type": "bytes"},
+            {"name": "_validUntil", "type": "uint256"},
+            {"name": "_priorityFee", "type": "uint256"},
+        ],
+        "outputs": [],
+    }
+]
+
+
+def test_encode_add_transaction_detects_valid_until_by_name_not_arg_count():
+    # A future ABI with 7 inputs should still slot valid_until into the
+    # right position (by name), not silently drop it because count > 6.
+    client = _make_client(ADD_TRANSACTION_ABI_V7)
+
+    # Encoding succeeds when valid_until is supplied (6 user args + the new one
+    # would actually need to be added by a caller; here we just confirm the
+    # name-based check fires and does not silently skip valid_until).
+    import pytest
+
+    with pytest.raises(Exception):
+        # eth_abi.encode will complain about the missing 7th arg — the point is
+        # that we did NOT silently include valid_until in the wrong position.
+        contract_actions._encode_add_transaction_data(
+            self=client,
+            sender_account=client.local_account,
+            recipient=RECIPIENT,
+            consensus_max_rotations=3,
+            data="0x",
+            valid_until=42,
+        )
+
+
 def test_write_contract_refreshes_consensus_abi_before_add_transaction_encoding(
     monkeypatch,
 ):

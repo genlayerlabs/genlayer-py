@@ -22,6 +22,8 @@ from genlayer_py.contracts.actions import (
     write_contract,
     deploy_contract,
     appeal_transaction,
+    top_up_fees,
+    top_up_and_submit_appeal,
     get_round_number,
     get_round_data,
     get_last_round_data,
@@ -30,6 +32,11 @@ from genlayer_py.contracts.actions import (
     get_contract_schema,
     get_contract_schema_for_code,
     simulate_write_contract,
+    get_current_fee_policy,
+    estimate_fees_distribution,
+    estimate_transaction_fees,
+    estimate_transaction_fees_from_simulation,
+    estimate_transaction_fees_for_write,
 )
 from genlayer_py.chains.actions import initialize_consensus_smart_contract
 from genlayer_py.transactions.actions import (
@@ -60,6 +67,12 @@ from genlayer_py.staking.actions import (
     delegator_min_stake,
 )
 from genlayer_py.config import transaction_config
+from genlayer_py.transactions.fees import (
+    FeeEstimateOptions,
+    FeesDistributionInput,
+    TransactionFeeOptions,
+    SimulationFeeEstimateOptions,
+)
 
 
 class GenLayerClient(Eth):
@@ -139,6 +152,8 @@ class GenLayerClient(Eth):
         args: Optional[List[CalldataEncodable]] = None,
         kwargs: Optional[Dict[str, CalldataEncodable]] = None,
         sim_config: Optional[SimConfig] = None,
+        valid_until: Optional[int] = None,
+        fees: Optional[TransactionFeeOptions] = None,
     ):
         """Executes a state-modifying function on a contract through consensus. Returns the transaction hash."""
         return write_contract(
@@ -152,6 +167,8 @@ class GenLayerClient(Eth):
             args=args,
             kwargs=kwargs,
             sim_config=sim_config,
+            valid_until=valid_until,
+            fees=fees,
         )
 
     def simulate_write_contract(
@@ -161,6 +178,9 @@ class GenLayerClient(Eth):
         account: Optional[LocalAccount] = None,
         args: Optional[List[CalldataEncodable]] = None,
         kwargs: Optional[Dict[str, CalldataEncodable]] = None,
+        value: int = 0,
+        leader_only: bool = False,
+        fees: Optional[TransactionFeeOptions] = None,
         sim_config: Optional[SimConfig] = None,
         transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_NONFINAL,
     ):
@@ -172,6 +192,9 @@ class GenLayerClient(Eth):
             args=args,
             kwargs=kwargs,
             account=account,
+            value=value,
+            leader_only=leader_only,
+            fees=fees,
             sim_config=sim_config,
             transaction_hash_variant=transaction_hash_variant,
         )
@@ -185,6 +208,8 @@ class GenLayerClient(Eth):
         consensus_max_rotations: Optional[int] = None,
         leader_only: bool = False,
         sim_config: Optional[SimConfig] = None,
+        valid_until: Optional[int] = None,
+        fees: Optional[TransactionFeeOptions] = None,
     ):
         """Deploys a new intelligent contract to GenLayer. Returns the transaction hash."""
         return deploy_contract(
@@ -196,6 +221,8 @@ class GenLayerClient(Eth):
             consensus_max_rotations=consensus_max_rotations,
             leader_only=leader_only,
             sim_config=sim_config,
+            valid_until=valid_until,
+            fees=fees,
         )
 
     def get_contract_schema(
@@ -216,6 +243,91 @@ class GenLayerClient(Eth):
         return get_contract_schema_for_code(
             self=self,
             contract_code=contract_code,
+        )
+
+    def get_current_fee_policy(self):
+        """Returns the active fee price policy used to build user-side caps."""
+        return get_current_fee_policy(self=self)
+
+    def estimate_fees_distribution(
+        self,
+        options: Optional[FeeEstimateOptions] = None,
+    ):
+        """Builds a fee distribution with caps derived from the active fee policy."""
+        return estimate_fees_distribution(self=self, options=options)
+
+    def estimate_transaction_fees(
+        self,
+        options: Optional[FeeEstimateOptions] = None,
+    ):
+        """Builds a complete transaction fees object, including feeValue."""
+        return estimate_transaction_fees(self=self, options=options)
+
+    def estimate_transaction_fees_from_simulation(
+        self,
+        options: SimulationFeeEstimateOptions,
+    ):
+        """Builds a complete transaction fees object from a representative simulation."""
+        return estimate_transaction_fees_from_simulation(self=self, options=options)
+
+    def estimate_transaction_fees_for_write(
+        self,
+        address: Union[Address, ChecksumAddress],
+        function_name: str,
+        account: Optional[LocalAccount] = None,
+        args: Optional[List[CalldataEncodable]] = None,
+        kwargs: Optional[Dict[str, CalldataEncodable]] = None,
+        value: int = 0,
+        leader_only: bool = False,
+        options: Optional[FeeEstimateOptions] = None,
+        sim_config: Optional[SimConfig] = None,
+        transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_NONFINAL,
+    ):
+        """Builds a complete transaction fees object for a concrete write call."""
+        return estimate_transaction_fees_for_write(
+            self=self,
+            address=address,
+            function_name=function_name,
+            account=account,
+            args=args,
+            kwargs=kwargs,
+            value=value,
+            leader_only=leader_only,
+            options=options,
+            sim_config=sim_config,
+            transaction_hash_variant=transaction_hash_variant,
+        )
+
+    def top_up_fees(
+        self,
+        transaction_id: HexStr,
+        distribution: FeesDistributionInput,
+        account: Optional[LocalAccount] = None,
+        value: int = 0,
+    ) -> HexStr:
+        """Deposits additional fee budget for an existing consensus transaction."""
+        return top_up_fees(
+            self=self,
+            transaction_id=transaction_id,
+            distribution=distribution,
+            account=account,
+            value=value,
+        )
+
+    def top_up_and_submit_appeal(
+        self,
+        transaction_id: HexStr,
+        distribution: FeesDistributionInput,
+        account: Optional[LocalAccount] = None,
+        value: int = 0,
+    ) -> HexStr:
+        """Deposits appeal fee budget and submits an appeal in one consensus call."""
+        return top_up_and_submit_appeal(
+            self=self,
+            transaction_id=transaction_id,
+            distribution=distribution,
+            account=account,
+            value=value,
         )
 
     # Transaction actions

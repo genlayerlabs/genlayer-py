@@ -4,15 +4,31 @@ from web3 import Web3
 from eth_abi import decode as abi_decode
 from genlayer_py.consensus.abi import CONSENSUS_MAIN_ABI
 from genlayer_py.abi import calldata
+from genlayer_py.transactions.fees import (
+    ADD_TRANSACTION_WITH_FEES_ARGUMENT_TYPES,
+    ADD_TRANSACTION_WITH_FEES_SELECTOR,
+    decode_fees_distribution_tuple,
+    decode_message_allocation_tuple,
+)
 
 
 def decode_add_transaction_data(encoded_data):
     w3 = Web3()
+    selector = encoded_data[2:10] if encoded_data.startswith("0x") else encoded_data[:8]
+    payload = encoded_data[10:] if encoded_data.startswith("0x") else encoded_data[8:]
+
+    if selector == ADD_TRANSACTION_WITH_FEES_SELECTOR:
+        abi_decoded = abi_decode(
+            ADD_TRANSACTION_WITH_FEES_ARGUMENT_TYPES,
+            w3.to_bytes(hexstr=payload),
+        )
+        return _format_fee_aware_add_transaction_data(abi_decoded[0])
+
     consensus_main_contract = w3.eth.contract(abi=CONSENSUS_MAIN_ABI)
     contract_fn = consensus_main_contract.get_function_by_name("addTransaction")
     abi_decoded = abi_decode(
         contract_fn.argument_types,
-        w3.to_bytes(hexstr=encoded_data[10:]),
+        w3.to_bytes(hexstr=payload),
     )
     encoded_tx_data_bytes = abi_decoded[4]
     encoded_tx_data = Web3.to_hex(encoded_tx_data_bytes)
@@ -27,6 +43,30 @@ def decode_add_transaction_data(encoded_data):
             "decoded": decoded_tx_data,
         },
         "valid_until": abi_decoded[5] if len(abi_decoded) > 5 else None,
+    }
+
+
+def _format_fee_aware_add_transaction_data(params):
+    encoded_tx_data_bytes = params[8]
+    encoded_tx_data = Web3.to_hex(encoded_tx_data_bytes)
+    decoded_tx_data = decode_tx_data(encoded_tx_data_bytes)
+    return {
+        "sender_address": params[0],
+        "recipient_address": params[1],
+        "num_of_initial_validators": params[2],
+        "max_rotations": params[3],
+        "tx_data": {
+            "encoded": encoded_tx_data,
+            "decoded": decoded_tx_data,
+        },
+        "valid_until": params[4],
+        "salt_nonce": params[5],
+        "user_value": params[6],
+        "fees_distribution": decode_fees_distribution_tuple(params[7]),
+        "message_allocations": [
+            decode_message_allocation_tuple(allocation)
+            for allocation in params[9]
+        ],
     }
 
 

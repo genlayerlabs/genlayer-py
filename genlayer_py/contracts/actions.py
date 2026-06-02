@@ -1,4 +1,5 @@
 from __future__ import annotations
+import time
 from eth_account.signers.local import LocalAccount
 import eth_utils
 from eth_abi import encode as abi_encode
@@ -17,6 +18,28 @@ from genlayer_py.chains import localnet
 from web3.constants import ADDRESS_ZERO
 from web3.logs import DISCARD
 from genlayer_py.contracts.utils import make_calldata_object
+from genlayer_py.transactions.fees import (
+    FeeEstimateOptions,
+    FeePolicyQuote,
+    FeesDistributionInput,
+    FeesDistribution,
+    FEES_DISTRIBUTION_ABI_TYPE,
+    NormalizedTransactionFees,
+    SimulationFeeEstimateOptions,
+    TransactionFeeEstimate,
+    TransactionFeeOptions,
+    build_estimated_fees_distribution,
+    build_estimated_fees_options_from_simulation,
+    calculate_local_round_fees,
+    create_fees_distribution,
+    encode_fee_aware_add_transaction_data,
+    extract_studio_fee_policy,
+    fees_distribution_to_abi_tuple,
+    normalize_transaction_fees,
+    requires_fee_deposit_calculation,
+    to_uint,
+    transaction_fee_estimate_from_studio_estimate,
+)
 
 if TYPE_CHECKING:
     from genlayer_py.client import GenLayerClient
@@ -102,6 +125,8 @@ def write_contract(
     args: Optional[List[CalldataEncodable]] = None,
     kwargs: Optional[Dict[str, CalldataEncodable]] = None,
     sim_config: Optional[SimConfig] = None,
+    valid_until: Optional[int] = None,
+    fees: Optional[TransactionFeeOptions] = None,
 ):
     if consensus_max_rotations is None:
         consensus_max_rotations = self.chain.default_consensus_max_rotations
@@ -114,18 +139,26 @@ def write_contract(
     ]
     sender_account = account if account is not None else self.local_account
     serialized_data = serialize(data)
+    transaction_fees = _resolve_transaction_fees(
+        self=self,
+        fees=fees,
+        num_of_initial_validators=self.chain.default_number_of_initial_validators,
+    )
     encoded_data = _encode_add_transaction_data(
         self=self,
         sender_account=sender_account,
         recipient=address,
         consensus_max_rotations=consensus_max_rotations,
         data=serialized_data,
+        valid_until=valid_until,
+        user_value=value,
+        transaction_fees=transaction_fees,
     )
     return _send_transaction(
         self=self,
         encoded_data=encoded_data,
         sender_account=sender_account,
-        value=value,
+        value=value + (transaction_fees["fee_value"] or 0),
         sim_config=sim_config,
     )
 
@@ -139,6 +172,8 @@ def deploy_contract(
     consensus_max_rotations: Optional[int] = None,
     leader_only: bool = False,
     sim_config: Optional[SimConfig] = None,
+    valid_until: Optional[int] = None,
+    fees: Optional[TransactionFeeOptions] = None,
 ):
     if consensus_max_rotations is None:
         consensus_max_rotations = self.chain.default_consensus_max_rotations
@@ -150,6 +185,11 @@ def deploy_contract(
     ]
     serialized_data = serialize(data)
     sender_account = account if account is not None else self.local_account
+    transaction_fees = _resolve_transaction_fees(
+        self=self,
+        fees=fees,
+        num_of_initial_validators=self.chain.default_number_of_initial_validators,
+    )
 
     encoded_data = _encode_add_transaction_data(
         self=self,
@@ -157,11 +197,15 @@ def deploy_contract(
         recipient=ADDRESS_ZERO,
         consensus_max_rotations=consensus_max_rotations,
         data=serialized_data,
+        valid_until=valid_until,
+        user_value=0,
+        transaction_fees=transaction_fees,
     )
     return _send_transaction(
         self=self,
         encoded_data=encoded_data,
         sender_account=sender_account,
+        value=transaction_fees["fee_value"] or 0,
         sim_config=sim_config,
     )
 
@@ -185,23 +229,70 @@ def appeal_transaction(
 
     encoded_data = _encode_submit_appeal_data(self=self, transaction_id=transaction_id)
 
-    transaction = _prepare_transaction(
+    _send_consensus_call(
         self=self,
-        sender=sender_account.address,
-        recipient=self.chain.consensus_main_contract["address"],
-        data=encoded_data,
+        encoded_data=encoded_data,
+        sender_account=sender_account,
         value=value,
+        operation_name="Appeal",
     )
-    signed_transaction = sender_account.sign_transaction(transaction)
-    serialized_transaction = self.w3.to_hex(signed_transaction.raw_transaction)
-    tx_hash = self.provider.make_request(
-        method="eth_sendRawTransaction", params=[serialized_transaction]
-    )["result"]
-    tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
 
-    if tx_receipt.status != 1:
-        raise GenLayerError(f"Appeal reverted: EVM tx {tx_hash}")
+    return transaction_id
 
+
+def top_up_fees(
+    self: GenLayerClient,
+    transaction_id: HexStr,
+    distribution: FeesDistributionInput,
+    account: Optional[LocalAccount] = None,
+    value: int = 0,
+) -> HexStr:
+    """Deposits additional fee budget for an existing consensus transaction.
+
+    Returns the backend RPC hash: an EVM transaction hash on network backends,
+    or the target GenLayer tx id on Studio/localnet.
+    """
+    sender_account = account if account is not None else self.local_account
+    encoded_data = _encode_fee_management_data(
+        self=self,
+        function_name="topUpFees",
+        transaction_id=transaction_id,
+        distribution=distribution,
+    )
+    return _send_consensus_call(
+        self=self,
+        encoded_data=encoded_data,
+        sender_account=sender_account,
+        value=value,
+        operation_name="Top up fees",
+    )
+
+
+def top_up_and_submit_appeal(
+    self: GenLayerClient,
+    transaction_id: HexStr,
+    distribution: FeesDistributionInput,
+    account: Optional[LocalAccount] = None,
+    value: int = 0,
+) -> HexStr:
+    """Deposits appeal fee budget and submits an appeal in one consensus call.
+
+    Returns the original GenLayer transaction id, matching appeal_transaction.
+    """
+    sender_account = account if account is not None else self.local_account
+    encoded_data = _encode_fee_management_data(
+        self=self,
+        function_name="topUpAndSubmitAppeal",
+        transaction_id=transaction_id,
+        distribution=distribution,
+    )
+    _send_consensus_call(
+        self=self,
+        encoded_data=encoded_data,
+        sender_account=sender_account,
+        value=value,
+        operation_name="Top up and submit appeal",
+    )
     return transaction_id
 
 
@@ -300,9 +391,12 @@ def simulate_write_contract(
     account: Optional[LocalAccount] = None,
     args: Optional[List[CalldataEncodable]] = None,
     kwargs: Optional[Dict[str, CalldataEncodable]] = None,
+    value: int = 0,
+    leader_only: bool = False,
+    fees: Optional[TransactionFeeOptions] = None,
     sim_config: Optional[SimConfig] = None,
     transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_NONFINAL,
-) -> CalldataEncodable:
+) -> dict:
     if self.chain.id != localnet.id:
         raise GenLayerError("Client is not connected to the localnet")
     if account is None and self.local_account is None:
@@ -312,7 +406,7 @@ def simulate_write_contract(
         calldata.encode(
             make_calldata_object(method=function_name, args=args, kwargs=kwargs)
         ),
-        b"\x00",
+        leader_only,
     ]
     serialized_data = serialize(data)
     request_params = {
@@ -322,6 +416,11 @@ def simulate_write_contract(
         "data": serialized_data,
         "transaction_hash_variant": transaction_hash_variant.value,
     }
+    if value > 0:
+        request_params["value"] = hex(value)
+    rpc_fees = _transaction_fees_to_rpc(fees)
+    if rpc_fees is not None:
+        request_params["fees"] = rpc_fees
     if sim_config is not None:
         request_params["sim_config"] = sim_config
     receipt = self.provider.make_request(
@@ -329,6 +428,21 @@ def simulate_write_contract(
         params=[request_params],
     )["result"]
     return receipt
+
+
+def _transaction_fees_to_rpc(
+    fees: Optional[TransactionFeeOptions],
+) -> Optional[dict]:
+    if fees is None:
+        return None
+    normalized = normalize_transaction_fees(fees)
+    rpc_fees = {
+        "distribution": normalized["distribution"],
+        "messageAllocations": normalized["message_allocations"],
+    }
+    if normalized["fee_value"] is not None:
+        rpc_fees["feeValue"] = normalized["fee_value"]
+    return rpc_fees
 
 
 def _encode_submit_appeal_data(
@@ -352,18 +466,386 @@ def _encode_submit_appeal_data(
     return encoded_data
 
 
+FEE_MANAGEMENT_ARGUMENT_TYPES = ("bytes32", FEES_DISTRIBUTION_ABI_TYPE)
+
+
+def _encode_fee_management_data(
+    self: GenLayerClient,
+    function_name: str,
+    transaction_id: HexStr,
+    distribution: FeesDistributionInput,
+):
+    if function_name not in ("topUpFees", "topUpAndSubmitAppeal"):
+        raise ValueError(f"Unsupported fee management function: {function_name}")
+
+    tx_bytes = _to_bytes32(self, transaction_id)
+    fees_distribution = create_fees_distribution(distribution)
+    params = abi_encode(
+        FEE_MANAGEMENT_ARGUMENT_TYPES,
+        [
+            tx_bytes,
+            fees_distribution_to_abi_tuple(fees_distribution),
+        ],
+    )
+    signature = f"{function_name}(bytes32,{FEES_DISTRIBUTION_ABI_TYPE})"
+    function_selector = eth_utils.keccak(text=signature)[:4].hex()
+    return "0x" + function_selector + params.hex()
+
+
+FEE_MANAGER_CALCULATE_ROUND_FEES_ABI = [
+    {
+        "type": "function",
+        "name": "GENPerTimeUnit",
+        "stateMutability": "view",
+        "inputs": [],
+        "outputs": [{"name": "", "type": "uint256"}],
+    },
+    {
+        "type": "function",
+        "name": "storageUnitPrice",
+        "stateMutability": "view",
+        "inputs": [],
+        "outputs": [{"name": "", "type": "uint256"}],
+    },
+    {
+        "type": "function",
+        "name": "quoteGasPrice",
+        "stateMutability": "view",
+        "inputs": [],
+        "outputs": [{"name": "", "type": "uint256"}],
+    },
+    {
+        "type": "function",
+        "name": "messageFeeParamsBudgetFloor",
+        "stateMutability": "view",
+        "inputs": [],
+        "outputs": [{"name": "", "type": "uint256"}],
+    },
+    {
+        "type": "function",
+        "name": "calculateRoundFees",
+        "stateMutability": "view",
+        "inputs": [
+            {
+                "name": "_feesDistribution",
+                "type": "tuple",
+                "components": [
+                    {"name": "leaderTimeunitsAllocation", "type": "uint256"},
+                    {"name": "validatorTimeunitsAllocation", "type": "uint256"},
+                    {"name": "appealRounds", "type": "uint256"},
+                    {"name": "executionBudgetPerRound", "type": "uint256"},
+                    {"name": "executionConsumed", "type": "uint256"},
+                    {"name": "totalMessageFees", "type": "uint256"},
+                    {"name": "rotations", "type": "uint256[]"},
+                    {"name": "maxPriceGenPerTimeUnit", "type": "uint256"},
+                    {"name": "storageFeeMaxGasPrice", "type": "uint256"},
+                    {"name": "receiptFeeMaxGasPrice", "type": "uint256"},
+                ],
+            },
+            {"name": "_numOfValidators", "type": "uint256"},
+            {"name": "round", "type": "uint256"},
+        ],
+        "outputs": [{"name": "totalFeesToPay", "type": "uint256"}],
+    },
+]
+
+
+def _get_add_transaction_abi_version(abi: Optional[list]) -> str:
+    if not abi:
+        return "v5"
+
+    for entry in abi:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("type") != "function" or entry.get("name") != "addTransaction":
+            continue
+
+        inputs = entry.get("inputs", [])
+        if len(inputs) == 1 and inputs[0].get("type") == "tuple":
+            return "fees"
+        if len(inputs) >= 6:
+            return "v6"
+        return "v5"
+
+    return "v5"
+
+
+def _get_default_valid_until() -> int:
+    return int(time.time()) + 3600
+
+
+def get_current_fee_policy(self: GenLayerClient) -> FeePolicyQuote:
+    if self.chain.fee_manager_contract and self.chain.fee_manager_contract.get("address"):
+        fee_manager_contract = self.w3.eth.contract(
+            address=self.w3.to_checksum_address(self.chain.fee_manager_contract["address"]),
+            abi=FEE_MANAGER_CALCULATE_ROUND_FEES_ABI,
+        )
+        gen_per_time_unit = fee_manager_contract.functions.GENPerTimeUnit().call()
+        storage_unit_price = fee_manager_contract.functions.storageUnitPrice().call()
+        receipt_gas_price = fee_manager_contract.functions.quoteGasPrice().call()
+        execution_budget_floor = (
+            fee_manager_contract.functions.messageFeeParamsBudgetFloor().call()
+        )
+        return {
+            "enabled": (
+                gen_per_time_unit > 0
+                or storage_unit_price > 0
+                or receipt_gas_price > 0
+            ),
+            "genPerTimeUnit": gen_per_time_unit,
+            "storageUnitPrice": storage_unit_price,
+            "receiptGasPrice": receipt_gas_price,
+            "executionBudgetFloor": execution_budget_floor,
+        }
+
+    try:
+        response = self.provider.make_request(
+            method="sim_getFeeConfig",
+            params=[],
+        )
+        return extract_studio_fee_policy(response["result"])
+    except Exception as exc:
+        raise GenLayerError(
+            "Fee policy estimation is not supported on this chain "
+            "(missing fee_manager_contract and sim_getFeeConfig)."
+        ) from exc
+
+
+def estimate_fees_distribution(
+    self: GenLayerClient,
+    options: Optional[FeeEstimateOptions] = None,
+) -> FeesDistribution:
+    policy = get_current_fee_policy(self)
+    return build_estimated_fees_distribution(options, policy)
+
+
+def estimate_transaction_fees(
+    self: GenLayerClient,
+    options: Optional[FeeEstimateOptions] = None,
+) -> TransactionFeeEstimate:
+    policy = get_current_fee_policy(self)
+    return _estimate_transaction_fees_with_policy(self, options, policy)
+
+
+def _estimate_transaction_fees_with_policy(
+    self: GenLayerClient,
+    options: Optional[FeeEstimateOptions],
+    policy: FeePolicyQuote,
+) -> TransactionFeeEstimate:
+    distribution = build_estimated_fees_distribution(options, policy)
+
+    if self.chain.fee_manager_contract and self.chain.fee_manager_contract.get("address"):
+        fee_manager_contract = self.w3.eth.contract(
+            address=self.w3.to_checksum_address(self.chain.fee_manager_contract["address"]),
+            abi=FEE_MANAGER_CALCULATE_ROUND_FEES_ABI,
+        )
+        round_fees = fee_manager_contract.functions.calculateRoundFees(
+            fees_distribution_to_abi_tuple(distribution),
+            self.chain.default_number_of_initial_validators,
+            0,
+        ).call()
+        fee_value = round_fees + distribution["totalMessageFees"]
+    else:
+        fee_value = (
+            calculate_local_round_fees(
+                distribution,
+                self.chain.default_number_of_initial_validators,
+                policy,
+            )
+            + distribution["totalMessageFees"]
+        )
+
+    estimate: TransactionFeeEstimate = {
+        "distribution": distribution,
+        "feeValue": fee_value,
+        "fee_value": fee_value,
+        "policy": policy,
+    }
+    message_allocations = None
+    if options:
+        message_allocations = options.get(
+            "messageAllocations",
+            options.get("message_allocations"),
+        )
+    if message_allocations is not None:
+        estimate["messageAllocations"] = message_allocations
+        estimate["message_allocations"] = message_allocations
+    return estimate
+
+
+def estimate_transaction_fees_from_simulation(
+    self: GenLayerClient,
+    options: SimulationFeeEstimateOptions,
+) -> TransactionFeeEstimate:
+    policy = get_current_fee_policy(self)
+    preset = build_estimated_fees_options_from_simulation(options, policy)
+    estimate = _estimate_transaction_fees_with_policy(
+        self,
+        preset["estimateOptions"],
+        policy,
+    )
+    estimate["observed"] = preset["observed"]
+    message_allocations = preset.get("messageAllocations")
+    if message_allocations is not None:
+        estimate["messageAllocations"] = message_allocations
+        estimate["message_allocations"] = message_allocations
+    return estimate
+
+
+def estimate_transaction_fees_for_write(
+    self: GenLayerClient,
+    address: Union[Address, ChecksumAddress],
+    function_name: str,
+    account: Optional[LocalAccount] = None,
+    args: Optional[List[CalldataEncodable]] = None,
+    kwargs: Optional[Dict[str, CalldataEncodable]] = None,
+    value: int = 0,
+    leader_only: bool = False,
+    options: Optional[FeeEstimateOptions] = None,
+    sim_config: Optional[SimConfig] = None,
+    transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_NONFINAL,
+) -> TransactionFeeEstimate:
+    if self.chain.id != localnet.id:
+        raise GenLayerError("Target write fee estimation is only supported on localnet")
+    if account is None and self.local_account is None:
+        raise GenLayerError("No account provided and no account is connected")
+
+    policy = get_current_fee_policy(self)
+    initial_estimate = _estimate_transaction_fees_with_policy(self, options, policy)
+    initial_fees: TransactionFeeOptions = {
+        "distribution": initial_estimate["distribution"],
+        "feeValue": initial_estimate["feeValue"],
+    }
+    message_allocations = initial_estimate.get("messageAllocations")
+    if message_allocations is not None:
+        initial_fees["messageAllocations"] = message_allocations
+
+    sender_address = self.local_account.address if account is None else account.address
+    data = [
+        calldata.encode(
+            make_calldata_object(method=function_name, args=args, kwargs=kwargs)
+        ),
+        leader_only,
+    ]
+    request_params = {
+        "type": "write",
+        "to": address,
+        "from": sender_address,
+        "data": serialize(data),
+        "transaction_hash_variant": transaction_hash_variant.value,
+        "fees": _transaction_fees_to_rpc(initial_fees),
+    }
+    if value > 0:
+        request_params["value"] = hex(value)
+    if sim_config is not None:
+        request_params["sim_config"] = sim_config
+
+    estimate_result = self.provider.make_request(
+        method="sim_estimateTransactionFees",
+        params=[request_params],
+    )["result"]
+    authoritative_estimate = transaction_fee_estimate_from_studio_estimate(
+        estimate_result,
+        policy,
+    )
+    if authoritative_estimate is not None:
+        return authoritative_estimate
+
+    simulation = self.provider.make_request(
+        method="sim_call",
+        params=[request_params],
+    )["result"]
+    simulation_options: SimulationFeeEstimateOptions = dict(options or {})
+    simulation_options["simulation"] = simulation
+    return estimate_transaction_fees_from_simulation(
+        self,
+        simulation_options,
+    )
+
+
+def _resolve_transaction_fees(
+    self: GenLayerClient,
+    fees: Optional[TransactionFeeOptions],
+    num_of_initial_validators: int,
+) -> NormalizedTransactionFees:
+    transaction_fees = normalize_transaction_fees(fees)
+    if (
+        transaction_fees["fee_value"] is not None
+        or not requires_fee_deposit_calculation(transaction_fees["distribution"])
+    ):
+        transaction_fees["fee_value"] = transaction_fees["fee_value"] or 0
+        return transaction_fees
+
+    if not self.chain.fee_manager_contract or not self.chain.fee_manager_contract.get("address"):
+        try:
+            policy = get_current_fee_policy(self)
+        except GenLayerError as exc:
+            raise GenLayerError(
+                "fees.feeValue is required when the chain does not expose a fee_manager_contract."
+            ) from exc
+        transaction_fees["fee_value"] = (
+            calculate_local_round_fees(
+                transaction_fees["distribution"],
+                num_of_initial_validators,
+                policy,
+            )
+            + transaction_fees["distribution"]["totalMessageFees"]
+            if policy["enabled"]
+            else 0
+        )
+        return transaction_fees
+
+    fee_manager_contract = self.w3.eth.contract(
+        address=self.w3.to_checksum_address(self.chain.fee_manager_contract["address"]),
+        abi=FEE_MANAGER_CALCULATE_ROUND_FEES_ABI,
+    )
+    round_fees = fee_manager_contract.functions.calculateRoundFees(
+        fees_distribution_to_abi_tuple(transaction_fees["distribution"]),
+        num_of_initial_validators,
+        0,
+    ).call()
+    transaction_fees["fee_value"] = (
+        round_fees + transaction_fees["distribution"]["totalMessageFees"]
+    )
+    return transaction_fees
+
+
 def _encode_add_transaction_data(
     self: GenLayerClient,
     sender_account,
     recipient,
     consensus_max_rotations,
     data,
-    valid_until: int = 0,
+    valid_until: Optional[int] = None,
+    user_value: int = 0,
+    transaction_fees: Optional[NormalizedTransactionFees] = None,
 ):
     consensus_main_contract = self.w3.eth.contract(
         abi=self.chain.consensus_main_contract["abi"]
     )
     contract_fn = consensus_main_contract.get_function_by_name("addTransaction")
+    abi_version = _get_add_transaction_abi_version(self.chain.consensus_main_contract["abi"])
+    transaction_fees = transaction_fees or normalize_transaction_fees()
+    use_fee_aware_transaction = (
+        transaction_fees["requires_fee_aware_transaction"] or abi_version == "fees"
+    )
+    normalized_valid_until = to_uint(
+        valid_until,
+        "valid_until",
+        _get_default_valid_until() if use_fee_aware_transaction else 0,
+    )
+
+    if use_fee_aware_transaction:
+        return encode_fee_aware_add_transaction_data(
+            sender_address=sender_account.address,
+            recipient_address=recipient,
+            num_of_initial_validators=self.chain.default_number_of_initial_validators,
+            max_rotations=consensus_max_rotations,
+            tx_data=data,
+            valid_until=normalized_valid_until,
+            user_value=user_value,
+            transaction_fees=transaction_fees,
+        )
 
     add_transaction_args = [
         sender_account.address,
@@ -373,7 +855,7 @@ def _encode_add_transaction_data(
         self.w3.to_bytes(hexstr=data),
     ]
     if len(contract_fn.argument_types) >= 6:
-        add_transaction_args.append(valid_until)
+        add_transaction_args.append(normalized_valid_until)
 
     params = abi_encode(
         contract_fn.argument_types,
@@ -421,6 +903,43 @@ def _prepare_transaction(
         "eth_estimateGas", params=[transaction]
     )["result"]
     return transaction
+
+
+def _send_consensus_call(
+    self: GenLayerClient,
+    encoded_data: HexStr,
+    sender_account: Optional[LocalAccount] = None,
+    value: int = 0,
+    operation_name: str = "Consensus call",
+) -> HexStr:
+    if sender_account is None:
+        raise GenLayerError(
+            "No account set. Configure the client with an account or pass an account to this function."
+        )
+    if self.chain.consensus_main_contract is None:
+        raise GenLayerError("Consensus main contract not configured.")
+
+    transaction = _prepare_transaction(
+        self=self,
+        sender=sender_account.address,
+        recipient=self.chain.consensus_main_contract["address"],
+        data=encoded_data,
+        value=value,
+    )
+    signed_transaction = sender_account.sign_transaction(transaction)
+    serialized_transaction = self.w3.to_hex(signed_transaction.raw_transaction)
+    tx_hash = self.provider.make_request(
+        method="eth_sendRawTransaction", params=[serialized_transaction]
+    )["result"]
+    if self.chain.id == localnet.id:
+        return tx_hash
+
+    tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+
+    if tx_receipt.status != 1:
+        raise GenLayerError(f"{operation_name} reverted: EVM tx {tx_hash}")
+
+    return tx_hash
 
 
 def _send_transaction(

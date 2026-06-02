@@ -106,6 +106,167 @@ receipt = client.wait_for_transaction_receipt(
 )
 ```
 
+### Fee presets for transactions
+
+Apps can build a trusted fee preset once they know the transaction shape, then
+submit the same preset with the transaction. The user may still override these
+values in wallet or app UI before signing.
+
+```python
+estimate = client.estimate_transaction_fees(
+    {
+        "leaderTimeunitsAllocation": 100,
+        "validatorTimeunitsAllocation": 200,
+        "rotations": [0],
+    }
+)
+
+tx_hash = client.write_contract(
+    account=account,
+    address=contract_address,
+    function_name="update_storage",
+    args=["new_storage"],
+    fees={
+        "distribution": estimate["distribution"],
+        "feeValue": estimate["feeValue"],
+    },
+)
+```
+
+If `fees["distribution"]` is provided without `feeValue`, the SDK derives the
+fee deposit from FeeManager on network backends, or from `sim_getFeeConfig` on
+Studio. Use `messageAllocations` with `estimate_transaction_fees` for
+transactions that can emit funded messages. For method-specific message
+budgets, derive the same call key GenVM reports in fee accounting:
+
+```python
+from genlayer_py.transactions import (
+    MessageType,
+    derive_external_message_call_key,
+    derive_internal_message_call_key,
+    encode_external_message_fee_params,
+    encode_internal_message_fee_params,
+)
+
+estimate = client.estimate_transaction_fees(
+    {
+        "messageAllocations": [
+            {
+                "messageType": MessageType.Internal,
+                "onAcceptance": True,
+                "recipient": contract_address,
+                "callKey": derive_internal_message_call_key("update_storage"),
+                "budget": 55,
+                "feeParams": encode_internal_message_fee_params(),
+            },
+            {
+                "messageType": MessageType.External,
+                "onAcceptance": False,
+                "recipient": "0x3333333333333333333333333333333333333333",
+                "callKey": derive_external_message_call_key("0xaabbccdd"),
+                "budget": 210_000,
+                "feeParams": encode_external_message_fee_params(
+                    {"gasLimit": 21_000, "maxGasPrice": 10}
+                ),
+            },
+        ],
+    }
+)
+```
+
+For a concrete Studio/localnet write, use the one-call helper. The SDK sends an
+initial fee budget to `sim_estimateTransactionFees`; Studio simulates the write
+without committing state and returns the authoritative recommended preset.
+
+```python
+recommended = client.estimate_transaction_fees_for_write(
+    account=account,
+    address=contract_address,
+    function_name="update_storage",
+    args=["new_storage"],
+)
+
+tx_hash = client.write_contract(
+    account=account,
+    address=contract_address,
+    function_name="update_storage",
+    args=["new_storage"],
+    fees={
+        "distribution": recommended["distribution"],
+        "messageAllocations": recommended.get("messageAllocations"),
+        "feeValue": recommended["feeValue"],
+    },
+)
+```
+
+For tests or tools that need to inspect the raw simulation, use the explicit
+two-step flow. `simulate_write_contract` uses `sim_call`; the returned receipt
+includes the fee accounting report produced by GenVM and Studio:
+
+```python
+simulation = client.simulate_write_contract(
+    account=account,
+    address=contract_address,
+    function_name="update_storage",
+    args=["new_storage"],
+    fees={
+        "distribution": estimate["distribution"],
+        "feeValue": estimate["feeValue"],
+    },
+)
+
+print(simulation["genvm_result"]["fee_accounting"])
+```
+
+To reuse a representative Studio simulation as the trusted preset source, pass
+the simulation result into `estimate_transaction_fees_from_simulation`:
+
+```python
+estimate = client.estimate_transaction_fees_from_simulation(
+    {
+        "simulation": simulation,
+    }
+)
+
+tx_hash = client.write_contract(
+    account=account,
+    address=contract_address,
+    function_name="update_storage",
+    args=["new_storage"],
+    fees={
+        "distribution": estimate["distribution"],
+        "messageAllocations": estimate.get("messageAllocations"),
+        "feeValue": estimate["feeValue"],
+    },
+)
+```
+
+For transactions that are already submitted, use the fee-management helpers:
+
+```python
+client.top_up_fees(
+    transaction_id=tx_hash,
+    value=1_100,
+    distribution={
+        "leaderTimeunitsAllocation": 100,
+        "validatorTimeunitsAllocation": 200,
+        "rotations": [0],
+    },
+)
+
+client.top_up_and_submit_appeal(
+    transaction_id=tx_hash,
+    value=1_400,
+    distribution={
+        "appealRounds": 1,
+        "rotations": [0, 0],
+    },
+)
+```
+
+`top_up_fees` returns the backend RPC hash. On network backends this is the EVM
+transaction hash; on Studio/localnet it is the target GenLayer transaction id.
+
 ### Checking execution results
 
 A transaction can be finalized by consensus but still have a failed execution. Always check `tx_execution_result` before reading contract state:

@@ -131,6 +131,7 @@ class TransactionFeeEstimate(TypedDict, total=False):
     fee_value: int
     policy: FeePolicyQuote
     observed: dict[str, int]
+    simulation: Any
 
 
 class SimulationFeeEstimateOptions(FeeEstimateOptions, total=False):
@@ -193,6 +194,7 @@ DEFAULT_PRICE_CAP_HEADROOM_BPS = 12_000
 DEFAULT_LEADER_TIMEUNITS_ALLOCATION = 100
 DEFAULT_VALIDATOR_TIMEUNITS_ALLOCATION = 200
 DEFAULT_TRANSACTION_EXECUTION_BUDGET_PER_ROUND = 500_000
+DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM = 10_000
 MIN_RECEIPT_BYTES = 512
 DEFAULT_RECEIPT_SLOTS_CHANGED = 7
 DEFAULT_INTRINSIC_GAS = 21_000
@@ -967,6 +969,7 @@ def transaction_fee_estimate_from_studio_estimate(
         "feeValue": to_uint(fee_value, "recommendedPreset.feeValue"),
         "fee_value": to_uint(fee_value, "recommendedPreset.feeValue"),
         "policy": policy,
+        "simulation": simulation,
         "observed": observed_simulation_fee_usage(
             {"simulation": simulation},
             policy,
@@ -1058,17 +1061,38 @@ def build_estimated_fees_distribution(
         "priceCapHeadroomBps",
         DEFAULT_PRICE_CAP_HEADROOM_BPS,
     )
-    execution_budget_default = _default_execution_budget_per_round(policy)
+    base_execution_budget_default = _default_execution_budget_per_round(policy)
 
     total_message_fees = _get(options, "totalMessageFees", "total_message_fees")
     message_allocations = _get(options, "messageAllocations", "message_allocations")
+    normalized_message_allocations = (
+        normalize_message_fee_allocations(message_allocations)
+        if message_allocations is not None
+        else None
+    )
     if total_message_fees is None and message_allocations is not None:
         total_message_fees = sum(
             allocation["budget"]
-            for allocation in normalize_message_fee_allocations(message_allocations)
+            for allocation in normalized_message_allocations or []
             if allocation["messageType"] == int(MessageType.External)
             or allocation["parentIndex"] == MESSAGE_ALLOCATION_ROOT_PARENT_INDEX
         )
+    emits_messages = (
+        (
+            normalized_message_allocations is not None
+            and len(normalized_message_allocations) > 0
+        )
+        or (
+            total_message_fees is not None
+            and to_uint(total_message_fees, "totalMessageFees") > 0
+        )
+    )
+    execution_budget_default = (
+        base_execution_budget_default
+        + policy["receiptGasPrice"] * DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM
+        if emits_messages
+        else base_execution_budget_default
+    )
 
     return create_fees_distribution(
         {

@@ -442,7 +442,22 @@ def _transaction_fees_to_rpc(
     }
     if normalized["fee_value"] is not None:
         rpc_fees["feeValue"] = normalized["fee_value"]
-    return rpc_fees
+    return _json_safe_rpc_value(rpc_fees)
+
+
+def _json_safe_rpc_value(value):
+    if isinstance(value, (bytes, bytearray)):
+        return "0x" + bytes(value).hex()
+    if isinstance(value, list):
+        return [_json_safe_rpc_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe_rpc_value(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _json_safe_rpc_value(item)
+            for key, item in value.items()
+        }
+    return value
 
 
 def _encode_submit_appeal_data(

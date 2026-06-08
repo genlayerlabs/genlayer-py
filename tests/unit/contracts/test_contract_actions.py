@@ -28,6 +28,9 @@ from genlayer_py.transactions.fees import (
 )
 
 
+DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM = 10_000
+
+
 ADD_TRANSACTION_ABI_V5 = [
     {
         "type": "function",
@@ -385,6 +388,10 @@ def test_simulate_write_contract_passes_fee_policy_and_value_to_sim_call():
         MessageType.Internal
     )
     assert request_params["fees"]["messageAllocations"][0]["budget"] == 5
+    assert (
+        request_params["fees"]["messageAllocations"][0]["callKey"]
+        == "0x" + "00" * 32
+    )
 
 
 def test_encode_add_transaction_uses_v5_signature_when_abi_has_5_inputs():
@@ -584,11 +591,40 @@ def test_build_estimated_fees_distribution_adds_caps_and_message_bucket():
 
     assert distribution["leaderTimeunitsAllocation"] == 100
     assert distribution["validatorTimeunitsAllocation"] == 200
-    assert distribution["executionBudgetPerRound"] == 500_000
+    assert distribution["executionBudgetPerRound"] == (
+        500_000 + 30 * DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM
+    )
     assert distribution["totalMessageFees"] == 80
     assert distribution["maxPriceGenPerTimeUnit"] == 12
     assert distribution["storageFeeMaxGasPrice"] == 24
     assert distribution["receiptFeeMaxGasPrice"] == 36
+
+
+def test_build_estimated_fees_distribution_preserves_explicit_execution_budget_with_messages():
+    policy = {
+        "enabled": True,
+        "genPerTimeUnit": 10,
+        "storageUnitPrice": 20,
+        "receiptGasPrice": 30,
+        "executionBudgetFloor": 1_234,
+    }
+
+    distribution = build_estimated_fees_distribution(
+        {
+            "executionBudgetPerRound": 42,
+            "messageAllocations": [
+                {
+                    "messageType": MessageType.Internal,
+                    "recipient": RECIPIENT,
+                    "budget": 50,
+                    "feeParams": "0x1234",
+                },
+            ],
+        },
+        policy,
+    )
+
+    assert distribution["executionBudgetPerRound"] == 42
 
 
 def test_calculate_local_round_fees_matches_consensus_initial_round():
@@ -702,7 +738,10 @@ def test_estimate_transaction_fees_derives_message_bucket_from_allocations():
     )
 
     assert estimate["distribution"]["totalMessageFees"] == 80
-    assert estimate["feeValue"] == 9_196_840
+    assert estimate["distribution"]["executionBudgetPerRound"] == (
+        9_185_760 + 30 * DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM
+    )
+    assert estimate["feeValue"] == 9_496_840
     assert estimate["messageAllocations"] == message_allocations
     assert estimate["message_allocations"] == message_allocations
 
@@ -882,12 +921,18 @@ def test_estimate_transaction_fees_for_write_uses_studio_estimate_rpc():
     )
     request_params = sim_call.kwargs["params"][0]
     assert request_params["value"] == hex(7)
-    assert request_params["fees"]["feeValue"] == 511_110
+    assert request_params["fees"]["feeValue"] == 521_110
     assert request_params["fees"]["distribution"]["totalMessageFees"] == 110
     assert request_params["fees"]["messageAllocations"][0]["budget"] == 110
+    assert (
+        request_params["fees"]["messageAllocations"][0]["callKey"]
+        == "0x" + "00" * 32
+    )
     assert estimate["observed"]["recommendedExecutionBudgetPerRound"] == 602_117
     assert estimate["observed"]["messageFeeBudget"] == 110
     assert estimate["observed"]["messageFeeConsumed"] == 50
+    assert estimate["simulation"]["feeAccounting"]["message_fee_budget"] == "110"
+    assert estimate["simulation"]["feeReport"]["totalEstimatedFee"] == "501664"
     assert estimate["distribution"]["executionBudgetPerRound"] == 700_000
     assert estimate["distribution"]["totalMessageFees"] == 110
     assert estimate["messageAllocations"][0]["budget"] == 110

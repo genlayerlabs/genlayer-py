@@ -3,8 +3,15 @@ from unittest.mock import patch
 from genlayer_py.transactions.actions import (
     wait_for_transaction_receipt,
     _simplify_transaction_receipt,
+    is_successful,
 )
-from genlayer_py.types import TransactionStatus, DECIDED_STATES, is_decided_state
+from genlayer_py.types import (
+    ExecutionResult,
+    TransactionStatus,
+    DECIDED_STATES,
+    TRANSACTION_STATUS_NUMBER_TO_NAME,
+    is_decided_state,
+)
 from genlayer_py.exceptions import GenLayerError
 
 
@@ -162,6 +169,43 @@ class TestWaitForTransactionReceipt:
             
             assert result == mock_transaction
 
+    def test_wait_until_decided_resolves_on_undetermined(self, mock_client):
+        mock_transaction = {
+            "hash": "0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
+            "status": "6",
+            "status_name": "UNDETERMINED",
+        }
+        mock_client.get_transaction.return_value = mock_transaction
+
+        result = wait_for_transaction_receipt(
+            self=mock_client,
+            transaction_hash="0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
+            wait_until="decided",
+            full_transaction=True,
+        )
+
+        assert result == mock_transaction
+
+    def test_status_14_does_not_crash_wait_loop(self, mock_client):
+        mock_transaction = {
+            "hash": "0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
+            "status": "14",
+            "status_name": "LEADER_REVEALING",
+        }
+        mock_client.get_transaction.return_value = mock_transaction
+
+        with pytest.raises(GenLayerError, match="LEADER_REVEALING"):
+            wait_for_transaction_receipt(
+                self=mock_client,
+                transaction_hash="0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
+                wait_until="finalized",
+                retries=1,
+                interval=1,
+                full_transaction=True,
+            )
+
+        assert TRANSACTION_STATUS_NUMBER_TO_NAME["14"] == TransactionStatus.LEADER_REVEALING
+
     def test_wait_for_specific_status_not_affected(self, mock_client):
         """Test that waiting for specific non-ACCEPTED statuses is not affected by decided states logic"""
         mock_transaction = {
@@ -225,6 +269,34 @@ class TestDecidedStatesUtility:
         for status in invalid_statuses:
             if status is not None:
                 assert is_decided_state(status) == False, f"Invalid status {status} should not be decided"
+
+
+class TestIsSuccessful:
+    def test_truth_table(self):
+        assert is_successful(
+            {
+                "status": "5",
+                "tx_execution_result": "1",
+            }
+        )
+        assert not is_successful(
+            {
+                "status": "6",
+                "tx_execution_result": "1",
+            }
+        )
+        assert not is_successful(
+            {
+                "status": TransactionStatus.ACCEPTED,
+                "tx_execution_result": "2",
+            }
+        )
+        assert is_successful(
+            {
+                "status_name": TransactionStatus.FINALIZED,
+                "tx_execution_result_name": ExecutionResult.FINISHED_WITH_RETURN,
+            }
+        )
 
 
 class TestSimplifyTransactionReceipt:

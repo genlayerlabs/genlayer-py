@@ -4,7 +4,7 @@ from web3.types import Nonce, BlockIdentifier, ENS, _Hash32
 from eth_typing import Address, ChecksumAddress, HexStr
 from eth_account.signers.local import LocalAccount
 from hexbytes import HexBytes
-from typing import AnyStr
+from typing import AnyStr, Literal
 from genlayer_py.types import (
     GenLayerChain,
     TransactionStatus,
@@ -302,8 +302,8 @@ class GenLayerClient(Eth):
         self,
         transaction_id: HexStr,
         distribution: FeesDistributionInput,
+        value: int,
         account: Optional[LocalAccount] = None,
-        value: int = 0,
     ) -> HexStr:
         """Deposits additional fee budget for an existing consensus transaction."""
         return top_up_fees(
@@ -319,7 +319,7 @@ class GenLayerClient(Eth):
         transaction_id: HexStr,
         distribution: FeesDistributionInput,
         account: Optional[LocalAccount] = None,
-        value: int = 0,
+        value: Optional[int] = None,
     ) -> HexStr:
         """Deposits appeal fee budget and submits an appeal in one consensus call."""
         return top_up_and_submit_appeal(
@@ -334,7 +334,8 @@ class GenLayerClient(Eth):
     def wait_for_transaction_receipt(
         self,
         transaction_hash: _Hash32,
-        status: TransactionStatus = TransactionStatus.ACCEPTED,
+        status: Optional[TransactionStatus] = None,
+        wait_until: Optional[Literal["decided", "finalized"]] = None,
         interval: int = transaction_config.wait_interval,
         retries: int = transaction_config.retries,
         full_transaction: bool = False,
@@ -344,6 +345,7 @@ class GenLayerClient(Eth):
             self=self,
             transaction_hash=transaction_hash,
             status=status,
+            wait_until=wait_until,
             interval=interval,
             retries=retries,
             full_transaction=full_transaction,
@@ -375,7 +377,7 @@ class GenLayerClient(Eth):
         self,
         transaction_id: HexStr,
         account: Optional[LocalAccount] = None,
-        value: int = 0,
+        value: Optional[int] = None,
     ):
         """Appeals a consensus transaction to trigger a new round of validation.
         Returns the original transaction_id (appeals operate on the same tx)."""

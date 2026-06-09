@@ -27,6 +27,7 @@ class TransactionStatus(str, Enum):
     READY_TO_FINALIZE = "READY_TO_FINALIZE"
     VALIDATORS_TIMEOUT = "VALIDATORS_TIMEOUT"
     LEADER_TIMEOUT = "LEADER_TIMEOUT"
+    LEADER_REVEALING = "LEADER_REVEALING"
 
 
 TRANSACTION_STATUS_NUMBER_TO_NAME = {
@@ -44,6 +45,7 @@ TRANSACTION_STATUS_NUMBER_TO_NAME = {
     "11": TransactionStatus.READY_TO_FINALIZE,
     "12": TransactionStatus.VALIDATORS_TIMEOUT,
     "13": TransactionStatus.LEADER_TIMEOUT,
+    "14": TransactionStatus.LEADER_REVEALING,
 }
 
 TRANSACTION_STATUS_NAME_TO_NUMBER = {
@@ -61,6 +63,7 @@ TRANSACTION_STATUS_NAME_TO_NUMBER = {
     TransactionStatus.READY_TO_FINALIZE: "11",
     TransactionStatus.VALIDATORS_TIMEOUT: "12",
     TransactionStatus.LEADER_TIMEOUT: "13",
+    TransactionStatus.LEADER_REVEALING: "14",
 }
 
 DECIDED_STATES = [
@@ -86,29 +89,26 @@ class TransactionResult(str, Enum):
     NO_MAJORITY = "NO_MAJORITY"
     MAJORITY_AGREE = "MAJORITY_AGREE"
     MAJORITY_DISAGREE = "MAJORITY_DISAGREE"
+    MAJORITY_TIMEOUT = "MAJORITY_TIMEOUT"
 
 
 TRANSACTION_RESULT_NUMBER_TO_NAME = {
     "0": TransactionResult.IDLE,
-    "1": TransactionResult.AGREE,
-    "2": TransactionResult.DISAGREE,
-    "3": TransactionResult.TIMEOUT,
+    "1": TransactionResult.MAJORITY_AGREE,
+    "2": TransactionResult.MAJORITY_DISAGREE,
+    "3": TransactionResult.MAJORITY_TIMEOUT,
     "4": TransactionResult.DETERMINISTIC_VIOLATION,
     "5": TransactionResult.NO_MAJORITY,
-    "6": TransactionResult.MAJORITY_AGREE,
-    "7": TransactionResult.MAJORITY_DISAGREE,
 }
 
 
 TRANSACTION_RESULT_NAME_TO_NUMBER = {
     TransactionResult.IDLE: "0",
-    TransactionResult.AGREE: "1",
-    TransactionResult.DISAGREE: "2",
-    TransactionResult.TIMEOUT: "3",
+    TransactionResult.MAJORITY_AGREE: "1",
+    TransactionResult.MAJORITY_DISAGREE: "2",
+    TransactionResult.MAJORITY_TIMEOUT: "3",
     TransactionResult.DETERMINISTIC_VIOLATION: "4",
     TransactionResult.NO_MAJORITY: "5",
-    TransactionResult.MAJORITY_AGREE: "6",
-    TransactionResult.MAJORITY_DISAGREE: "7",
 }
 
 
@@ -117,12 +117,16 @@ class ExecutionResult(str, Enum):
     NOT_VOTED = "NOT_VOTED"
     FINISHED_WITH_RETURN = "FINISHED_WITH_RETURN"
     FINISHED_WITH_ERROR = "FINISHED_WITH_ERROR"
+    TIMEOUT = "TIMEOUT"
+    NONDET_DISAGREE = "NONDET_DISAGREE"
 
 
 EXECUTION_RESULT_NUMBER_TO_NAME = {
     "0": ExecutionResult.NOT_VOTED,
     "1": ExecutionResult.FINISHED_WITH_RETURN,
     "2": ExecutionResult.FINISHED_WITH_ERROR,
+    "3": ExecutionResult.TIMEOUT,
+    "4": ExecutionResult.NONDET_DISAGREE,
 }
 
 

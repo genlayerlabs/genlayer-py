@@ -156,7 +156,8 @@ class NormalizedTransactionFees(TypedDict):
 MESSAGE_ALLOCATION_ROOT_PARENT_INDEX = (1 << 256) - 1
 CALL_KEY_WILDCARD = b"\x00" * 32
 CALL_KEY_UNNAMED = HexStr("0x" + ("0" * 64))
-CALL_KEY_DEPLOY = CALL_KEY_UNNAMED
+DEPLOY_CALL_KEY = HexStr("0x" + ("0" * 62) + "01")
+CALL_KEY_DEPLOY = DEPLOY_CALL_KEY
 
 FEES_DISTRIBUTION_ABI_TYPE = (
     "(uint256,uint256,uint256,uint256,uint256,uint256,uint256[],uint256,uint256,uint256)"
@@ -194,6 +195,8 @@ DEFAULT_PRICE_CAP_HEADROOM_BPS = 12_000
 DEFAULT_LEADER_TIMEUNITS_ALLOCATION = 100
 DEFAULT_VALIDATOR_TIMEUNITS_ALLOCATION = 200
 DEFAULT_TRANSACTION_EXECUTION_BUDGET_PER_ROUND = 500_000
+# Provisional heuristic sized ~20x observed dev-env consumption (~5M gas-equivalent).
+# TODO(data): replace with telemetry-derived default (p99 x margin) once fee consumption telemetry is collected.
 DEFAULT_TRANSACTION_EXECUTION_GAS = 100_000_000
 DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM = 10_000
 MIN_RECEIPT_BYTES = 512
@@ -201,8 +204,11 @@ DEFAULT_RECEIPT_SLOTS_CHANGED = 7
 DEFAULT_INTRINSIC_GAS = 21_000
 DEFAULT_BOOTLOADER_OVERHEAD = 60_000
 DEFAULT_FIXED_PROPOSE_RECEIPT_GAS = 210_000
+DEFAULT_FIXED_MESSAGE_REVEAL_GAS = 100_000
 DEFAULT_GAS_PER_CHANGED_SLOT = 1_000
 DEFAULT_CALLDATA_GAS_PER_BYTE = 16
+DEFAULT_MESSAGE_REVEAL_LENGTH_SLOTS = 32
+DEFAULT_NONDET_OUTPUT_LENGTH_BYTES = 32
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 VALIDATORS_PER_ROUND = [
@@ -306,6 +312,10 @@ def derive_external_message_call_key(
     if len(calldata) < 4:
         return CALL_KEY_UNNAMED
     return _bytes_to_padded_call_key(calldata[:4])
+
+
+def deploy_call_key() -> HexStr:
+    return DEPLOY_CALL_KEY
 
 
 def _normalize_message_type(value: Union[MessageType, int, str]) -> int:
@@ -658,6 +668,10 @@ def extract_studio_fee_policy(config: Any) -> FeePolicyQuote:
         policy.get("fixedProposeReceiptGas", DEFAULT_FIXED_PROPOSE_RECEIPT_GAS),
         "policy.fixedProposeReceiptGas",
     )
+    fixed_message_reveal_gas = _int_from_unknown(
+        policy.get("fixedMessageRevealGas", DEFAULT_FIXED_MESSAGE_REVEAL_GAS),
+        "policy.fixedMessageRevealGas",
+    )
     explicit_budget_floor = policy.get(
         "messageFeeParamsBudgetFloor",
         config.get("messageFeeParamsBudgetFloor"),
@@ -673,8 +687,12 @@ def extract_studio_fee_policy(config: Any) -> FeePolicyQuote:
             fixed_propose_receipt_gas
             + intrinsic_gas
             + bootloader_overhead
-            + (MIN_RECEIPT_BYTES * calldata_gas_per_byte)
             + (DEFAULT_RECEIPT_SLOTS_CHANGED * gas_per_changed_slot)
+            + fixed_message_reveal_gas
+            + intrinsic_gas
+            + bootloader_overhead
+            + (DEFAULT_MESSAGE_REVEAL_LENGTH_SLOTS * gas_per_changed_slot)
+            + (DEFAULT_NONDET_OUTPUT_LENGTH_BYTES * calldata_gas_per_byte)
         )
     )
 
@@ -860,7 +878,7 @@ def observed_simulation_fee_usage(
     observed_execution_budget = execution_fee_consumed + execution_fee_report_total
     recommended_execution_budget = (
         max(
-            _default_execution_budget_per_round(policy),
+            policy["executionBudgetFloor"],
             _with_cap_headroom(observed_execution_budget, execution_headroom_bps),
         )
         if observed_execution_budget > 0

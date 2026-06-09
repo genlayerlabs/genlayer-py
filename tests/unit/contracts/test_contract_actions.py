@@ -2,17 +2,21 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import eth_utils
+import pytest
 from eth_abi import decode as abi_decode
 from web3 import Web3
 
 import genlayer_py.contracts.actions as contract_actions
 from genlayer_py.chains import localnet
+from genlayer_py.chains.testnet_asimov import testnet_asimov
+from genlayer_py.exceptions import GenLayerError
 from genlayer_py.transactions.fees import (
     ADD_TRANSACTION_WITH_FEES_ARGUMENT_TYPES,
     ADD_TRANSACTION_WITH_FEES_SELECTOR,
     CALL_KEY_DEPLOY,
     CALL_KEY_UNNAMED,
     CALL_KEY_WILDCARD,
+    DEPLOY_CALL_KEY,
     FEES_DISTRIBUTION_ABI_TYPE,
     MESSAGE_ALLOCATION_ROOT_PARENT_INDEX,
     MessageType,
@@ -21,6 +25,7 @@ from genlayer_py.transactions.fees import (
     create_fees_distribution,
     derive_external_message_call_key,
     derive_internal_message_call_key,
+    deploy_call_key,
     encode_external_message_fee_params,
     encode_internal_message_fee_params,
     extract_studio_fee_policy,
@@ -29,6 +34,7 @@ from genlayer_py.transactions.fees import (
 
 
 DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM = 10_000
+LOCAL_EXECUTION_BUDGET_FLOOR_GAS = 306_192
 
 
 ADD_TRANSACTION_ABI_V5 = [
@@ -155,7 +161,9 @@ def test_derive_internal_message_call_key_hashes_exact_32_byte_method_name():
 
 
 def test_derive_message_call_key_constants_for_deploy_and_unnamed():
-    assert CALL_KEY_DEPLOY == "0x" + "00" * 32
+    assert DEPLOY_CALL_KEY == "0x" + "00" * 31 + "01"
+    assert CALL_KEY_DEPLOY == DEPLOY_CALL_KEY
+    assert deploy_call_key() == DEPLOY_CALL_KEY
     assert CALL_KEY_UNNAMED == "0x" + "00" * 32
     assert derive_internal_message_call_key("") == CALL_KEY_UNNAMED
 
@@ -275,6 +283,87 @@ def test_top_up_and_submit_appeal_sends_consensus_call_and_returns_tx_id(monkeyp
     assert captured["encoded_data"].startswith(f"0x{selector}")
 
 
+def test_appeal_transaction_auto_resolves_min_bond(monkeypatch):
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client.chain.fee_manager_contract = {"address": "0x4444444444444444444444444444444444444444"}
+    client.chain.rounds_storage_contract = {"address": "0x5555555555555555555555555555555555555555"}
+    captured = {}
+
+    monkeypatch.setattr(
+        contract_actions,
+        "get_min_appeal_bond",
+        Mock(return_value=4_321),
+    )
+    monkeypatch.setattr(
+        contract_actions,
+        "_encode_submit_appeal_data",
+        Mock(return_value="0x1234"),
+    )
+
+    def fake_send_consensus_call(**kwargs):
+        captured.update(kwargs)
+        return "0xevmtx"
+
+    monkeypatch.setattr(
+        contract_actions,
+        "_send_consensus_call",
+        fake_send_consensus_call,
+    )
+
+    result = contract_actions.appeal_transaction(
+        self=client,
+        transaction_id=TX_ID,
+    )
+
+    assert result == TX_ID
+    contract_actions.get_min_appeal_bond.assert_called_once_with(client, TX_ID)
+    assert captured["value"] == 4_321
+    assert captured["operation_name"] == "Appeal"
+
+
+def test_top_up_and_submit_appeal_auto_resolves_min_bond(monkeypatch):
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client.chain.fee_manager_contract = {"address": "0x4444444444444444444444444444444444444444"}
+    client.chain.rounds_storage_contract = {"address": "0x5555555555555555555555555555555555555555"}
+    captured = {}
+
+    monkeypatch.setattr(
+        contract_actions,
+        "get_min_appeal_bond",
+        Mock(return_value=9_999),
+    )
+
+    def fake_send_consensus_call(**kwargs):
+        captured.update(kwargs)
+        return "0xevmtx"
+
+    monkeypatch.setattr(
+        contract_actions,
+        "_send_consensus_call",
+        fake_send_consensus_call,
+    )
+
+    result = contract_actions.top_up_and_submit_appeal(
+        self=client,
+        transaction_id=TX_ID,
+        distribution={"appealRounds": 1, "rotations": [0, 1]},
+    )
+
+    assert result == TX_ID
+    assert captured["value"] == 9_999
+
+
+def test_appeal_auto_bond_requires_fee_contracts():
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client.chain.fee_manager_contract = None
+
+    with pytest.raises(GenLayerError, match="Cannot auto-resolve appeal bond"):
+        contract_actions.appeal_transaction(
+            self=client,
+            transaction_id=TX_ID,
+        )
+
+
 def test_send_consensus_call_returns_localnet_rpc_hash_without_waiting(monkeypatch):
     wait_for_transaction_receipt = Mock()
     sign_transaction = Mock(
@@ -315,6 +404,14 @@ def test_send_consensus_call_returns_localnet_rpc_hash_without_waiting(monkeypat
     wait_for_transaction_receipt.assert_not_called()
 
 
+def test_revert_selector_formatter_names_fee_errors():
+    error = Exception({"data": "0x632be5a1"})
+
+    assert contract_actions._format_rpc_error(error).endswith(
+        "(FeeValueMustBeNonZero)"
+    )
+
+
 def _make_client(add_transaction_abi):
     chain = SimpleNamespace(
         id=61999,
@@ -330,6 +427,113 @@ def _make_client(add_transaction_abi):
         chain=chain,
         local_account=local_account,
         w3=Web3(),
+    )
+
+
+class _FakeContractFunction:
+    def __init__(self, value):
+        self.value = value
+
+    def call(self):
+        return self.value
+
+
+class _FakeFeeManagerFunctions:
+    def __init__(self, values):
+        self.values = values
+
+    def GENPerTimeUnit(self):
+        return _FakeContractFunction(self.values["gen"])
+
+    def storageUnitPrice(self):
+        return _FakeContractFunction(self.values["storage"])
+
+    def quoteGasPrice(self):
+        return _FakeContractFunction(self.values["quote"])
+
+    def messageFeeParamsBudgetFloor(self):
+        return _FakeContractFunction(self.values["floor"])
+
+
+class _FakeEth:
+    def __init__(self, values, gas_price):
+        self.values = values
+        self._gas_price = gas_price
+        self.gas_price_accesses = 0
+
+    def contract(self, address=None, abi=None):
+        return SimpleNamespace(functions=_FakeFeeManagerFunctions(self.values))
+
+    @property
+    def gas_price(self):
+        self.gas_price_accesses += 1
+        if isinstance(self._gas_price, Exception):
+            raise self._gas_price
+        return self._gas_price
+
+
+def _make_fee_policy_client(values, gas_price=0):
+    eth = _FakeEth(values, gas_price)
+    return SimpleNamespace(
+        chain=SimpleNamespace(
+            fee_manager_contract={"address": "0x4444444444444444444444444444444444444444"},
+        ),
+        w3=SimpleNamespace(
+            eth=eth,
+            to_checksum_address=Mock(side_effect=lambda address: address),
+        ),
+    )
+
+
+def test_get_current_fee_policy_uses_effective_receipt_gas_price_and_local_floor():
+    client = _make_fee_policy_client(
+        {"gen": 0, "storage": 0, "quote": 1, "floor": 0},
+        gas_price=2,
+    )
+
+    policy = contract_actions.get_current_fee_policy(client)
+
+    assert policy["enabled"] is True
+    assert policy["receiptGasPrice"] == 2
+    assert policy["executionBudgetFloor"] == 2 * LOCAL_EXECUTION_BUDGET_FLOOR_GAS
+    assert client.w3.eth.gas_price_accesses == 1
+
+
+def test_get_current_fee_policy_refuses_enabled_zero_receipt_price():
+    client = _make_fee_policy_client(
+        {"gen": 1, "storage": 0, "quote": 0, "floor": 0},
+        gas_price=0,
+    )
+
+    with pytest.raises(
+        GenLayerError,
+        match="receipt gas price quoted as zero; refusing to build a zero price cap",
+    ):
+        contract_actions.get_current_fee_policy(client)
+
+
+def test_get_current_fee_policy_does_not_read_network_gas_price_when_disabled():
+    client = _make_fee_policy_client(
+        {"gen": 0, "storage": 0, "quote": 0, "floor": 0},
+        gas_price=AssertionError("eth_gasPrice should not be called"),
+    )
+
+    policy = contract_actions.get_current_fee_policy(client)
+
+    assert policy["enabled"] is False
+    assert policy["receiptGasPrice"] == 0
+    assert client.w3.eth.gas_price_accesses == 0
+
+
+def test_asimov_chain_has_fee_contracts():
+    assert testnet_asimov.fee_manager_contract["address"] == (
+        "0x21737AA4bea8FF12E202BF1BAB23751A95617533"
+    )
+    assert testnet_asimov.rounds_storage_contract["address"] == (
+        "0x1F595c0D549DE0812F127508ea1039636CFA62Cc"
+    )
+    assert testnet_asimov.appeals_contract["address"] == (
+        "0x0F739Dd8f5322b9547c7d19a9621BC2ac8DF4089"
     )
 
 
@@ -687,6 +891,31 @@ def test_estimate_transaction_fees_uses_studio_fee_config():
     assert estimate["feeValue"] == 3_000_011_000
 
 
+def test_extract_studio_fee_policy_fallback_includes_message_reveal_leg():
+    policy = extract_studio_fee_policy(
+        {
+            "enabled": True,
+            "policy": {
+                "genPerTimeUnit": "10",
+                "storageUnitPrice": "20",
+                "receiptGasPrice": "30",
+            },
+        }
+    )
+
+    assert policy["executionBudgetFloor"] == 30 * (
+        210_000
+        + 21_000
+        + 60_000
+        + 7 * 1_000
+        + 100_000
+        + 21_000
+        + 60_000
+        + 32 * 1_000
+        + 32 * 16
+    )
+
+
 def test_estimate_transaction_fees_derives_message_bucket_from_allocations():
     client = SimpleNamespace(
         chain=SimpleNamespace(
@@ -818,6 +1047,52 @@ def test_estimate_transaction_fees_from_simulation_builds_trusted_preset():
     assert estimate["feeValue"] == 613_123
 
 
+def test_simulation_execution_budget_uses_floor_without_default_gas_clobber():
+    client = SimpleNamespace(
+        chain=SimpleNamespace(
+            fee_manager_contract=None,
+            default_number_of_initial_validators=5,
+        ),
+        provider=SimpleNamespace(
+            make_request=Mock(
+                return_value={
+                    "result": {
+                        "enabled": True,
+                        "policy": {
+                            "genPerTimeUnit": "10",
+                            "storageUnitPrice": "0",
+                            "receiptGasPrice": "1",
+                            "messageFeeParamsBudgetFloor": str(
+                                LOCAL_EXECUTION_BUDGET_FLOOR_GAS
+                            ),
+                        },
+                    }
+                }
+            )
+        ),
+    )
+
+    estimate = contract_actions.estimate_transaction_fees_from_simulation(
+        self=client,
+        options={
+            "simulation": {
+                "feeAccounting": {
+                    "execution_fee_consumed": "10",
+                    "execution_fee_report": {"totalEstimatedFee": "0"},
+                }
+            },
+            "executionHeadroomBps": 10_000,
+        },
+    )
+
+    assert estimate["observed"]["recommendedExecutionBudgetPerRound"] == (
+        LOCAL_EXECUTION_BUDGET_FLOOR_GAS
+    )
+    assert estimate["distribution"]["executionBudgetPerRound"] == (
+        LOCAL_EXECUTION_BUDGET_FLOOR_GAS
+    )
+
+
 def test_estimate_transaction_fees_for_write_uses_studio_estimate_rpc():
     fee_params = encode_internal_message_fee_params(
         {
@@ -928,7 +1203,7 @@ def test_estimate_transaction_fees_for_write_uses_studio_estimate_rpc():
         request_params["fees"]["messageAllocations"][0]["callKey"]
         == "0x" + "00" * 32
     )
-    assert estimate["observed"]["recommendedExecutionBudgetPerRound"] == 100_000_000
+    assert estimate["observed"]["recommendedExecutionBudgetPerRound"] == 602_117
     assert estimate["observed"]["messageFeeBudget"] == 110
     assert estimate["observed"]["messageFeeConsumed"] == 50
     assert estimate["simulation"]["feeAccounting"]["message_fee_budget"] == "110"

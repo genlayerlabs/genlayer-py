@@ -24,6 +24,13 @@ from genlayer_py.transactions.fees import (
     FeesDistributionInput,
     FeesDistribution,
     FEES_DISTRIBUTION_ABI_TYPE,
+    DEFAULT_BOOTLOADER_OVERHEAD,
+    DEFAULT_CALLDATA_GAS_PER_BYTE,
+    DEFAULT_FIXED_PROPOSE_RECEIPT_GAS,
+    DEFAULT_GAS_PER_CHANGED_SLOT,
+    DEFAULT_INTRINSIC_GAS,
+    DEFAULT_RECEIPT_SLOTS_CHANGED,
+    MIN_RECEIPT_BYTES,
     NormalizedTransactionFees,
     SimulationFeeEstimateOptions,
     TransactionFeeEstimate,
@@ -214,7 +221,7 @@ def appeal_transaction(
     self: GenLayerClient,
     transaction_id: HexStr,
     account: Optional[LocalAccount] = None,
-    value: int = 0,
+    value: Optional[int] = None,
 ) -> HexStr:
     """Appeals a consensus transaction. Returns the original transaction_id.
 
@@ -226,6 +233,7 @@ def appeal_transaction(
         raise GenLayerError("No account set.")
     if self.chain.consensus_main_contract is None:
         raise GenLayerError("Consensus main contract not configured.")
+    resolved_value = _resolve_appeal_value(self, transaction_id, value)
 
     encoded_data = _encode_submit_appeal_data(self=self, transaction_id=transaction_id)
 
@@ -233,7 +241,7 @@ def appeal_transaction(
         self=self,
         encoded_data=encoded_data,
         sender_account=sender_account,
-        value=value,
+        value=resolved_value,
         operation_name="Appeal",
     )
 
@@ -244,8 +252,8 @@ def top_up_fees(
     self: GenLayerClient,
     transaction_id: HexStr,
     distribution: FeesDistributionInput,
+    value: int,
     account: Optional[LocalAccount] = None,
-    value: int = 0,
 ) -> HexStr:
     """Deposits additional fee budget for an existing consensus transaction.
 
@@ -273,13 +281,14 @@ def top_up_and_submit_appeal(
     transaction_id: HexStr,
     distribution: FeesDistributionInput,
     account: Optional[LocalAccount] = None,
-    value: int = 0,
+    value: Optional[int] = None,
 ) -> HexStr:
     """Deposits appeal fee budget and submits an appeal in one consensus call.
 
     Returns the original GenLayer transaction id, matching appeal_transaction.
     """
     sender_account = account if account is not None else self.local_account
+    resolved_value = _resolve_appeal_value(self, transaction_id, value)
     encoded_data = _encode_fee_management_data(
         self=self,
         function_name="topUpAndSubmitAppeal",
@@ -290,7 +299,7 @@ def top_up_and_submit_appeal(
         self=self,
         encoded_data=encoded_data,
         sender_account=sender_account,
-        value=value,
+        value=resolved_value,
         operation_name="Top up and submit appeal",
     )
     return transaction_id
@@ -375,6 +384,20 @@ def get_min_appeal_bond(
     )
     tx_bytes = _to_bytes32(self, transaction_id)
     return fee_contract.functions.calculateMinAppealBond(tx_bytes, round_number, tx_status).call()
+
+
+def _resolve_appeal_value(
+    self: GenLayerClient,
+    transaction_id: HexStr,
+    value: Optional[int],
+) -> int:
+    if value is not None:
+        return value
+    if self.chain.fee_manager_contract is None or self.chain.rounds_storage_contract is None:
+        raise GenLayerError(
+            "Cannot auto-resolve appeal bond: fee_manager_contract/rounds_storage_contract not configured for this chain."
+        )
+    return get_min_appeal_bond(self, transaction_id)
 
 
 def _to_bytes32(self: GenLayerClient, hex_str: HexStr) -> bytes:
@@ -597,20 +620,37 @@ def get_current_fee_policy(self: GenLayerClient) -> FeePolicyQuote:
         )
         gen_per_time_unit = fee_manager_contract.functions.GENPerTimeUnit().call()
         storage_unit_price = fee_manager_contract.functions.storageUnitPrice().call()
-        receipt_gas_price = fee_manager_contract.functions.quoteGasPrice().call()
+        quoted_receipt_gas_price = fee_manager_contract.functions.quoteGasPrice().call()
         execution_budget_floor = (
             fee_manager_contract.functions.messageFeeParamsBudgetFloor().call()
         )
+        enabled = (
+            gen_per_time_unit > 0
+            or storage_unit_price > 0
+            or quoted_receipt_gas_price > 0
+        )
+        network_receipt_gas_price = self.w3.eth.gas_price if enabled else 0
+        receipt_gas_price = max(quoted_receipt_gas_price, network_receipt_gas_price)
+        if enabled and receipt_gas_price == 0:
+            raise GenLayerError(
+                "receipt gas price quoted as zero; refusing to build a zero price cap"
+            )
+        local_execution_budget_floor = receipt_gas_price * (
+            DEFAULT_FIXED_PROPOSE_RECEIPT_GAS
+            + DEFAULT_INTRINSIC_GAS
+            + DEFAULT_BOOTLOADER_OVERHEAD
+            + (MIN_RECEIPT_BYTES * DEFAULT_CALLDATA_GAS_PER_BYTE)
+            + (DEFAULT_RECEIPT_SLOTS_CHANGED * DEFAULT_GAS_PER_CHANGED_SLOT)
+        )
         return {
-            "enabled": (
-                gen_per_time_unit > 0
-                or storage_unit_price > 0
-                or receipt_gas_price > 0
-            ),
+            "enabled": enabled,
             "genPerTimeUnit": gen_per_time_unit,
             "storageUnitPrice": storage_unit_price,
             "receiptGasPrice": receipt_gas_price,
-            "executionBudgetFloor": execution_budget_floor,
+            "executionBudgetFloor": max(
+                execution_budget_floor,
+                local_execution_budget_floor,
+            ),
         }
 
     try:
@@ -920,6 +960,46 @@ def _prepare_transaction(
     return transaction
 
 
+KNOWN_REVERT_SELECTOR_NAMES = {
+    "0x8d53e553": "InsufficientFees",
+    "0xb4132db3": "MaxPriceExceeded",
+    "0x57df8523": "ExecutionBudgetExceeded",
+    "0x305e533c": "BudgetTooLow",
+    "0xa70732ee": "RollupBudgetBelowFloor",
+    "0x632be5a1": "FeeValueMustBeNonZero",
+}
+
+
+def _format_rpc_error(error: Exception) -> str:
+    parts = [str(error)]
+    for attr in ("message", "data"):
+        value = getattr(error, attr, None)
+        if isinstance(value, str) and value.strip():
+            parts.append(value)
+    args = getattr(error, "args", ())
+    for arg in args:
+        if isinstance(arg, dict):
+            for key in ("message", "data", "details", "shortMessage"):
+                value = arg.get(key)
+                if isinstance(value, str) and value.strip():
+                    parts.append(value)
+        elif isinstance(arg, str) and arg.strip():
+            parts.append(arg)
+
+    text = " ".join(dict.fromkeys(parts))
+    selector_name = next(
+        (
+            name
+            for selector, name in KNOWN_REVERT_SELECTOR_NAMES.items()
+            if selector in text
+        ),
+        None,
+    )
+    if selector_name and selector_name not in text:
+        return f"{text} ({selector_name})"
+    return text
+
+
 def _send_consensus_call(
     self: GenLayerClient,
     encoded_data: HexStr,
@@ -934,18 +1014,21 @@ def _send_consensus_call(
     if self.chain.consensus_main_contract is None:
         raise GenLayerError("Consensus main contract not configured.")
 
-    transaction = _prepare_transaction(
-        self=self,
-        sender=sender_account.address,
-        recipient=self.chain.consensus_main_contract["address"],
-        data=encoded_data,
-        value=value,
-    )
-    signed_transaction = sender_account.sign_transaction(transaction)
-    serialized_transaction = self.w3.to_hex(signed_transaction.raw_transaction)
-    tx_hash = self.provider.make_request(
-        method="eth_sendRawTransaction", params=[serialized_transaction]
-    )["result"]
+    try:
+        transaction = _prepare_transaction(
+            self=self,
+            sender=sender_account.address,
+            recipient=self.chain.consensus_main_contract["address"],
+            data=encoded_data,
+            value=value,
+        )
+        signed_transaction = sender_account.sign_transaction(transaction)
+        serialized_transaction = self.w3.to_hex(signed_transaction.raw_transaction)
+        tx_hash = self.provider.make_request(
+            method="eth_sendRawTransaction", params=[serialized_transaction]
+        )["result"]
+    except Exception as exc:
+        raise GenLayerError(f"{operation_name} failed: {_format_rpc_error(exc)}") from exc
     if self.chain.id == localnet.id:
         return tx_hash
 
@@ -974,21 +1057,24 @@ def _send_transaction(
             f"Consensus main contract address not found in chain config for \"{self.chain.name}\".",
         )
 
-    transaction = _prepare_transaction(
-        self=self,
-        sender=sender_account.address,
-        recipient=self.chain.consensus_main_contract["address"],
-        data=encoded_data,
-        value=value,
-    )
-    signed_transaction = sender_account.sign_transaction(transaction)
-    serialized_transaction = self.w3.to_hex(signed_transaction.raw_transaction)
-    params = [serialized_transaction]
-    if sim_config is not None:
-        params.append(sim_config)
-    tx_hash = self.provider.make_request(
-        method="eth_sendRawTransaction", params=params
-    )["result"]
+    try:
+        transaction = _prepare_transaction(
+            self=self,
+            sender=sender_account.address,
+            recipient=self.chain.consensus_main_contract["address"],
+            data=encoded_data,
+            value=value,
+        )
+        signed_transaction = sender_account.sign_transaction(transaction)
+        serialized_transaction = self.w3.to_hex(signed_transaction.raw_transaction)
+        params = [serialized_transaction]
+        if sim_config is not None:
+            params.append(sim_config)
+        tx_hash = self.provider.make_request(
+            method="eth_sendRawTransaction", params=params
+        )["result"]
+    except Exception as exc:
+        raise GenLayerError(f"Transaction failed: {_format_rpc_error(exc)}") from exc
     tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
 
     if tx_receipt.status != 1:

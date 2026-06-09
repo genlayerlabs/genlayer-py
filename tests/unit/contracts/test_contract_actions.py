@@ -592,7 +592,7 @@ def test_build_estimated_fees_distribution_adds_caps_and_message_bucket():
     assert distribution["leaderTimeunitsAllocation"] == 100
     assert distribution["validatorTimeunitsAllocation"] == 200
     assert distribution["executionBudgetPerRound"] == (
-        500_000 + 30 * DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM
+        3_000_000_000 + 30 * DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM
     )
     assert distribution["totalMessageFees"] == 80
     assert distribution["maxPriceGenPerTimeUnit"] == 12
@@ -683,8 +683,8 @@ def test_estimate_transaction_fees_uses_studio_fee_config():
             },
         }
     )
-    assert estimate["distribution"]["executionBudgetPerRound"] == 9_185_760
-    assert estimate["feeValue"] == 9_196_760
+    assert estimate["distribution"]["executionBudgetPerRound"] == 3_000_000_000
+    assert estimate["feeValue"] == 3_000_011_000
 
 
 def test_estimate_transaction_fees_derives_message_bucket_from_allocations():
@@ -739,9 +739,9 @@ def test_estimate_transaction_fees_derives_message_bucket_from_allocations():
 
     assert estimate["distribution"]["totalMessageFees"] == 80
     assert estimate["distribution"]["executionBudgetPerRound"] == (
-        9_185_760 + 30 * DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM
+        3_000_000_000 + 30 * DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM
     )
-    assert estimate["feeValue"] == 9_496_840
+    assert estimate["feeValue"] == 3_000_311_080
     assert estimate["messageAllocations"] == message_allocations
     assert estimate["message_allocations"] == message_allocations
 
@@ -866,7 +866,7 @@ def test_estimate_transaction_fees_for_write_uses_studio_estimate_rpc():
                             "leaderTimeunitsAllocation": "100",
                             "validatorTimeunitsAllocation": "200",
                             "appealRounds": "0",
-                            "executionBudgetPerRound": "700000",
+                            "executionBudgetPerRound": "100000000",
                             "executionConsumed": "0",
                             "totalMessageFees": "110",
                             "rotations": ["0"],
@@ -885,7 +885,7 @@ def test_estimate_transaction_fees_for_write_uses_studio_estimate_rpc():
                                 "feeParams": fee_params,
                             }
                         ],
-                        "feeValue": "711110",
+                        "feeValue": "100011110",
                     },
                 }
             }
@@ -921,22 +921,22 @@ def test_estimate_transaction_fees_for_write_uses_studio_estimate_rpc():
     )
     request_params = sim_call.kwargs["params"][0]
     assert request_params["value"] == hex(7)
-    assert request_params["fees"]["feeValue"] == 521_110
+    assert request_params["fees"]["feeValue"] == 100_021_110
     assert request_params["fees"]["distribution"]["totalMessageFees"] == 110
     assert request_params["fees"]["messageAllocations"][0]["budget"] == 110
     assert (
         request_params["fees"]["messageAllocations"][0]["callKey"]
         == "0x" + "00" * 32
     )
-    assert estimate["observed"]["recommendedExecutionBudgetPerRound"] == 602_117
+    assert estimate["observed"]["recommendedExecutionBudgetPerRound"] == 100_000_000
     assert estimate["observed"]["messageFeeBudget"] == 110
     assert estimate["observed"]["messageFeeConsumed"] == 50
     assert estimate["simulation"]["feeAccounting"]["message_fee_budget"] == "110"
     assert estimate["simulation"]["feeReport"]["totalEstimatedFee"] == "501664"
-    assert estimate["distribution"]["executionBudgetPerRound"] == 700_000
+    assert estimate["distribution"]["executionBudgetPerRound"] == 100_000_000
     assert estimate["distribution"]["totalMessageFees"] == 110
     assert estimate["messageAllocations"][0]["budget"] == 110
-    assert estimate["feeValue"] == 711_110
+    assert estimate["feeValue"] == 100_011_110
 
 
 def test_estimate_transaction_fees_from_simulation_preserves_mode2_allocations():

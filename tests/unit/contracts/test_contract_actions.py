@@ -161,7 +161,13 @@ def test_derive_internal_message_call_key_hashes_exact_32_byte_method_name():
 
 
 def test_derive_message_call_key_constants_for_deploy_and_unnamed():
-    assert DEPLOY_CALL_KEY == "0x" + "00" * 31 + "01"
+    # Wildcard is the untagged hash of empty bytes — outside the derived-key space.
+    assert CALL_KEY_WILDCARD == eth_utils.keccak(b"")
+    assert CALL_KEY_WILDCARD == bytes.fromhex(
+        "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+    )
+    # Empty name derives bytes32(0): the natural key for deploy and emit_transfer.
+    assert DEPLOY_CALL_KEY == "0x" + "00" * 32
     assert CALL_KEY_DEPLOY == DEPLOY_CALL_KEY
     assert deploy_call_key() == DEPLOY_CALL_KEY
     assert CALL_KEY_UNNAMED == "0x" + "00" * 32
@@ -594,7 +600,7 @@ def test_simulate_write_contract_passes_fee_policy_and_value_to_sim_call():
     assert request_params["fees"]["messageAllocations"][0]["budget"] == 5
     assert (
         request_params["fees"]["messageAllocations"][0]["callKey"]
-        == "0x" + "00" * 32
+        == "0x" + CALL_KEY_WILDCARD.hex()
     )
 
 
@@ -1201,7 +1207,7 @@ def test_estimate_transaction_fees_for_write_uses_studio_estimate_rpc():
     assert request_params["fees"]["messageAllocations"][0]["budget"] == 110
     assert (
         request_params["fees"]["messageAllocations"][0]["callKey"]
-        == "0x" + "00" * 32
+        == "0x" + CALL_KEY_WILDCARD.hex()
     )
     assert estimate["observed"]["recommendedExecutionBudgetPerRound"] == 602_117
     assert estimate["observed"]["messageFeeBudget"] == 110

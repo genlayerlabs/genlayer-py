@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from genlayer_py.logging import logger
 import json
-from typing import Any, Dict, List
+import warnings
+from typing import Any, Dict, List, Literal, Optional
 from web3 import Web3
 from web3.types import _Hash32
 from eth_typing import HexStr
@@ -11,6 +12,8 @@ from web3.logs import DISCARD
 from genlayer_py.config import transaction_config
 from genlayer_py.types import (
     TransactionStatus,
+    ExecutionResult,
+    EXECUTION_RESULT_NUMBER_TO_NAME,
     TRANSACTION_STATUS_NAME_TO_NUMBER,
     TRANSACTION_STATUS_NUMBER_TO_NAME,
     is_decided_state,
@@ -66,40 +69,129 @@ if TYPE_CHECKING:
     from genlayer_py.client import GenLayerClient
 
 
+_did_warn_wait_for_transaction_receipt_status = False
+
+
+def _warn_deprecated_receipt_status() -> None:
+    global _did_warn_wait_for_transaction_receipt_status
+    if _did_warn_wait_for_transaction_receipt_status:
+        return
+    _did_warn_wait_for_transaction_receipt_status = True
+    warnings.warn(
+        "wait_for_transaction_receipt(status=...) is deprecated; use "
+        "wait_until='decided' or wait_until='finalized' instead.",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+
+
+def _resolve_wait_target(
+    status: Optional[TransactionStatus],
+    wait_until: Optional[Literal["decided", "finalized"]],
+) -> dict:
+    if wait_until is not None:
+        if wait_until not in ("decided", "finalized"):
+            raise ValueError("wait_until must be 'decided' or 'finalized'.")
+        return {"wait_until": wait_until, "legacy_status": None, "label": wait_until}
+    if status is None:
+        return {"wait_until": "decided", "legacy_status": None, "label": "decided"}
+
+    _warn_deprecated_receipt_status()
+    if status == TransactionStatus.ACCEPTED:
+        return {"wait_until": "decided", "legacy_status": None, "label": "decided"}
+    if status == TransactionStatus.FINALIZED:
+        return {"wait_until": "finalized", "legacy_status": None, "label": "finalized"}
+    return {"wait_until": None, "legacy_status": status, "label": status.value}
+
+
+def _has_reached_wait_target(transaction_status: str, target: dict) -> bool:
+    if target["wait_until"] == "decided":
+        return is_decided_state(transaction_status)
+    if target["wait_until"] == "finalized":
+        return transaction_status == TRANSACTION_STATUS_NAME_TO_NUMBER[
+            TransactionStatus.FINALIZED
+        ]
+    legacy_status = target["legacy_status"]
+    return (
+        legacy_status is not None
+        and transaction_status == TRANSACTION_STATUS_NAME_TO_NUMBER[legacy_status]
+    )
+
+
+def _normalize_status_name(value: Any) -> Optional[TransactionStatus]:
+    if isinstance(value, TransactionStatus):
+        return value
+    if isinstance(value, str):
+        if value in TransactionStatus._value2member_map_:
+            return TransactionStatus(value)
+        return TRANSACTION_STATUS_NUMBER_TO_NAME.get(value)
+    if value is None:
+        return None
+    return TRANSACTION_STATUS_NUMBER_TO_NAME.get(str(value))
+
+
+def _normalize_execution_result_name(value: Any) -> Optional[ExecutionResult]:
+    if isinstance(value, ExecutionResult):
+        return value
+    if isinstance(value, str) and value in ExecutionResult._value2member_map_:
+        return ExecutionResult(value)
+    if value is None:
+        return None
+    return EXECUTION_RESULT_NUMBER_TO_NAME.get(str(value))
+
+
+def is_successful(transaction: GenLayerTransaction) -> bool:
+    status_name = _normalize_status_name(
+        transaction.get("status_name", transaction.get("status"))
+    )
+    execution_result_name = _normalize_execution_result_name(
+        transaction.get(
+            "tx_execution_result_name",
+            transaction.get("tx_execution_result"),
+        )
+    )
+    return (
+        status_name in (TransactionStatus.ACCEPTED, TransactionStatus.FINALIZED)
+        and execution_result_name == ExecutionResult.FINISHED_WITH_RETURN
+    )
+
+
 def wait_for_transaction_receipt(
     self: GenLayerClient,
     transaction_hash: _Hash32,
-    status: TransactionStatus = TransactionStatus.ACCEPTED,
+    status: Optional[TransactionStatus] = None,
+    wait_until: Optional[Literal["decided", "finalized"]] = None,
     interval: int = transaction_config.wait_interval,
     retries: int = transaction_config.retries,
     full_transaction: bool = False,
 ) -> GenLayerTransaction:
 
     attempts = 0
+    target = _resolve_wait_target(status, wait_until)
+    transaction = None
+    last_status = None
     while attempts < retries:
         transaction = self.get_transaction(transaction_hash=transaction_hash)
         if transaction is None:
             raise GenLayerError(f"Transaction {transaction_hash} not found")
         transaction_status = str(transaction["status"])
-        last_status = TRANSACTION_STATUS_NUMBER_TO_NAME[transaction_status]
-        finalized_status = TRANSACTION_STATUS_NAME_TO_NUMBER[
-            TransactionStatus.FINALIZED
-        ]
-        requested_status = TRANSACTION_STATUS_NAME_TO_NUMBER[status]
+        last_status = TRANSACTION_STATUS_NUMBER_TO_NAME.get(transaction_status)
 
-        if transaction_status == requested_status or (
-            status == TransactionStatus.ACCEPTED
-            and is_decided_state(transaction_status)
-        ):
+        if _has_reached_wait_target(transaction_status, target):
             if not full_transaction:
                 return _simplify_transaction_receipt(transaction)
             return transaction
         time.sleep(interval / 1000)
         attempts += 1
+    last_status_label = (
+        last_status.value
+        if isinstance(last_status, TransactionStatus)
+        else str(transaction["status"]) if transaction else "<unknown>"
+    )
     raise GenLayerError(
-        f"Transaction {transaction_hash} did not reach desired status '{status.value}' after {retries} attempts "
+        f"Transaction {transaction_hash} did not reach desired status '{target['label']}' after {retries} attempts "
         f"(polling every {interval}ms for a total of {retries * interval / 1000:.1f}s). "
-        f"Last observed status: '{last_status.value}'. "
+        f"Last observed status: '{last_status_label}'. "
         f"This may indicate the transaction is still processing, or the network is experiencing delays. "
         f"Consider increasing 'retries' or 'interval' parameters.\n"
         f"Transaction object simplified: {json.dumps(_simplify_transaction_receipt(transaction), indent=2, default=str)}"

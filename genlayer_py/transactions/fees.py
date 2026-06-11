@@ -154,9 +154,15 @@ class NormalizedTransactionFees(TypedDict):
 
 
 MESSAGE_ALLOCATION_ROOT_PARENT_INDEX = (1 << 256) - 1
-CALL_KEY_WILDCARD = b"\x00" * 32
+# Wildcard sentinel = keccak256 of empty bytes, untagged. Reserved: it can never be a
+# derived key — short names (<32B) are left-aligned with a zero tail byte, long names
+# get the low bit forced to 1, and this hash has neither.
+CALL_KEY_WILDCARD = bytes.fromhex(
+    "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+)
+# Empty method name derives bytes32(0); GenVM emits it for deploy and emit_transfer.
 CALL_KEY_UNNAMED = HexStr("0x" + ("0" * 64))
-DEPLOY_CALL_KEY = HexStr("0x" + ("0" * 62) + "01")
+DEPLOY_CALL_KEY = CALL_KEY_UNNAMED
 CALL_KEY_DEPLOY = DEPLOY_CALL_KEY
 
 FEES_DISTRIBUTION_ABI_TYPE = (

@@ -32,7 +32,7 @@ SIMPLIFIED_WRITE_TRANSACTION_DATA = {
                     "stake": 1,
                 },
                 "calldata": {
-                    "readable": '{"args":["Can you please give me your coin ?"],"method":"ask_for_coin"}'
+                    "readable": '{"":"ask_for_coin","args":["Can you please give me your coin ?"]}'
                 },
                 "eq_outputs": {
                     "0": {
@@ -66,7 +66,7 @@ SIMPLIFIED_WRITE_TRANSACTION_DATA = {
                     "stake": 1,
                 },
                 "calldata": {
-                    "readable": '{"args":["Can you please give me your coin ?"],"method":"ask_for_coin"}'
+                    "readable": '{"":"ask_for_coin","args":["Can you please give me your coin ?"]}'
                 },
                 "eq_outputs": {},
                 "result": {"status": "return", "payload": {"readable": "null"}},
@@ -169,7 +169,7 @@ SIMPLIFIED_WRITE_TRANSACTION_DATA = {
     "created_at": "2025-07-23T15:24:43.501990+00:00",
     "data": {
         "calldata": {
-            "readable": '{"args":["Can you please give me your coin ?"],"method":"ask_for_coin"}'
+            "readable": '{"":"ask_for_coin","args":["Can you please give me your coin ?"]}'
         }
     },
     "from_address": "0xd650f318A0C1F940a3b6dFeA695747fA9804D685",

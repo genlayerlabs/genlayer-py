@@ -23,6 +23,8 @@ VALIDATOR_ADDR = "0x4444444444444444444444444444444444444444"
 BENEFICIARY_ADDR = "0x5555555555555555555555555555555555555555"
 CREATOR_ADDR = "0x6666666666666666666666666666666666666666"
 REVOKER_ADDR = "0x7777777777777777777777777777777777777777"
+WALLET_ADDR = "0x8888888888888888888888888888888888888888"
+NEW_OPERATOR_ADDR = "0x9999999999999999999999999999999999999999"
 
 SEL_VESTING_DELEGATOR_JOIN = keccak(
     text="vestingDelegatorJoin(address,uint256)"
@@ -33,6 +35,33 @@ SEL_VESTING_DELEGATOR_EXIT = keccak(
 SEL_VESTING_DELEGATOR_CLAIM = keccak(text="vestingDelegatorClaim(address)")[
     :4
 ].hex()
+SEL_VESTING_VALIDATOR_JOIN = keccak(
+    text="vestingValidatorJoin(address,uint256)"
+)[:4].hex()
+SEL_VESTING_VALIDATOR_DEPOSIT = keccak(
+    text="vestingValidatorDeposit(address,uint256)"
+)[:4].hex()
+SEL_VESTING_VALIDATOR_EXIT = keccak(
+    text="vestingValidatorExit(address,uint256)"
+)[:4].hex()
+SEL_VESTING_VALIDATOR_CLAIM = keccak(text="vestingValidatorClaim(address)")[
+    :4
+].hex()
+SEL_VESTING_VALIDATOR_INITIATE_OPERATOR_TRANSFER = keccak(
+    text="vestingValidatorInitiateOperatorTransfer(address,address)"
+)[:4].hex()
+SEL_VESTING_VALIDATOR_COMPLETE_OPERATOR_TRANSFER = keccak(
+    text="vestingValidatorCompleteOperatorTransfer(address)"
+)[:4].hex()
+SEL_VESTING_VALIDATOR_CANCEL_OPERATOR_TRANSFER = keccak(
+    text="vestingValidatorCancelOperatorTransfer(address)"
+)[:4].hex()
+SEL_VESTING_VALIDATOR_SET_IDENTITY = keccak(
+    text=(
+        "vestingValidatorSetIdentity("
+        "address,string,string,string,string,string,string,string,string,bytes)"
+    )
+)[:4].hex()
 SEL_VESTING_WITHDRAW = keccak(text="vestingWithdraw(uint256)")[:4].hex()
 
 
@@ -64,6 +93,13 @@ def _last_tx(client):
 
 def _call_result(value):
     return SimpleNamespace(call=Mock(return_value=value))
+
+
+def _decode_vesting_tx(client, data):
+    contract = client.w3.eth.contract(
+        address=client.w3.to_checksum_address(VESTING_ADDR), abi=VESTING_ABI
+    )
+    return contract.decode_function_input(data)
 
 
 def test_vesting_delegator_join_targets_vesting_contract():
@@ -115,6 +151,140 @@ def test_vesting_withdraw_targets_vesting_contract():
     tx = _last_tx(client)
     assert tx["to"].lower() == VESTING_ADDR.lower()
     assert tx["data"][2:10] == SEL_VESTING_WITHDRAW
+
+
+def test_vesting_validator_join_targets_vesting_contract():
+    client = _make_client()
+    vesting_actions.vesting_validator_join(
+        self=client,
+        vesting_contract_address=VESTING_ADDR,
+        operator=VALIDATOR_ADDR,
+        amount=10,
+    )
+    tx = _last_tx(client)
+    assert tx["to"].lower() == VESTING_ADDR.lower()
+    assert tx["value"] == 0
+    assert tx["data"][2:10] == SEL_VESTING_VALIDATOR_JOIN
+
+
+def test_vesting_validator_deposit_targets_vesting_contract():
+    client = _make_client()
+    vesting_actions.vesting_validator_deposit(
+        self=client,
+        vesting_contract_address=VESTING_ADDR,
+        wallet=WALLET_ADDR,
+        amount=25,
+    )
+    tx = _last_tx(client)
+    assert tx["to"].lower() == VESTING_ADDR.lower()
+    assert tx["value"] == 0
+    assert tx["data"][2:10] == SEL_VESTING_VALIDATOR_DEPOSIT
+
+
+def test_vesting_validator_exit_targets_vesting_contract():
+    client = _make_client()
+    vesting_actions.vesting_validator_exit(
+        self=client,
+        vesting_contract_address=VESTING_ADDR,
+        wallet=WALLET_ADDR,
+        shares=42,
+    )
+    tx = _last_tx(client)
+    assert tx["to"].lower() == VESTING_ADDR.lower()
+    assert tx["data"][2:10] == SEL_VESTING_VALIDATOR_EXIT
+
+
+def test_vesting_validator_claim_targets_vesting_contract():
+    client = _make_client()
+    vesting_actions.vesting_validator_claim(
+        self=client,
+        vesting_contract_address=VESTING_ADDR,
+        wallet=WALLET_ADDR,
+    )
+    tx = _last_tx(client)
+    assert tx["to"].lower() == VESTING_ADDR.lower()
+    assert tx["data"][2:10] == SEL_VESTING_VALIDATOR_CLAIM
+
+
+def test_vesting_validator_initiate_operator_transfer_targets_vesting_contract():
+    client = _make_client()
+    vesting_actions.vesting_validator_initiate_operator_transfer(
+        self=client,
+        vesting_contract_address=VESTING_ADDR,
+        wallet=WALLET_ADDR,
+        new_operator=NEW_OPERATOR_ADDR,
+    )
+    tx = _last_tx(client)
+    assert tx["to"].lower() == VESTING_ADDR.lower()
+    assert tx["data"][2:10] == SEL_VESTING_VALIDATOR_INITIATE_OPERATOR_TRANSFER
+
+
+def test_vesting_validator_complete_operator_transfer_targets_vesting_contract():
+    client = _make_client()
+    vesting_actions.vesting_validator_complete_operator_transfer(
+        self=client,
+        vesting_contract_address=VESTING_ADDR,
+        wallet=WALLET_ADDR,
+    )
+    tx = _last_tx(client)
+    assert tx["to"].lower() == VESTING_ADDR.lower()
+    assert tx["data"][2:10] == SEL_VESTING_VALIDATOR_COMPLETE_OPERATOR_TRANSFER
+
+
+def test_vesting_validator_cancel_operator_transfer_targets_vesting_contract():
+    client = _make_client()
+    vesting_actions.vesting_validator_cancel_operator_transfer(
+        self=client,
+        vesting_contract_address=VESTING_ADDR,
+        wallet=WALLET_ADDR,
+    )
+    tx = _last_tx(client)
+    assert tx["to"].lower() == VESTING_ADDR.lower()
+    assert tx["data"][2:10] == SEL_VESTING_VALIDATOR_CANCEL_OPERATOR_TRANSFER
+
+
+def test_vesting_validator_set_identity_targets_vesting_contract():
+    client = _make_client()
+    vesting_actions.vesting_validator_set_identity(
+        self=client,
+        vesting_contract_address=VESTING_ADDR,
+        wallet=WALLET_ADDR,
+        moniker="validator",
+        logo_uri="logo",
+        website="site",
+        description="desc",
+        email="email",
+        twitter="tw",
+        telegram="tg",
+        github="gh",
+        extra_cid="cid",
+    )
+    tx = _last_tx(client)
+    _, args = _decode_vesting_tx(client, tx["data"])
+    assert tx["to"].lower() == VESTING_ADDR.lower()
+    assert tx["data"][2:10] == SEL_VESTING_VALIDATOR_SET_IDENTITY
+    assert args["extraCid"] == b"cid"
+
+
+def test_vesting_validator_set_identity_preserves_hex_extra_cid():
+    client = _make_client()
+    vesting_actions.vesting_validator_set_identity(
+        self=client,
+        vesting_contract_address=VESTING_ADDR,
+        wallet=WALLET_ADDR,
+        moniker="validator",
+        logo_uri="logo",
+        website="site",
+        description="desc",
+        email="email",
+        twitter="tw",
+        telegram="tg",
+        github="gh",
+        extra_cid="0x1234",
+    )
+    tx = _last_tx(client)
+    _, args = _decode_vesting_tx(client, tx["data"])
+    assert args["extraCid"] == b"\x12\x34"
 
 
 def test_write_requires_account():
@@ -259,6 +429,73 @@ def test_get_vesting_stake_info_reads_validator_state():
     functions.pendingExitDeposited.assert_called_once_with(checksum_validator)
 
 
+def test_get_validator_wallets_reads_wallet_list():
+    client = _make_client()
+    functions = SimpleNamespace(
+        getValidatorWallets=Mock(return_value=_call_result([WALLET_ADDR])),
+    )
+    client.w3.eth.contract = Mock(return_value=SimpleNamespace(functions=functions))
+
+    wallets = vesting_actions.get_validator_wallets(
+        self=client, vesting_contract_address=VESTING_ADDR
+    )
+
+    assert wallets == [WALLET_ADDR]
+
+
+def test_validator_wallet_count_reads_wallet_count():
+    client = _make_client()
+    functions = SimpleNamespace(
+        validatorWalletCount=Mock(return_value=_call_result(3)),
+    )
+    client.w3.eth.contract = Mock(return_value=SimpleNamespace(functions=functions))
+
+    assert (
+        vesting_actions.validator_wallet_count(
+            self=client, vesting_contract_address=VESTING_ADDR
+        )
+        == 3
+    )
+
+
+def test_validator_deposited_reads_wallet_deposit():
+    client = _make_client()
+    functions = SimpleNamespace(
+        validatorDeposited=Mock(return_value=_call_result(123)),
+    )
+    client.w3.eth.contract = Mock(return_value=SimpleNamespace(functions=functions))
+
+    deposited = vesting_actions.validator_deposited(
+        self=client,
+        vesting_contract_address=VESTING_ADDR,
+        wallet=WALLET_ADDR,
+    )
+
+    assert deposited == 123
+    functions.validatorDeposited.assert_called_once_with(
+        client.w3.to_checksum_address(WALLET_ADDR)
+    )
+
+
+def test_is_validator_wallet_reads_membership():
+    client = _make_client()
+    functions = SimpleNamespace(
+        isValidatorWallet=Mock(return_value=_call_result(True)),
+    )
+    client.w3.eth.contract = Mock(return_value=SimpleNamespace(functions=functions))
+
+    is_wallet = vesting_actions.is_validator_wallet(
+        self=client,
+        vesting_contract_address=VESTING_ADDR,
+        wallet=WALLET_ADDR,
+    )
+
+    assert is_wallet is True
+    functions.isValidatorWallet.assert_called_once_with(
+        client.w3.to_checksum_address(WALLET_ADDR)
+    )
+
+
 def test_get_vesting_contract_reads_factory_mapping():
     client = _make_client()
     functions = SimpleNamespace(
@@ -289,12 +526,24 @@ def test_abi_includes_expected_functions_and_events():
         "vestingDelegatorJoin",
         "vestingDelegatorExit",
         "vestingDelegatorClaim",
+        "vestingValidatorJoin",
+        "vestingValidatorDeposit",
+        "vestingValidatorExit",
+        "vestingValidatorClaim",
+        "vestingValidatorInitiateOperatorTransfer",
+        "vestingValidatorCompleteOperatorTransfer",
+        "vestingValidatorCancelOperatorTransfer",
+        "vestingValidatorSetIdentity",
         "vestingWithdraw",
         "vestedAmount",
         "unvestedAmount",
         "withdrawableAmount",
         "depositedPerValidator",
         "pendingExitDeposited",
+        "getValidatorWallets",
+        "validatorWalletCount",
+        "validatorDeposited",
+        "isValidatorWallet",
         "getVesting",
     }.issubset(names)
     assert {
@@ -302,5 +551,9 @@ def test_abi_includes_expected_functions_and_events():
         "DelegatorJoined",
         "DelegatorExited",
         "DelegatorClaimed",
+        "ValidatorJoined",
+        "ValidatorDeposited",
+        "ValidatorExited",
+        "ValidatorClaimed",
         "VestingCreated",
     }.issubset(events)

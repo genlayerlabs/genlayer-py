@@ -7,7 +7,7 @@ discovery methods operate on a VestingFactory contract address.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, List, Optional, Union
 
 from eth_account.signers.local import LocalAccount
 from eth_typing import Address, ChecksumAddress
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 
 AddressLike = Union[Address, ChecksumAddress, str]
+ExtraCidLike = Union[str, bytes, bytearray, HexBytes]
 
 
 def _vesting_address(
@@ -40,6 +41,16 @@ def _vesting_factory(self: "GenLayerClient", vesting_factory_address: AddressLik
         address=self.w3.to_checksum_address(vesting_factory_address),
         abi=VESTING_ABI,
     )
+
+
+def _extra_cid(extra_cid: Optional[ExtraCidLike]) -> bytes:
+    if not extra_cid:
+        return b""
+    if isinstance(extra_cid, str):
+        if extra_cid.startswith("0x"):
+            return bytes(HexBytes(extra_cid))
+        return extra_cid.encode()
+    return bytes(extra_cid)
 
 
 def _sender(
@@ -169,6 +180,50 @@ def get_vesting_stake_info(
     }
 
 
+def get_validator_wallets(
+    self: "GenLayerClient", vesting_contract_address: AddressLike
+) -> List[ChecksumAddress]:
+    return (
+        _vesting(self, vesting_contract_address)
+        .functions.getValidatorWallets()
+        .call()
+    )
+
+
+def validator_wallet_count(
+    self: "GenLayerClient", vesting_contract_address: AddressLike
+) -> int:
+    return (
+        _vesting(self, vesting_contract_address)
+        .functions.validatorWalletCount()
+        .call()
+    )
+
+
+def validator_deposited(
+    self: "GenLayerClient",
+    vesting_contract_address: AddressLike,
+    wallet: AddressLike,
+) -> int:
+    return (
+        _vesting(self, vesting_contract_address)
+        .functions.validatorDeposited(self.w3.to_checksum_address(wallet))
+        .call()
+    )
+
+
+def is_validator_wallet(
+    self: "GenLayerClient",
+    vesting_contract_address: AddressLike,
+    wallet: AddressLike,
+) -> bool:
+    return (
+        _vesting(self, vesting_contract_address)
+        .functions.isValidatorWallet(self.w3.to_checksum_address(wallet))
+        .call()
+    )
+
+
 def get_vesting_contract(
     self: "GenLayerClient",
     vesting_factory_address: AddressLike,
@@ -182,9 +237,6 @@ def get_vesting_contract(
 
 
 # --- write methods ----------------------------------------------------
-
-
-# TODO: Add vesting-validator actions after consensus PR #1154 lands.
 
 
 def vesting_delegator_join(
@@ -236,6 +288,176 @@ def vesting_delegator_claim(
     contract = _vesting(self, vesting_contract_address)
     data = contract.encode_abi(
         "vestingDelegatorClaim", args=[self.w3.to_checksum_address(validator)]
+    )
+    vesting_address = _vesting_address(self, vesting_contract_address)
+    tx = _build(self, sender, vesting_address, data)
+    return _send(self, sender, tx)
+
+
+def vesting_validator_join(
+    self: "GenLayerClient",
+    vesting_contract_address: AddressLike,
+    operator: AddressLike,
+    amount: int,
+    account: Optional[LocalAccount] = None,
+) -> HexBytes:
+    """Creates a validator wallet using GEN from a Vesting contract."""
+    sender = _sender(self, account)
+    contract = _vesting(self, vesting_contract_address)
+    data = contract.encode_abi(
+        "vestingValidatorJoin",
+        args=[self.w3.to_checksum_address(operator), amount],
+    )
+    vesting_address = _vesting_address(self, vesting_contract_address)
+    tx = _build(self, sender, vesting_address, data)
+    return _send(self, sender, tx)
+
+
+def vesting_validator_deposit(
+    self: "GenLayerClient",
+    vesting_contract_address: AddressLike,
+    wallet: AddressLike,
+    amount: int,
+    account: Optional[LocalAccount] = None,
+) -> HexBytes:
+    """Adds Vesting-held GEN to one of the Vesting validator wallets."""
+    sender = _sender(self, account)
+    contract = _vesting(self, vesting_contract_address)
+    data = contract.encode_abi(
+        "vestingValidatorDeposit",
+        args=[self.w3.to_checksum_address(wallet), amount],
+    )
+    vesting_address = _vesting_address(self, vesting_contract_address)
+    tx = _build(self, sender, vesting_address, data)
+    return _send(self, sender, tx)
+
+
+def vesting_validator_exit(
+    self: "GenLayerClient",
+    vesting_contract_address: AddressLike,
+    wallet: AddressLike,
+    shares: int,
+    account: Optional[LocalAccount] = None,
+) -> HexBytes:
+    """Burns `shares` from a Vesting-owned validator wallet."""
+    sender = _sender(self, account)
+    contract = _vesting(self, vesting_contract_address)
+    data = contract.encode_abi(
+        "vestingValidatorExit",
+        args=[self.w3.to_checksum_address(wallet), shares],
+    )
+    vesting_address = _vesting_address(self, vesting_contract_address)
+    tx = _build(self, sender, vesting_address, data)
+    return _send(self, sender, tx)
+
+
+def vesting_validator_claim(
+    self: "GenLayerClient",
+    vesting_contract_address: AddressLike,
+    wallet: AddressLike,
+    account: Optional[LocalAccount] = None,
+) -> HexBytes:
+    """Claims exited validator self-stake back into the Vesting contract."""
+    sender = _sender(self, account)
+    contract = _vesting(self, vesting_contract_address)
+    data = contract.encode_abi(
+        "vestingValidatorClaim", args=[self.w3.to_checksum_address(wallet)]
+    )
+    vesting_address = _vesting_address(self, vesting_contract_address)
+    tx = _build(self, sender, vesting_address, data)
+    return _send(self, sender, tx)
+
+
+def vesting_validator_initiate_operator_transfer(
+    self: "GenLayerClient",
+    vesting_contract_address: AddressLike,
+    wallet: AddressLike,
+    new_operator: AddressLike,
+    account: Optional[LocalAccount] = None,
+) -> HexBytes:
+    """Begins operator transfer for a Vesting-owned validator wallet."""
+    sender = _sender(self, account)
+    contract = _vesting(self, vesting_contract_address)
+    data = contract.encode_abi(
+        "vestingValidatorInitiateOperatorTransfer",
+        args=[
+            self.w3.to_checksum_address(wallet),
+            self.w3.to_checksum_address(new_operator),
+        ],
+    )
+    vesting_address = _vesting_address(self, vesting_contract_address)
+    tx = _build(self, sender, vesting_address, data)
+    return _send(self, sender, tx)
+
+
+def vesting_validator_complete_operator_transfer(
+    self: "GenLayerClient",
+    vesting_contract_address: AddressLike,
+    wallet: AddressLike,
+    account: Optional[LocalAccount] = None,
+) -> HexBytes:
+    """Completes operator transfer for a Vesting-owned validator wallet."""
+    sender = _sender(self, account)
+    contract = _vesting(self, vesting_contract_address)
+    data = contract.encode_abi(
+        "vestingValidatorCompleteOperatorTransfer",
+        args=[self.w3.to_checksum_address(wallet)],
+    )
+    vesting_address = _vesting_address(self, vesting_contract_address)
+    tx = _build(self, sender, vesting_address, data)
+    return _send(self, sender, tx)
+
+
+def vesting_validator_cancel_operator_transfer(
+    self: "GenLayerClient",
+    vesting_contract_address: AddressLike,
+    wallet: AddressLike,
+    account: Optional[LocalAccount] = None,
+) -> HexBytes:
+    """Cancels operator transfer for a Vesting-owned validator wallet."""
+    sender = _sender(self, account)
+    contract = _vesting(self, vesting_contract_address)
+    data = contract.encode_abi(
+        "vestingValidatorCancelOperatorTransfer",
+        args=[self.w3.to_checksum_address(wallet)],
+    )
+    vesting_address = _vesting_address(self, vesting_contract_address)
+    tx = _build(self, sender, vesting_address, data)
+    return _send(self, sender, tx)
+
+
+def vesting_validator_set_identity(
+    self: "GenLayerClient",
+    vesting_contract_address: AddressLike,
+    wallet: AddressLike,
+    moniker: str,
+    logo_uri: str,
+    website: str,
+    description: str,
+    email: str,
+    twitter: str,
+    telegram: str,
+    github: str,
+    extra_cid: Optional[ExtraCidLike] = None,
+    account: Optional[LocalAccount] = None,
+) -> HexBytes:
+    """Sets identity metadata on a Vesting-owned validator wallet."""
+    sender = _sender(self, account)
+    contract = _vesting(self, vesting_contract_address)
+    data = contract.encode_abi(
+        "vestingValidatorSetIdentity",
+        args=[
+            self.w3.to_checksum_address(wallet),
+            moniker,
+            logo_uri,
+            website,
+            description,
+            email,
+            twitter,
+            telegram,
+            github,
+            _extra_cid(extra_cid),
+        ],
     )
     vesting_address = _vesting_address(self, vesting_contract_address)
     tx = _build(self, sender, vesting_address, data)

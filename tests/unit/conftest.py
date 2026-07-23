@@ -101,7 +101,7 @@ def sample_transaction_data():
         "created_at": "2025-07-22T19:58:39.866436+00:00",
         "data": {
             "calldata": {
-                "readable": '{"args":[500,"0x4C76986555e8C63bD0D9CFAFbf8e68C338556b6b"],"method":"transfer"}'
+                "readable": '{"":"transfer","args":[500,"0x4C76986555e8C63bD0D9CFAFbf8e68C338556b6b"]}'
             }
         },
         "contract_snapshot": {

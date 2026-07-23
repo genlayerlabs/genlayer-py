@@ -6,10 +6,11 @@
 # }
 
 from datetime import datetime, timezone
-from genlayer import *
+import genlayer as gl
+from genlayer.types import *
 
 
-class SimpleTimeContract(gl.Contract):
+class SimpleTimeContract(gl.contract.Contract):
     """
     A simple contract that demonstrates time-based function availability.
     """

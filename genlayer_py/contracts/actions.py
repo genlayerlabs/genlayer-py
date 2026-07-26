@@ -93,7 +93,8 @@ def read_contract(
 ) -> CalldataEncodable:
     if account is None and self.local_account is None:
         raise GenLayerError("No account provided and no account is connected")
-    sender_address = self.local_account.address
+    sender = account if account is not None else self.local_account
+    sender_address = sender.address
     data = [
         calldata.encode(
             make_calldata_object(method=function_name, args=args, kwargs=kwargs)

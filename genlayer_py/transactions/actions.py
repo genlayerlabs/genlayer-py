@@ -150,6 +150,19 @@ def is_successful(transaction: GenLayerTransaction) -> bool:
             transaction.get("tx_execution_result"),
         )
     )
+
+    if execution_result_name is None:
+        consensus_data = transaction.get("consensus_data")
+        if isinstance(consensus_data, dict):
+            leader_receipt = consensus_data.get("leader_receipt")
+            if isinstance(leader_receipt, list):
+                leader_receipt = leader_receipt[0] if leader_receipt else None
+            if (
+                isinstance(leader_receipt, dict)
+                and leader_receipt.get("execution_result") == "SUCCESS"
+            ):
+                execution_result_name = ExecutionResult.FINISHED_WITH_RETURN
+
     return (
         status_name in (TransactionStatus.ACCEPTED, TransactionStatus.FINALIZED)
         and execution_result_name == ExecutionResult.FINISHED_WITH_RETURN

@@ -38,4 +38,9 @@ def get_current_nonce(
     if address is None and self.account is None:
         raise GenLayerError("No address provided and no account is connected")
     address_to_use = address or self.account.address
-    return self.get_transaction_count(address_to_use, block_identifier)
+    # Include locally pending transactions by default so consecutive
+    # submissions do not reuse the same nonce before the first is mined.
+    resolved_block_identifier = (
+        "pending" if block_identifier is None else block_identifier
+    )
+    return self.get_transaction_count(address_to_use, resolved_block_identifier)

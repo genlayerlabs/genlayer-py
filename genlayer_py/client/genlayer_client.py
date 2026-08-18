@@ -52,6 +52,11 @@ from genlayer_py.staking.actions import (
     validator_claim,
     validator_prime,
     set_operator,
+    get_operator_transfer_context,
+    initiate_operator_transfer,
+    complete_operator_transfer,
+    cancel_operator_transfer,
+    get_pending_operator,
     set_identity,
     delegator_join,
     delegator_exit,
@@ -489,6 +494,38 @@ class GenLayerClient(Eth):
         return set_operator(
             self=self, validator=validator, operator=operator, account=account
         )
+
+    def get_operator_transfer_context(self, validator):
+        """Wallet-bound context for building a rotation proof."""
+        return get_operator_transfer_context(self=self, validator=validator)
+
+    def initiate_operator_transfer(
+        self, validator, registration, account: Optional[LocalAccount] = None
+    ) -> HexBytes:
+        """Starts the two-step operator rotation (CON-715)."""
+        return initiate_operator_transfer(
+            self=self, validator=validator, registration=registration, account=account
+        )
+
+    def complete_operator_transfer(
+        self, validator, account: Optional[LocalAccount] = None
+    ) -> HexBytes:
+        """Finalises a pending operator rotation."""
+        return complete_operator_transfer(
+            self=self, validator=validator, account=account
+        )
+
+    def cancel_operator_transfer(
+        self, validator, account: Optional[LocalAccount] = None
+    ) -> HexBytes:
+        """Abandons a pending operator rotation."""
+        return cancel_operator_transfer(
+            self=self, validator=validator, account=account
+        )
+
+    def get_pending_operator(self, validator) -> dict:
+        """Pending operator and when its transfer was initiated."""
+        return get_pending_operator(self=self, validator=validator)
 
     def set_identity(
         self, validator, moniker: str, account: Optional[LocalAccount] = None

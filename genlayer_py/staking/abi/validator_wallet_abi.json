@@ -998,5 +998,55 @@
   {
     "stateMutability": "payable",
     "type": "receive"
+  },
+  {
+    "name": "initiateOperatorTransfer",
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {
+        "name": "_newOperatorPubKey",
+        "type": "uint256[2]",
+        "internalType": "uint256[2]"
+      },
+      {
+        "name": "_possessionProof",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "name": "completeOperatorTransfer",
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "inputs": [],
+    "outputs": []
+  },
+  {
+    "name": "cancelOperatorTransfer",
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "inputs": [],
+    "outputs": []
+  },
+  {
+    "name": "getPendingOperator",
+    "type": "function",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   }
 ]

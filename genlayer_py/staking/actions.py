@@ -17,6 +17,11 @@ from hexbytes import HexBytes
 
 from genlayer_py.exceptions import GenLayerError
 from genlayer_py.staking.abi import STAKING_ABI, VALIDATOR_WALLET_ABI
+from genlayer_py.staking.operator_registration import (
+    OperatorRegistrationContext,
+    OperatorRegistrationProof,
+    verify_operator_registration,
+)
 
 if TYPE_CHECKING:
     from genlayer_py.client import GenLayerClient
@@ -237,7 +242,12 @@ def set_operator(
     account: Optional[LocalAccount] = None,
 ) -> HexBytes:
     """Rotates the operator for an existing ValidatorWallet. Only the
-    wallet owner (the EOA that called validator_join) may do this."""
+    wallet owner (the EOA that called validator_join) may do this.
+
+    CON-715 removed this single call in favour of the two-step transfer
+    below; against a deployment carrying that change it reverts with no
+    decodable reason, because the selector no longer exists. Prefer
+    initiate_operator_transfer + complete_operator_transfer."""
     sender = _sender(self, account)
     wallet = _wallet(self, validator)
     data = wallet.encode_abi(
@@ -245,6 +255,89 @@ def set_operator(
     )
     tx = _build(self, sender, self.w3.to_checksum_address(validator), data)
     return _send(self, sender, tx)
+
+
+def get_operator_transfer_context(
+    self: "GenLayerClient", validator: AddressLike
+) -> OperatorRegistrationContext:
+    """Context for a rotation proof.
+
+    Rotation is verified by the wallet rather than the factory, so the
+    registrar is the wallet's own address. The owner is read from the wallet
+    instead of assumed to be the caller: the proof is bound to whatever
+    owner() returns, and a mismatch is easier to diagnose here than as an
+    onlyOwner revert."""
+    wallet = _wallet(self, validator)
+    return OperatorRegistrationContext(
+        registrar=self.w3.to_checksum_address(validator),
+        owner=self.w3.to_checksum_address(wallet.functions.owner().call()),
+        chain_id=self.w3.eth.chain_id,
+    )
+
+
+def initiate_operator_transfer(
+    self: "GenLayerClient",
+    validator: AddressLike,
+    registration: OperatorRegistrationProof,
+    account: Optional[LocalAccount] = None,
+) -> HexBytes:
+    """Starts the two-step operator rotation. Owner only.
+
+    `registration` must be built against get_operator_transfer_context — a
+    join proof is bound to the factory and will not verify here."""
+    context = get_operator_transfer_context(self, validator)
+    if not verify_operator_registration(registration, context):
+        raise GenLayerError(
+            "Operator registration proof does not match the wallet, owner, chain, "
+            "or public key. Rotation proofs must use the validator wallet as "
+            "their registrar."
+        )
+
+    sender = _sender(self, account)
+    wallet = _wallet(self, validator)
+    data = wallet.encode_abi(
+        "initiateOperatorTransfer",
+        args=[list(registration.operator_pub_key), registration.possession_proof],
+    )
+    tx = _build(self, sender, self.w3.to_checksum_address(validator), data)
+    return _send(self, sender, tx)
+
+
+def complete_operator_transfer(
+    self: "GenLayerClient",
+    validator: AddressLike,
+    account: Optional[LocalAccount] = None,
+) -> HexBytes:
+    """Finalises a pending rotation. Callable by the wallet owner or the
+    pending operator, once the factory's operatorTransferDelay has elapsed."""
+    sender = _sender(self, account)
+    wallet = _wallet(self, validator)
+    data = wallet.encode_abi("completeOperatorTransfer", args=[])
+    tx = _build(self, sender, self.w3.to_checksum_address(validator), data)
+    return _send(self, sender, tx)
+
+
+def cancel_operator_transfer(
+    self: "GenLayerClient",
+    validator: AddressLike,
+    account: Optional[LocalAccount] = None,
+) -> HexBytes:
+    """Abandons a pending rotation, leaving the current operator in place."""
+    sender = _sender(self, account)
+    wallet = _wallet(self, validator)
+    data = wallet.encode_abi("cancelOperatorTransfer", args=[])
+    tx = _build(self, sender, self.w3.to_checksum_address(validator), data)
+    return _send(self, sender, tx)
+
+
+def get_pending_operator(self: "GenLayerClient", validator: AddressLike) -> dict:
+    """Pending operator and when its transfer was initiated (0 when none)."""
+    wallet = _wallet(self, validator)
+    operator, initiated_at = wallet.functions.getPendingOperator().call()
+    return {
+        "operator": self.w3.to_checksum_address(operator),
+        "initiated_at": int(initiated_at),
+    }
 
 
 def set_identity(

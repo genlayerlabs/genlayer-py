@@ -662,6 +662,20 @@ def test_encode_add_transaction_rejects_unknown_argument_count():
         )
 
 
+def test_encode_add_transaction_rejects_v7_abi_when_fee_aware_transaction_is_requested():
+    client = _make_client(ADD_TRANSACTION_ABI_V7)
+
+    with pytest.raises(ValueError, match="expected 5 or 6 arguments, got 7"):
+        contract_actions._encode_add_transaction_data(
+            self=client,
+            sender_account=client.local_account,
+            recipient=RECIPIENT,
+            consensus_max_rotations=3,
+            data="0x",
+            transaction_fees={"requires_fee_aware_transaction": True},
+        )
+
+
 def test_encode_add_transaction_uses_fee_signature_when_abi_has_tuple_input():
     client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
 

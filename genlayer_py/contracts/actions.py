@@ -884,6 +884,13 @@ def _encode_add_transaction_data(
     use_fee_aware_transaction = (
         transaction_fees["requires_fee_aware_transaction"] or abi_version == "fees"
     )
+    argument_count = len(contract_fn.argument_types)
+    if abi_version != "fees" and argument_count not in (5, 6):
+        raise ValueError(
+            "Unsupported addTransaction ABI: expected 5 or 6 arguments, "
+            f"got {argument_count}"
+        )
+
     normalized_valid_until = to_uint(
         valid_until,
         "valid_until",
@@ -909,7 +916,6 @@ def _encode_add_transaction_data(
         consensus_max_rotations,
         self.w3.to_bytes(hexstr=data),
     ]
-    argument_count = len(contract_fn.argument_types)
     if argument_count == 6:
         add_transaction_args.append(normalized_valid_until)
     elif argument_count != 5:

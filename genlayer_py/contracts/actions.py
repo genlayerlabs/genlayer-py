@@ -909,8 +909,14 @@ def _encode_add_transaction_data(
         consensus_max_rotations,
         self.w3.to_bytes(hexstr=data),
     ]
-    if len(contract_fn.argument_types) >= 6:
+    argument_count = len(contract_fn.argument_types)
+    if argument_count == 6:
         add_transaction_args.append(normalized_valid_until)
+    elif argument_count != 5:
+        raise ValueError(
+            "Unsupported addTransaction ABI: expected 5 or 6 arguments, "
+            f"got {argument_count}"
+        )
 
     params = abi_encode(
         contract_fn.argument_types,

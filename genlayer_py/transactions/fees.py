@@ -19,9 +19,9 @@ class MessageType(IntEnum):
 
 class FeesDistributionInput(TypedDict, total=False):
     leaderTimeunitsAllocation: BigNumberish
-    leader_timeunits_allocation: BigNumberish
+    leader_time_units_allocation: BigNumberish
     validatorTimeunitsAllocation: BigNumberish
-    validator_timeunits_allocation: BigNumberish
+    validator_time_units_allocation: BigNumberish
     appealRounds: BigNumberish
     appeal_rounds: BigNumberish
     executionBudgetPerRound: BigNumberish
@@ -54,9 +54,9 @@ class FeesDistribution(TypedDict):
 
 class InternalMessageFeeParamsInput(TypedDict, total=False):
     leaderTimeunitsAllocation: BigNumberish
-    leader_timeunits_allocation: BigNumberish
+    leader_time_units_allocation: BigNumberish
     validatorTimeunitsAllocation: BigNumberish
-    validator_timeunits_allocation: BigNumberish
+    validator_time_units_allocation: BigNumberish
     appealRounds: BigNumberish
     appeal_rounds: BigNumberish
     executionBudgetPerRound: BigNumberish
@@ -368,7 +368,7 @@ def create_fees_distribution(
             _get(
                 fee_distribution,
                 "leaderTimeunitsAllocation",
-                "leader_timeunits_allocation",
+                "leader_time_units_allocation",
             ),
             "fees.distribution.leaderTimeunitsAllocation",
         ),
@@ -376,7 +376,7 @@ def create_fees_distribution(
             _get(
                 fee_distribution,
                 "validatorTimeunitsAllocation",
-                "validator_timeunits_allocation",
+                "validator_time_units_allocation",
             ),
             "fees.distribution.validatorTimeunitsAllocation",
         ),
@@ -444,7 +444,7 @@ def encode_internal_message_fee_params(
                     _get(
                         params,
                         "leaderTimeunitsAllocation",
-                        "leader_timeunits_allocation",
+                        "leader_time_units_allocation",
                     ),
                     "internalMessageFeeParams.leaderTimeunitsAllocation",
                 ),
@@ -452,7 +452,7 @@ def encode_internal_message_fee_params(
                     _get(
                         params,
                         "validatorTimeunitsAllocation",
-                        "validator_timeunits_allocation",
+                        "validator_time_units_allocation",
                     ),
                     "internalMessageFeeParams.validatorTimeunitsAllocation",
                 ),
@@ -1125,7 +1125,7 @@ def build_estimated_fees_distribution(
             "leaderTimeunitsAllocation": _get(
                 options,
                 "leaderTimeunitsAllocation",
-                "leader_timeunits_allocation",
+                "leader_time_units_allocation",
                 default=DEFAULT_LEADER_TIMEUNITS_ALLOCATION
                 if policy["enabled"]
                 else 0,
@@ -1133,7 +1133,7 @@ def build_estimated_fees_distribution(
             "validatorTimeunitsAllocation": _get(
                 options,
                 "validatorTimeunitsAllocation",
-                "validator_timeunits_allocation",
+                "validator_time_units_allocation",
                 default=DEFAULT_VALIDATOR_TIMEUNITS_ALLOCATION
                 if policy["enabled"]
                 else 0,
@@ -1193,12 +1193,12 @@ def _validator_index(num_of_validators: int) -> int:
 def _calculate_fee_for_round(
     num_of_validators: int,
     rotations: int,
-    leader_timeunits_allocation: int,
-    validator_timeunits_allocation: int,
+    leader_time_units_allocation: int,
+    validator_time_units_allocation: int,
 ) -> int:
     return rotations * (
-        leader_timeunits_allocation
-        + num_of_validators * validator_timeunits_allocation
+        leader_time_units_allocation
+        + num_of_validators * validator_time_units_allocation
     )
 
 

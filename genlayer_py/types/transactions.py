@@ -582,7 +582,7 @@ class GenLayerRawTransaction:
                     ),
                     "value": int.from_bytes(pending_transaction[2], byteorder="big"),
                     "on": (
-                        "accepted"
+                        "decided"
                         if int.from_bytes(pending_transaction[3], byteorder="big") == 0
                         else "finalized"
                     ),

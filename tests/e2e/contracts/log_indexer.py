@@ -23,7 +23,9 @@ class StoreValue:
 
 # contract class
 class LogIndexer(gl.contract.Contract):
-    vector_store: gle.VecDB[np.float32, typing.Literal[384], StoreValue]
+    vector_store: gle.VecDB[
+        np.float32, typing.Literal[384], StoreValue, gle.EuclideanDistance
+    ]
 
     def __init__(self):
         pass

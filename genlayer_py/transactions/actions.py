@@ -211,6 +211,34 @@ def wait_for_transaction_receipt(
     )
 
 
+def _read_transaction_data(consensus_data_contract, consensus_data_abi, transaction_hash):
+    """Read the stored transaction record from whichever surface the chain offers.
+
+    getTransactionData(txId, timestamp) answered with a projection evaluated at a
+    caller-supplied clock. The resolution-kernel train splits that apart: the
+    stored record is getStoredTransactionData(txId), and the projection lives
+    behind getTransactionLifecycle. Chains are upgraded independently, so pick
+    whichever read the chain's own ABI actually offers rather than assuming.
+
+    Both return the same 23-field struct -- only field [0] was renamed
+    (currentTimestamp -> observedAt) -- so the positional decode downstream is
+    unaffected by which one answered.
+    """
+    has_stored_read = any(
+        isinstance(entry, dict) and entry.get("name") == "getStoredTransactionData"
+        for entry in consensus_data_abi
+    )
+
+    if has_stored_read:
+        return consensus_data_contract.functions.getStoredTransactionData(
+            transaction_hash
+        ).call()
+
+    return consensus_data_contract.functions.getTransactionData(
+        transaction_hash, int(time.time())
+    ).call()
+
+
 def get_transaction(
     self: GenLayerClient,
     transaction_hash: _Hash32,
@@ -232,9 +260,11 @@ def get_transaction(
         address=self.chain.consensus_data_contract["address"],
         abi=self.chain.consensus_data_contract["abi"],
     )
-    tx_data = consensus_data_contract.functions.getTransactionData(
-        transaction_hash, int(time.time())
-    ).call()
+    tx_data = _read_transaction_data(
+        consensus_data_contract,
+        self.chain.consensus_data_contract["abi"],
+        transaction_hash,
+    )
     tx_all_data, rounds_data = consensus_data_contract.functions.getTransactionAllData(
         transaction_hash
     ).call()

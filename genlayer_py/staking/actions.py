@@ -29,6 +29,14 @@ if TYPE_CHECKING:
 
 AddressLike = Union[Address, ChecksumAddress, str]
 
+ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+
+# The joined validator registry is only readable in slices: committee capacity
+# is 1,543 and an address[] that long overruns the return-size limit. 64 is the
+# size the paged reads are written around, and the one genlayer-node uses for
+# the same walk.
+VALIDATORS_JOINED_PAGE_SIZE = 64
+
 
 def _require_staking(self: "GenLayerClient") -> ChecksumAddress:
     if self.chain.staking_contract is None:
@@ -97,11 +105,29 @@ def epoch(self: "GenLayerClient") -> int:
 
 
 def active_validators(self: "GenLayerClient") -> List[ChecksumAddress]:
-    return _staking(self).functions.activeValidators().call()
+    # Read a page at a time. Committee capacity is 1,543, and an address[] that
+    # long overruns the return-size limit, so the joined registry is only
+    # reachable in slices -- activeValidators() was withdrawn for that reason.
+    # The count is read first so a registry that grows underneath the walk cannot
+    # spin the loop, and a short page means it shrank instead: stop there and let
+    # the next read see it settled.
+    staking = _staking(self)
+    total = staking.functions.validatorsJoinedCount().call()
+
+    validators: List[ChecksumAddress] = []
+    for start in range(0, total, VALIDATORS_JOINED_PAGE_SIZE):
+        page = staking.functions.getValidatorsJoined(
+            start, VALIDATORS_JOINED_PAGE_SIZE
+        ).call()
+        if not page:
+            break
+        validators.extend(page)
+
+    return [v for v in validators if v != ZERO_ADDRESS]
 
 
 def active_validators_count(self: "GenLayerClient") -> int:
-    return _staking(self).functions.activeValidatorsCount().call()
+    return _staking(self).functions.validatorsJoinedCount().call()
 
 
 def is_validator(self: "GenLayerClient", address: AddressLike) -> bool:

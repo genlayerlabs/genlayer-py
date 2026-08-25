@@ -1264,45 +1264,6 @@
   },
   {
     "inputs": [],
-    "name": "activeValidators",
-    "outputs": [
-      {
-        "internalType": "address[]",
-        "name": "",
-        "type": "address[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "activeValidatorsCount",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "activeWeights",
-    "outputs": [
-      {
-        "internalType": "uint256[]",
-        "name": "",
-        "type": "uint256[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "addressManager",
     "outputs": [
       {
@@ -3550,21 +3511,6 @@
       {
         "components": [
           {
-            "internalType": "address",
-            "name": "left",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "right",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "parent",
-            "type": "address"
-          },
-          {
             "internalType": "uint256",
             "name": "eBanned",
             "type": "uint256"
@@ -3969,19 +3915,6 @@
       }
     ],
     "name": "validatorsOdd",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "validatorsRoot",
     "outputs": [
       {
         "internalType": "address",

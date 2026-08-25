@@ -30,6 +30,11 @@ class TransactionStatus(str, Enum):
     LEADER_REVEALING = "LEADER_REVEALING"
 
 
+# ReadyToFinalize is no longer one of these. It stopped being a status the chain
+# stores -- readiness is the resolution kernel's verdict now -- and removing it
+# at ordinal 11 shifted the three above it down. The TransactionStatus member
+# survives as a client-side state the node still reports; what changed is that
+# no chain value decodes to it.
 TRANSACTION_STATUS_NUMBER_TO_NAME = {
     "0": TransactionStatus.UNINITIALIZED,
     "1": TransactionStatus.PENDING,
@@ -42,10 +47,9 @@ TRANSACTION_STATUS_NUMBER_TO_NAME = {
     "8": TransactionStatus.CANCELED,
     "9": TransactionStatus.APPEAL_REVEALING,
     "10": TransactionStatus.APPEAL_COMMITTING,
-    "11": TransactionStatus.READY_TO_FINALIZE,
-    "12": TransactionStatus.VALIDATORS_TIMEOUT,
-    "13": TransactionStatus.LEADER_TIMEOUT,
-    "14": TransactionStatus.LEADER_REVEALING,
+    "11": TransactionStatus.VALIDATORS_TIMEOUT,
+    "12": TransactionStatus.LEADER_TIMEOUT,
+    "13": TransactionStatus.LEADER_REVEALING,
 }
 
 TRANSACTION_STATUS_NAME_TO_NUMBER = {
@@ -60,10 +64,13 @@ TRANSACTION_STATUS_NAME_TO_NUMBER = {
     TransactionStatus.CANCELED: "8",
     TransactionStatus.APPEAL_REVEALING: "9",
     TransactionStatus.APPEAL_COMMITTING: "10",
-    TransactionStatus.READY_TO_FINALIZE: "11",
-    TransactionStatus.VALIDATORS_TIMEOUT: "12",
-    TransactionStatus.LEADER_TIMEOUT: "13",
-    TransactionStatus.LEADER_REVEALING: "14",
+    # READY_TO_FINALIZE has no ordinal here on purpose. It is not a stored status
+    # any more, so there is no number it could take that would not collide with a
+    # real one -- 11 is VALIDATORS_TIMEOUT now. The map is genuinely partial:
+    # look it up with .get() rather than [] if the value may be that state.
+    TransactionStatus.VALIDATORS_TIMEOUT: "11",
+    TransactionStatus.LEADER_TIMEOUT: "12",
+    TransactionStatus.LEADER_REVEALING: "13",
 }
 
 DECIDED_STATES = [
@@ -457,30 +464,35 @@ class GenLayerRawTransaction:
 
     @classmethod
     def from_all_transaction_data(cls, tx_data: Tuple, rounds_data: List[Tuple]) -> "GenLayerRawTransaction":
-        """Parse getTransactionAllData response which returns (transaction, roundsData[])."""
+        """Parse getTransactionAllData response which returns (transaction, roundsData[]).
+
+        previousStatus was dropped from the Transaction struct, so status sits at
+        index 2 and everything after it moved up one slot. The old offsets clear
+        the length check and decode silently wrong rather than failing.
+        """
         last_round_data = rounds_data[-1] if rounds_data else None
-        latest_block_range = tx_data[18][-1] if tx_data[18] else (0, 0, 0)
+        latest_block_range = tx_data[17][-1] if tx_data[17] else (0, 0, 0)
 
         return cls(
             current_timestamp=0,
-            sender=tx_data[5],
-            recipient=tx_data[6],
-            num_of_initial_validators=tx_data[9],
-            tx_slot=tx_data[8],
+            sender=tx_data[4],
+            recipient=tx_data[5],
+            num_of_initial_validators=tx_data[8],
+            tx_slot=tx_data[7],
             created_timestamp=0,
             last_vote_timestamp=0,
-            random_seed=Web3.to_hex(tx_data[13]),
+            random_seed=Web3.to_hex(tx_data[12]),
             result=tx_data[0],
             tx_execution_result=tx_data[1],
-            tx_data=Web3.to_hex(tx_data[16]),
+            tx_data=Web3.to_hex(tx_data[15]),
             tx_receipt="0x",
             messages=[],
             queue_type=0,
             queue_position=0,
-            activator=tx_data[7],
-            last_leader=tx_data[7],
-            status=tx_data[3],
-            tx_id=Web3.to_hex(tx_data[12]),
+            activator=tx_data[6],
+            last_leader=tx_data[6],
+            status=tx_data[2],
+            tx_id=Web3.to_hex(tx_data[11]),
             read_state_block_range=cls.ReadStateBlockRange.from_transaction_data(latest_block_range),
             num_of_rounds=len(rounds_data),
             last_round=cls.LastRound.from_all_data_round(last_round_data) if last_round_data else cls.LastRound(

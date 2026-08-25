@@ -125,8 +125,8 @@ def test_abis_include_expected_functions():
     wallet_names = {e["name"] for e in VALIDATOR_WALLET_ABI if e.get("type") == "function"}
     assert {
         "epoch",
-        "activeValidators",
-        "activeValidatorsCount",
+        "validatorsJoinedCount",
+        "getValidatorsJoined",
         "isValidator",
         "validatorView",
         "stakeOf",
@@ -140,3 +140,77 @@ def test_abis_include_expected_functions():
     assert {"validatorDeposit", "validatorExit", "setOperator", "setIdentity"}.issubset(
         wallet_names
     )
+    # Withdrawn from the staking contract: keeping them in the bundled ABI lets
+    # callers reach entrypoints that revert.
+    assert not {
+        "activeValidators",
+        "activeValidatorsCount",
+        "activeWeights",
+        "validatorsRoot",
+    } & names
+
+
+class _PagedStakingStub:
+    """Stands in for the Staking contract's paged registry reads."""
+
+    def __init__(self, registry, page_len=None):
+        self._registry = registry
+        self._page_len = page_len
+        self.pages_requested = []
+        self.functions = self
+
+    def validatorsJoinedCount(self):
+        return SimpleNamespace(call=lambda: len(self._registry))
+
+    def getValidatorsJoined(self, start, size):
+        self.pages_requested.append((start, size))
+        take = self._page_len or size
+        return SimpleNamespace(call=lambda: self._registry[start : start + take])
+
+
+def _client_with_staking_stub(monkeypatch, stub):
+    client = _make_client()
+    monkeypatch.setattr(staking_actions, "_staking", lambda self: stub)
+    return client
+
+
+def test_active_validators_pages_the_joined_registry(monkeypatch):
+    """activeValidators() is gone; the registry is read a page at a time."""
+    registry = [f"0x{str(i) * 40}" for i in range(1, 6)]
+    stub = _PagedStakingStub(registry, page_len=2)
+    client = _client_with_staking_stub(monkeypatch, stub)
+
+    monkeypatch.setattr(staking_actions, "VALIDATORS_JOINED_PAGE_SIZE", 2)
+    result = staking_actions.active_validators(self=client)
+
+    assert result == registry
+    assert stub.pages_requested == [(0, 2), (2, 2), (4, 2)]
+
+
+def test_active_validators_stops_on_a_short_page(monkeypatch):
+    """An empty page means the registry shrank mid-walk: stop, do not spin."""
+    stub = _PagedStakingStub([])
+    stub._registry = ["0x" + "a1" * 20]
+    # Report a count far larger than what the pages actually yield.
+    stub.validatorsJoinedCount = lambda: SimpleNamespace(call=lambda: 500)
+    client = _client_with_staking_stub(monkeypatch, stub)
+
+    result = staking_actions.active_validators(self=client)
+
+    assert result == ["0x" + "a1" * 20]
+    assert len(stub.pages_requested) == 2
+
+
+def test_active_validators_filters_zero_address(monkeypatch):
+    zero = "0x" + "00" * 20
+    stub = _PagedStakingStub(["0x" + "a1" * 20, zero])
+    client = _client_with_staking_stub(monkeypatch, stub)
+
+    assert staking_actions.active_validators(self=client) == ["0x" + "a1" * 20]
+
+
+def test_active_validators_count_reads_the_registry(monkeypatch):
+    stub = _PagedStakingStub(["0x" + "a1" * 20, "0x" + "b2" * 20])
+    client = _client_with_staking_stub(monkeypatch, stub)
+
+    assert staking_actions.active_validators_count(self=client) == 2

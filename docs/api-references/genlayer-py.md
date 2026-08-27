@@ -212,7 +212,8 @@ client.wait_for_transaction_receipt(transaction_hash: Union, status: Transaction
 
 ### get_transaction
 
-Fetches transaction data including status, execution result, and consensus details.
+Fetches transaction data including projected and stored status, the resolution
+action, finalization readiness, execution result, and consensus details.
 
 ```python
 client.get_transaction(transaction_hash: Union)
@@ -223,6 +224,14 @@ client.get_transaction(transaction_hash: Union)
 - **transaction_hash** (`Union`) — required
 
 **Returns:** `GenLayerTransaction`
+
+`status` / `status_name` are projected lifecycle state. The exact chain record
+is exposed as `stored_status` / `stored_status_name`. Finalization readiness is
+`resolution_action == "FINALIZE"` together with `can_finalize == True`; it is
+not a transaction status.
+
+The train exposes the authoritative `tx_execution_hash`. It does not retain the
+old receipt bytes, so the legacy `tx_receipt` field is `None`.
 
 ---
 
@@ -277,9 +286,23 @@ TransactionStatus.FINALIZED = "FINALIZED"
 TransactionStatus.CANCELED = "CANCELED"
 TransactionStatus.APPEAL_REVEALING = "APPEAL_REVEALING"
 TransactionStatus.APPEAL_COMMITTING = "APPEAL_COMMITTING"
-TransactionStatus.READY_TO_FINALIZE = "READY_TO_FINALIZE"
 TransactionStatus.VALIDATORS_TIMEOUT = "VALIDATORS_TIMEOUT"
 TransactionStatus.LEADER_TIMEOUT = "LEADER_TIMEOUT"
+TransactionStatus.LEADER_REVEALING = "LEADER_REVEALING"
+```
+
+### ResolutionAction
+
+Action projected by the transaction lifecycle resolution kernel.
+
+```python
+ResolutionAction.NO_OP = "NO_OP"
+ResolutionAction.CANCEL = "CANCEL"
+ResolutionAction.REPLACE_ACTOR = "REPLACE_ACTOR"
+ResolutionAction.ROTATE_LEADER = "ROTATE_LEADER"
+ResolutionAction.RESOLVE_APPEAL = "RESOLVE_APPEAL"
+ResolutionAction.MATERIALIZE_DECISION = "MATERIALIZE_DECISION"
+ResolutionAction.FINALIZE = "FINALIZE"
 ```
 
 ---
@@ -309,28 +332,23 @@ Result of contract execution by the GenVM.
 ExecutionResult.NOT_VOTED = "NOT_VOTED"
 ExecutionResult.FINISHED_WITH_RETURN = "FINISHED_WITH_RETURN"
 ExecutionResult.FINISHED_WITH_ERROR = "FINISHED_WITH_ERROR"
+ExecutionResult.TIMEOUT = "TIMEOUT"
+ExecutionResult.NONDET_DISAGREE = "NONDET_DISAGREE"
+ExecutionResult.DETERMINISTIC_VIOLATION = "DETERMINISTIC_VIOLATION"
 ```
 
 ---
 
 ### VoteType
 
-str(object='') -> str
-str(bytes_or_buffer[, encoding[, errors]]) -> str
-
-Create a new string object from the given object. If encoding or
-errors is specified, then the object must expose a data buffer
-that will be decoded using the given encoding and error handler.
-Otherwise, returns the result of object.__str__() (if defined)
-or repr(object).
-encoding defaults to 'utf-8'.
-errors defaults to 'strict'.
+Validator execution vote recorded for a consensus round.
 
 ```python
 VoteType.NOT_VOTED = "NOT_VOTED"
-VoteType.AGREE = "AGREE"
-VoteType.DISAGREE = "DISAGREE"
+VoteType.FINISHED_WITH_RETURN = "FINISHED_WITH_RETURN"
+VoteType.FINISHED_WITH_ERROR = "FINISHED_WITH_ERROR"
 VoteType.TIMEOUT = "TIMEOUT"
+VoteType.NONDET_DISAGREE = "NONDET_DISAGREE"
 VoteType.DETERMINISTIC_VIOLATION = "DETERMINISTIC_VIOLATION"
 ```
 

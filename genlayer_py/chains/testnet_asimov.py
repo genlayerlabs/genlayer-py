@@ -1,6 +1,9 @@
 from genlayer_py.types import GenLayerChain, NativeCurrency, SimpleContractInfo
-from genlayer_py.consensus.abi import CONSENSUS_MAIN_ABI, CONSENSUS_DATA_ABI
-
+from genlayer_py.consensus.abi import (
+    APPEALS_ABI,
+    CONSENSUS_MAIN_ABI,
+    CONSENSUS_DATA_ABI,
+)
 
 TESTNET_JSON_RPC_URL = "https://rpc-asimov.genlayer.com"
 EXPLORER_URL = "https://explorer-asimov.genlayer.com/"
@@ -103,15 +106,7 @@ ROUNDS_STORAGE_CONTRACT: SimpleContractInfo = {
 
 APPEALS_CONTRACT: SimpleContractInfo = {
     "address": "0x0F739Dd8f5322b9547c7d19a9621BC2ac8DF4089",
-    "abi": [
-        {
-            "type": "function",
-            "name": "canAppeal",
-            "stateMutability": "view",
-            "inputs": [{"name": "_txId", "type": "bytes32"}],
-            "outputs": [{"name": "", "type": "bool"}],
-        },
-    ],
+    "abi": APPEALS_ABI,
 }
 
 

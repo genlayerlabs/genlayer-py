@@ -28,6 +28,8 @@ from genlayer_py.contracts.actions import (
     get_round_data,
     get_last_round_data,
     can_appeal,
+    get_appeal_quote,
+    get_appeal_charge,
     get_min_appeal_bond,
     get_contract_schema,
     get_contract_schema_for_code,
@@ -53,6 +55,7 @@ from genlayer_py.staking.actions import (
     validator_prime,
     set_operator,
     get_operator_transfer_context,
+    get_validator_join_context,
     initiate_operator_transfer,
     complete_operator_transfer,
     cancel_operator_transfer,
@@ -64,12 +67,18 @@ from genlayer_py.staking.actions import (
     epoch as staking_epoch,
     active_validators,
     active_validators_count,
+    joined_validators,
+    joined_validators_count,
     is_validator,
     get_validator_info,
     get_stake_info,
     banned_validators,
     validator_min_stake,
     delegator_min_stake,
+)
+from genlayer_py.staking.operator_registration import (
+    OperatorRegistrationContext,
+    OperatorRegistrationProof,
 )
 from genlayer_py.config import transaction_config
 from genlayer_py.transactions.fees import (
@@ -325,14 +334,20 @@ class GenLayerClient(Eth):
         distribution: FeesDistributionInput,
         account: Optional[LocalAccount] = None,
         value: Optional[int] = None,
+        expected_decision_id: Optional[int] = None,
     ) -> HexStr:
-        """Deposits appeal fee budget and submits an appeal in one consensus call."""
+        """Deposits appeal funding and submits the exact active decision.
+
+        When ``expected_decision_id`` or ``value`` is omitted, the SDK obtains
+        both from the lightweight consensus appeal quote.
+        """
         return top_up_and_submit_appeal(
             self=self,
             transaction_id=transaction_id,
             distribution=distribution,
             account=account,
             value=value,
+            expected_decision_id=expected_decision_id,
         )
 
     # Transaction actions
@@ -360,7 +375,15 @@ class GenLayerClient(Eth):
         self,
         transaction_hash: _Hash32,
     ) -> GenLayerTransaction:
-        """Fetches transaction data including status, execution result, and consensus details."""
+        """Fetches projected/stored status, resolution/finalization readiness,
+        execution result, and consensus details.
+
+        ``status`` is projected while ``stored_status`` is the exact chain
+        record. Finalization readiness is ``resolution_action == "FINALIZE"``
+        together with ``can_finalize``. The train exposes
+        ``tx_execution_hash``; legacy receipt bytes are unavailable, so
+        ``tx_receipt`` is ``None``.
+        """
         return get_transaction(self=self, transaction_hash=transaction_hash)
 
     def get_triggered_transaction_ids(
@@ -368,7 +391,9 @@ class GenLayerClient(Eth):
         transaction_hash: _Hash32,
     ) -> list:
         """Returns transaction IDs of child transactions created from emitted messages."""
-        return get_triggered_transaction_ids(self=self, transaction_hash=transaction_hash)
+        return get_triggered_transaction_ids(
+            self=self, transaction_hash=transaction_hash
+        )
 
     def debug_trace_transaction(
         self,
@@ -376,21 +401,27 @@ class GenLayerClient(Eth):
         round: int = 0,
     ) -> dict:
         """Fetches the full execution trace including return data, stdout, stderr, and GenVM logs."""
-        return debug_trace_transaction(self=self, transaction_hash=transaction_hash, round=round)
+        return debug_trace_transaction(
+            self=self, transaction_hash=transaction_hash, round=round
+        )
 
     def appeal_transaction(
         self,
         transaction_id: HexStr,
         account: Optional[LocalAccount] = None,
         value: Optional[int] = None,
+        expected_decision_id: Optional[int] = None,
     ):
         """Appeals a consensus transaction to trigger a new round of validation.
-        Returns the original transaction_id (appeals operate on the same tx)."""
+        Returns the original transaction_id (appeals operate on the same tx).
+        Missing decision/value inputs are filled from the latest appeal quote.
+        """
         return appeal_transaction(
             self=self,
             transaction_id=transaction_id,
             account=account,
             value=value,
+            expected_decision_id=expected_decision_id,
         )
 
     def get_round_number(self, transaction_id: HexStr) -> int:
@@ -405,12 +436,28 @@ class GenLayerClient(Eth):
         """Returns the current round number and its data."""
         return get_last_round_data(self=self, transaction_id=transaction_id)
 
-    def can_appeal(self, transaction_id: HexStr) -> bool:
-        """Checks if a transaction can be appealed."""
-        return can_appeal(self=self, transaction_id=transaction_id)
+    def can_appeal(
+        self,
+        transaction_id: HexStr,
+        expected_decision_id: Optional[int] = None,
+    ) -> bool:
+        """Checks whether the exact active decision can be appealed."""
+        return can_appeal(
+            self=self,
+            transaction_id=transaction_id,
+            expected_decision_id=expected_decision_id,
+        )
+
+    def get_appeal_quote(self, transaction_id: HexStr) -> Dict[str, int]:
+        """Returns the latest decision id, appeal charges, and deadline."""
+        return get_appeal_quote(self=self, transaction_id=transaction_id)
+
+    def get_appeal_charge(self, transaction_id: HexStr) -> int:
+        """Returns the full appeal payment (bond plus induced-work funding)."""
+        return get_appeal_charge(self=self, transaction_id=transaction_id)
 
     def get_min_appeal_bond(self, transaction_id: HexStr) -> int:
-        """Calculates the minimum bond required to appeal a transaction."""
+        """Deprecated alias for :meth:`get_appeal_charge`."""
         return get_min_appeal_bond(self=self, transaction_id=transaction_id)
 
     # ── Staking actions (EVM, not consensus-layer) ────────────────────
@@ -422,11 +469,20 @@ class GenLayerClient(Eth):
         return staking_epoch(self=self)
 
     def active_validators(self) -> List:
-        """Returns ValidatorWallet addresses active in the current epoch."""
+        """Returns ValidatorWallet addresses currently eligible for duties."""
         return active_validators(self=self)
 
     def active_validators_count(self) -> int:
+        """Returns the number of validators currently eligible for duties."""
         return active_validators_count(self=self)
+
+    def joined_validators(self) -> List:
+        """Returns every ValidatorWallet in the append-only joined registry."""
+        return joined_validators(self=self)
+
+    def joined_validators_count(self) -> int:
+        """Returns the size of the append-only joined validator registry."""
+        return joined_validators_count(self=self)
 
     def is_validator(self, address) -> bool:
         return is_validator(self=self, address=address)
@@ -451,14 +507,24 @@ class GenLayerClient(Eth):
     def validator_join(
         self,
         amount: int,
-        operator=None,
+        registration: Optional[OperatorRegistrationProof] = None,
         account: Optional[LocalAccount] = None,
+        operator=None,
     ) -> HexBytes:
-        """Joins as a validator. Deploys a ValidatorWallet with msg.sender
-        as owner and `operator` (defaults to owner) as operator."""
+        """Joins with a proof-bound operator key and deploys a ValidatorWallet."""
         return validator_join(
-            self=self, amount=amount, operator=operator, account=account
+            self=self,
+            amount=amount,
+            registration=registration,
+            account=account,
+            operator=operator,
         )
+
+    def get_validator_join_context(
+        self, account: Optional[LocalAccount] = None
+    ) -> OperatorRegistrationContext:
+        """Factory-bound context for building a validator join proof."""
+        return get_validator_join_context(self=self, account=account)
 
     def validator_deposit(
         self, validator, amount: int, account: Optional[LocalAccount] = None
@@ -490,7 +556,7 @@ class GenLayerClient(Eth):
     def set_operator(
         self, validator, operator, account: Optional[LocalAccount] = None
     ) -> HexBytes:
-        """Rotates the operator for an existing ValidatorWallet."""
+        """Raises with migration guidance for proof-based operator rotation."""
         return set_operator(
             self=self, validator=validator, operator=operator, account=account
         )
@@ -519,9 +585,7 @@ class GenLayerClient(Eth):
         self, validator, account: Optional[LocalAccount] = None
     ) -> HexBytes:
         """Abandons a pending operator rotation."""
-        return cancel_operator_transfer(
-            self=self, validator=validator, account=account
-        )
+        return cancel_operator_transfer(self=self, validator=validator, account=account)
 
     def get_pending_operator(self, validator) -> dict:
         """Pending operator and when its transfer was initiated."""

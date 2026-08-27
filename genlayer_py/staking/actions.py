@@ -15,6 +15,7 @@ from eth_account.signers.local import LocalAccount
 from eth_typing import Address, ChecksumAddress
 from hexbytes import HexBytes
 
+from genlayer_py.consensus.abi import ADDRESS_MANAGER_ABI
 from genlayer_py.exceptions import GenLayerError
 from genlayer_py.staking.abi import STAKING_ABI, VALIDATOR_WALLET_ABI
 from genlayer_py.staking.operator_registration import (
@@ -56,9 +57,7 @@ def _wallet(self: "GenLayerClient", validator: AddressLike):
     )
 
 
-def _sender(
-    self: "GenLayerClient", account: Optional[LocalAccount]
-) -> LocalAccount:
+def _sender(self: "GenLayerClient", account: Optional[LocalAccount]) -> LocalAccount:
     acct = account or self.local_account
     if acct is None:
         raise GenLayerError("No account provided and client has no local_account")
@@ -105,12 +104,20 @@ def epoch(self: "GenLayerClient") -> int:
 
 
 def active_validators(self: "GenLayerClient") -> List[ChecksumAddress]:
-    # Read a page at a time. Committee capacity is 1,543, and an address[] that
-    # long overruns the return-size limit, so the joined registry is only
-    # reachable in slices -- activeValidators() was withdrawn for that reason.
-    # The count is read first so a registry that grows underneath the walk cannot
-    # spin the loop, and a short page means it shrank instead: stop there and let
-    # the next read see it settled.
+    """Return validators that are currently eligible for protocol duties."""
+    return _staking(self).functions.selectableValidators().call()
+
+
+def active_validators_count(self: "GenLayerClient") -> int:
+    """Return the number of validators currently eligible for duties."""
+    return _staking(self).functions.selectableValidatorsCount().call()
+
+
+def joined_validators(self: "GenLayerClient") -> List[ChecksumAddress]:
+    """Return every validator wallet in the append-only joined registry."""
+    # The joined registry can contain 1,543 entries, so read it in slices. The
+    # count is read first so a registry that grows underneath the walk cannot
+    # spin forever, and an empty page lets a shrinking walk stop safely.
     staking = _staking(self)
     total = staking.functions.validatorsJoinedCount().call()
 
@@ -126,7 +133,8 @@ def active_validators(self: "GenLayerClient") -> List[ChecksumAddress]:
     return [v for v in validators if v != ZERO_ADDRESS]
 
 
-def active_validators_count(self: "GenLayerClient") -> int:
+def joined_validators_count(self: "GenLayerClient") -> int:
+    """Return the size of the append-only joined validator registry."""
     return _staking(self).functions.validatorsJoinedCount().call()
 
 
@@ -178,25 +186,62 @@ def delegator_min_stake(self: "GenLayerClient") -> int:
 # ─── write methods ────────────────────────────────────────────────────
 
 
+def get_validator_join_context(
+    self: "GenLayerClient",
+    account: Optional[LocalAccount] = None,
+) -> OperatorRegistrationContext:
+    """Return the factory-bound context required for a validator join proof."""
+    sender = _sender(self, account)
+    address_manager_address = _staking(self).functions.addressManager().call()
+    address_manager = self.w3.eth.contract(
+        address=self.w3.to_checksum_address(address_manager_address),
+        abi=ADDRESS_MANAGER_ABI,
+    )
+    factory = address_manager.functions.getAddressNonZero(
+        "ValidatorWalletFactory"
+    ).call()
+    return OperatorRegistrationContext(
+        registrar=self.w3.to_checksum_address(factory),
+        owner=self.w3.to_checksum_address(sender.address),
+        chain_id=self.w3.eth.chain_id,
+    )
+
+
 def validator_join(
     self: "GenLayerClient",
     amount: int,
-    operator: Optional[AddressLike] = None,
+    registration: Optional[OperatorRegistrationProof] = None,
     account: Optional[LocalAccount] = None,
+    operator: Optional[AddressLike] = None,
 ) -> HexBytes:
-    """Joins as a validator with `amount` GEN stake. Deploys a new
-    ValidatorWallet. Returns the tx hash — call get_validator_info on
-    the resulting wallet address to discover it (or parse the receipt
-    for the ValidatorJoin event)."""
+    """Join with a proof-bound operator key and deploy a ValidatorWallet.
+
+    Build ``registration`` with :func:`get_validator_join_context` and
+    ``create_operator_registration``. The legacy address-only overloads do not
+    exist on the train.
+    """
+    if operator is not None or not isinstance(registration, OperatorRegistrationProof):
+        raise GenLayerError(
+            "validator_join now requires an OperatorRegistrationProof; call "
+            "get_validator_join_context(), create_operator_registration(), then "
+            "pass the resulting registration. An operator address alone is not "
+            "accepted by the train contract."
+        )
+
     sender = _sender(self, account)
+    context = get_validator_join_context(self, account)
+    if not verify_operator_registration(registration, context):
+        raise GenLayerError(
+            "Operator registration proof does not match the validator wallet "
+            "factory, owner, chain, or public key. Build a fresh proof from "
+            "get_validator_join_context()."
+        )
+
     contract = _staking(self)
-    # Staking.validatorJoin has two overloads — () and (address) — so
-    # web3.py needs the full signature, not the name alone.
-    if operator is not None:
-        op = self.w3.to_checksum_address(operator)
-        data = contract.encode_abi("validatorJoin(address)", args=[op])
-    else:
-        data = contract.encode_abi("validatorJoin()", args=[])
+    data = contract.encode_abi(
+        "validatorJoin",
+        args=[list(registration.operator_pub_key), registration.possession_proof],
+    )
     tx = _build(self, sender, _require_staking(self), data, value=amount)
     return _send(self, sender, tx)
 
@@ -212,7 +257,9 @@ def validator_deposit(
     sender = _sender(self, account)
     wallet = _wallet(self, validator)
     data = wallet.encode_abi("validatorDeposit", args=[])
-    tx = _build(self, sender, self.w3.to_checksum_address(validator), data, value=amount)
+    tx = _build(
+        self, sender, self.w3.to_checksum_address(validator), data, value=amount
+    )
     return _send(self, sender, tx)
 
 
@@ -267,20 +314,13 @@ def set_operator(
     operator: AddressLike,
     account: Optional[LocalAccount] = None,
 ) -> HexBytes:
-    """Rotates the operator for an existing ValidatorWallet. Only the
-    wallet owner (the EOA that called validator_join) may do this.
-
-    CON-715 removed this single call in favour of the two-step transfer
-    below; against a deployment carrying that change it reverts with no
-    decodable reason, because the selector no longer exists. Prefer
-    initiate_operator_transfer + complete_operator_transfer."""
-    sender = _sender(self, account)
-    wallet = _wallet(self, validator)
-    data = wallet.encode_abi(
-        "setOperator", args=[self.w3.to_checksum_address(operator)]
+    """Explain how to migrate from the removed address-only rotation call."""
+    raise GenLayerError(
+        "set_operator(address) was removed from the train contract and no "
+        "transaction was sent. Build a proof with "
+        "get_operator_transfer_context(), call initiate_operator_transfer(), "
+        "then complete_operator_transfer() after the transfer delay."
     )
-    tx = _build(self, sender, self.w3.to_checksum_address(validator), data)
-    return _send(self, sender, tx)
 
 
 def get_operator_transfer_context(

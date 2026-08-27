@@ -13,6 +13,7 @@ from genlayer_py.consensus.consensus_main import decode_tx_data
 
 class TransactionStatus(str, Enum):
     """Status of a GenLayer transaction in the consensus lifecycle."""
+
     UNINITIALIZED = "UNINITIALIZED"
     PENDING = "PENDING"
     PROPOSING = "PROPOSING"
@@ -24,17 +25,37 @@ class TransactionStatus(str, Enum):
     CANCELED = "CANCELED"
     APPEAL_REVEALING = "APPEAL_REVEALING"
     APPEAL_COMMITTING = "APPEAL_COMMITTING"
-    READY_TO_FINALIZE = "READY_TO_FINALIZE"
     VALIDATORS_TIMEOUT = "VALIDATORS_TIMEOUT"
     LEADER_TIMEOUT = "LEADER_TIMEOUT"
     LEADER_REVEALING = "LEADER_REVEALING"
 
 
-# ReadyToFinalize is no longer one of these. It stopped being a status the chain
-# stores -- readiness is the resolution kernel's verdict now -- and removing it
-# at ordinal 11 shifted the three above it down. The TransactionStatus member
-# survives as a client-side state the node still reports; what changed is that
-# no chain value decodes to it.
+class ResolutionAction(str, Enum):
+    """Action projected by the transaction lifecycle resolution kernel."""
+
+    NO_OP = "NO_OP"
+    CANCEL = "CANCEL"
+    REPLACE_ACTOR = "REPLACE_ACTOR"
+    ROTATE_LEADER = "ROTATE_LEADER"
+    RESOLVE_APPEAL = "RESOLVE_APPEAL"
+    MATERIALIZE_DECISION = "MATERIALIZE_DECISION"
+    FINALIZE = "FINALIZE"
+
+
+RESOLUTION_ACTION_NUMBER_TO_NAME = {
+    "0": ResolutionAction.NO_OP,
+    "1": ResolutionAction.CANCEL,
+    "2": ResolutionAction.REPLACE_ACTOR,
+    "3": ResolutionAction.ROTATE_LEADER,
+    "4": ResolutionAction.RESOLVE_APPEAL,
+    "5": ResolutionAction.MATERIALIZE_DECISION,
+    "6": ResolutionAction.FINALIZE,
+}
+
+
+# Finalization readiness is a lifecycle resolution action, not a stored or
+# projected transaction status. Removing ReadyToFinalize at ordinal 11 shifted
+# the three statuses above it down.
 TRANSACTION_STATUS_NUMBER_TO_NAME = {
     "0": TransactionStatus.UNINITIALIZED,
     "1": TransactionStatus.PENDING,
@@ -64,10 +85,6 @@ TRANSACTION_STATUS_NAME_TO_NUMBER = {
     TransactionStatus.CANCELED: "8",
     TransactionStatus.APPEAL_REVEALING: "9",
     TransactionStatus.APPEAL_COMMITTING: "10",
-    # READY_TO_FINALIZE has no ordinal here on purpose. It is not a stored status
-    # any more, so there is no number it could take that would not collide with a
-    # real one -- 11 is VALIDATORS_TIMEOUT now. The map is genuinely partial:
-    # look it up with .get() rather than [] if the value may be that state.
     TransactionStatus.VALIDATORS_TIMEOUT: "11",
     TransactionStatus.LEADER_TIMEOUT: "12",
     TransactionStatus.LEADER_REVEALING: "13",
@@ -79,15 +96,19 @@ DECIDED_STATES = [
     TransactionStatus.LEADER_TIMEOUT,
     TransactionStatus.VALIDATORS_TIMEOUT,
     TransactionStatus.CANCELED,
-    TransactionStatus.FINALIZED
+    TransactionStatus.FINALIZED,
 ]
 
+
 def is_decided_state(status: str) -> bool:
-    return status in [TRANSACTION_STATUS_NAME_TO_NUMBER[state] for state in DECIDED_STATES]
+    return status in [
+        TRANSACTION_STATUS_NAME_TO_NUMBER[state] for state in DECIDED_STATES
+    ]
 
 
 class TransactionResult(str, Enum):
     """Consensus voting result across validators."""
+
     IDLE = "IDLE"
     AGREE = "AGREE"
     DISAGREE = "DISAGREE"
@@ -121,11 +142,13 @@ TRANSACTION_RESULT_NAME_TO_NUMBER = {
 
 class ExecutionResult(str, Enum):
     """Result of contract execution by the GenVM."""
+
     NOT_VOTED = "NOT_VOTED"
     FINISHED_WITH_RETURN = "FINISHED_WITH_RETURN"
     FINISHED_WITH_ERROR = "FINISHED_WITH_ERROR"
     TIMEOUT = "TIMEOUT"
     NONDET_DISAGREE = "NONDET_DISAGREE"
+    DETERMINISTIC_VIOLATION = "DETERMINISTIC_VIOLATION"
 
 
 EXECUTION_RESULT_NUMBER_TO_NAME = {
@@ -134,31 +157,37 @@ EXECUTION_RESULT_NUMBER_TO_NAME = {
     "2": ExecutionResult.FINISHED_WITH_ERROR,
     "3": ExecutionResult.TIMEOUT,
     "4": ExecutionResult.NONDET_DISAGREE,
+    "5": ExecutionResult.DETERMINISTIC_VIOLATION,
 }
 
 
 class VoteType(str, Enum):
+    """Validator execution vote recorded for a consensus round."""
+
     NOT_VOTED = "NOT_VOTED"
-    AGREE = "AGREE"
-    DISAGREE = "DISAGREE"
+    FINISHED_WITH_RETURN = "FINISHED_WITH_RETURN"
+    FINISHED_WITH_ERROR = "FINISHED_WITH_ERROR"
     TIMEOUT = "TIMEOUT"
+    NONDET_DISAGREE = "NONDET_DISAGREE"
     DETERMINISTIC_VIOLATION = "DETERMINISTIC_VIOLATION"
 
 
 VOTE_TYPE_NUMBER_TO_NAME = {
     "0": VoteType.NOT_VOTED,
-    "1": VoteType.AGREE,
-    "2": VoteType.DISAGREE,
+    "1": VoteType.FINISHED_WITH_RETURN,
+    "2": VoteType.FINISHED_WITH_ERROR,
     "3": VoteType.TIMEOUT,
-    "4": VoteType.DETERMINISTIC_VIOLATION,
+    "4": VoteType.NONDET_DISAGREE,
+    "5": VoteType.DETERMINISTIC_VIOLATION,
 }
 
 VOTE_TYPE_NAME_TO_NUMBER = {
     VoteType.NOT_VOTED: "0",
-    VoteType.AGREE: "1",
-    VoteType.DISAGREE: "2",
+    VoteType.FINISHED_WITH_RETURN: "1",
+    VoteType.FINISHED_WITH_ERROR: "2",
     VoteType.TIMEOUT: "3",
-    VoteType.DETERMINISTIC_VIOLATION: "4",
+    VoteType.NONDET_DISAGREE: "4",
+    VoteType.DETERMINISTIC_VIOLATION: "5",
 }
 
 
@@ -186,6 +215,7 @@ class DecodedCallData(TypedDict, total=False):
 
 class GenLayerTransaction(TypedDict, total=False):
     """Decoded transaction data returned by get_transaction and wait_for_transaction_receipt."""
+
     # currentTimestamp: testnet
     current_timestamp: Optional[str]
 
@@ -199,6 +229,7 @@ class GenLayerTransaction(TypedDict, total=False):
 
     # numOfInitialValidators: testnet
     num_of_initial_validators: Optional[str]
+    initial_rotations: Optional[str]
 
     # txSlot: testnet
     tx_slot: Optional[str]
@@ -225,11 +256,16 @@ class GenLayerTransaction(TypedDict, total=False):
     tx_data: Optional[HexStr]
     tx_data_decoded: Optional[Dict[str, Any]]
 
-    # txReceipt: testnet
+    # The train stores only the execution hash. `tx_receipt` remains present so
+    # callers can distinguish unavailable legacy bytes (`None`) explicitly.
+    tx_execution_hash: Optional[HexStr]
     tx_receipt: Optional[HexStr]
 
     # messages: testnet
     messages: Optional[List[Any]]
+
+    # consumedValidators: testnet
+    consumed_validators: Optional[List[Address]]
 
     # queueType: testnet
     queue_type: Optional[int]
@@ -246,6 +282,10 @@ class GenLayerTransaction(TypedDict, total=False):
     # status: localnet: TransactionStatus // status: testnet: number
     status: Optional[TransactionStatus]
     status_name: Optional[TransactionStatus]
+    stored_status: Optional[str]
+    stored_status_name: Optional[TransactionStatus]
+    resolution_action: Optional[ResolutionAction]
+    can_finalize: Optional[bool]
 
     # hash: localnet // txId: testnet// hash: localnet // txId: testnet
     hash: Optional[HexStr]
@@ -308,11 +348,17 @@ class GenLayerRawTransaction:
         result: int
         round_validators: List[Address]
         validator_votes_hash: List[HexStr]
+        validator_result_hash: List[HexStr]
         validator_votes: List[int]
 
         @classmethod
-        def from_transaction_data(
-            cls, tx_data: Tuple
+        def from_light_data(
+            cls,
+            tx_data: Tuple,
+            round_validators: List[Address],
+            validator_votes: List[int],
+            validator_votes_hash: List[HexStr],
+            validator_result_hash: List[HexStr],
         ) -> "GenLayerRawTransaction.LastRound":
             return cls(
                 round=tx_data[0],
@@ -322,29 +368,13 @@ class GenLayerRawTransaction:
                 appeal_bond=tx_data[4],
                 rotations_left=tx_data[5],
                 result=tx_data[6],
-                round_validators=tx_data[7],
-                validator_votes=tx_data[8],
+                round_validators=round_validators,
+                validator_votes=validator_votes,
                 validator_votes_hash=[
-                    Web3.to_hex(vote_hash) for vote_hash in tx_data[9]
+                    Web3.to_hex(vote_hash) for vote_hash in validator_votes_hash
                 ],
-            )
-
-        @classmethod
-        def from_all_data_round(
-            cls, tx_data: Tuple
-        ) -> "GenLayerRawTransaction.LastRound":
-            return cls(
-                round=tx_data[0],
-                leader_index=tx_data[1],
-                votes_committed=tx_data[2],
-                votes_revealed=tx_data[3],
-                appeal_bond=tx_data[4],
-                rotations_left=tx_data[5],
-                result=tx_data[6],
-                round_validators=tx_data[7],
-                validator_votes=tx_data[8],
-                validator_votes_hash=[
-                    Web3.to_hex(vote_hash) for vote_hash in tx_data[9]
+                validator_result_hash=[
+                    Web3.to_hex(result_hash) for result_hash in validator_result_hash
                 ],
             )
 
@@ -359,6 +389,7 @@ class GenLayerRawTransaction:
                 "result": str(self.result),
                 "round_validators": self.round_validators,
                 "validator_votes_hash": self.validator_votes_hash,
+                "validator_result_hash": self.validator_result_hash,
                 "validator_votes": self.validator_votes,
                 "validator_votes_name": [
                     VOTE_TYPE_NUMBER_TO_NAME[str(vote)].value
@@ -370,6 +401,7 @@ class GenLayerRawTransaction:
     sender: Address
     recipient: Address
     num_of_initial_validators: int
+    initial_rotations: int
     tx_slot: int
     created_timestamp: int
     last_vote_timestamp: int
@@ -377,8 +409,10 @@ class GenLayerRawTransaction:
     result: int
     tx_execution_result: int
     tx_data: HexStr
-    tx_receipt: HexStr
+    tx_execution_hash: HexStr
+    tx_receipt: Optional[HexStr]
     messages: List[Any]
+    consumed_validators: List[Address]
     queue_type: int
     queue_position: int
     activator: Address
@@ -390,65 +424,35 @@ class GenLayerRawTransaction:
     last_round: LastRound
 
     @classmethod
-    def from_transaction_data(cls, tx_data: Tuple) -> "GenLayerRawTransaction":
-        # V06/Bradbury ABI returns 23 fields (extra txExecutionHash, eqBlocksOutputs,
-        # consumedValidators; txData split into txCalldata). Asimov returns 21 fields.
-        if len(tx_data) >= 23:
-            return cls._from_v06(tx_data)
-        return cls._from_v04(tx_data)
-
-    @classmethod
-    def _from_v04(cls, tx_data: Tuple) -> "GenLayerRawTransaction":
-        """Asimov / pre-Bradbury ABI (21 fields)."""
+    def from_transaction_data_light(
+        cls,
+        tx_data: Tuple,
+        round_validators: List[Address],
+        validator_votes: List[int],
+        validator_votes_hash: List[HexStr],
+        validator_result_hash: List[HexStr],
+        consumed_validators: List[Address],
+        tx_execution_result: int,
+        num_of_initial_validators: int,
+    ) -> "GenLayerRawTransaction":
+        """Parse the bounded train transaction view and separately read arrays."""
         return cls(
             current_timestamp=tx_data[0],
             sender=tx_data[1],
             recipient=tx_data[2],
-            num_of_initial_validators=tx_data[3],
+            num_of_initial_validators=num_of_initial_validators,
+            initial_rotations=tx_data[3],
             tx_slot=tx_data[4],
             created_timestamp=tx_data[5],
             last_vote_timestamp=tx_data[6],
             random_seed=Web3.to_hex(tx_data[7]),
             result=tx_data[8],
-            tx_execution_result=0,
-            tx_data=Web3.to_hex(tx_data[9]),
-            tx_receipt=Web3.to_hex(tx_data[10]),
-            messages=tx_data[11],
-            queue_type=tx_data[12],
-            queue_position=tx_data[13],
-            activator=tx_data[14],
-            last_leader=tx_data[15],
-            status=tx_data[16],
-            tx_id=Web3.to_hex(tx_data[17]),
-            read_state_block_range=cls.ReadStateBlockRange.from_transaction_data(
-                tx_data[18]
-            ),
-            num_of_rounds=tx_data[19],
-            last_round=cls.LastRound.from_transaction_data(tx_data[20]),
-        )
-
-    @classmethod
-    def _from_v06(cls, tx_data: Tuple) -> "GenLayerRawTransaction":
-        """Bradbury / V06 ABI (23 fields). Fields differ at positions 9-12."""
-        # [9] txExecutionHash (bytes32) — not in v04
-        # [10] txCalldata (bytes) — equivalent to v04's txData
-        # [11] eqBlocksOutputs (bytes) — not in v04
-        # [12+] messages and rest shifted by +1 vs v04
-        # [22] consumedValidators — not in v04
-        return cls(
-            current_timestamp=tx_data[0],
-            sender=tx_data[1],
-            recipient=tx_data[2],
-            num_of_initial_validators=tx_data[3],  # initialRotations in ABI
-            tx_slot=tx_data[4],
-            created_timestamp=tx_data[5],
-            last_vote_timestamp=tx_data[6],
-            random_seed=Web3.to_hex(tx_data[7]),
-            result=tx_data[8],
-            tx_execution_result=0,
-            tx_data=Web3.to_hex(tx_data[10]),  # txCalldata
-            tx_receipt="0x",  # not present in V06; txExecutionHash is at [9]
+            tx_execution_result=tx_execution_result,
+            tx_data=Web3.to_hex(tx_data[10]),
+            tx_execution_hash=Web3.to_hex(tx_data[9]),
+            tx_receipt=None,
             messages=tx_data[12],
+            consumed_validators=consumed_validators,
             queue_type=tx_data[13],
             queue_position=tx_data[14],
             activator=tx_data[15],
@@ -459,46 +463,12 @@ class GenLayerRawTransaction:
                 tx_data[19]
             ),
             num_of_rounds=tx_data[20],
-            last_round=cls.LastRound.from_transaction_data(tx_data[21]),
-        )
-
-    @classmethod
-    def from_all_transaction_data(cls, tx_data: Tuple, rounds_data: List[Tuple]) -> "GenLayerRawTransaction":
-        """Parse getTransactionAllData response which returns (transaction, roundsData[]).
-
-        previousStatus was dropped from the Transaction struct, so status sits at
-        index 2 and everything after it moved up one slot. The old offsets clear
-        the length check and decode silently wrong rather than failing.
-        """
-        last_round_data = rounds_data[-1] if rounds_data else None
-        latest_block_range = tx_data[17][-1] if tx_data[17] else (0, 0, 0)
-
-        return cls(
-            current_timestamp=0,
-            sender=tx_data[4],
-            recipient=tx_data[5],
-            num_of_initial_validators=tx_data[8],
-            tx_slot=tx_data[7],
-            created_timestamp=0,
-            last_vote_timestamp=0,
-            random_seed=Web3.to_hex(tx_data[12]),
-            result=tx_data[0],
-            tx_execution_result=tx_data[1],
-            tx_data=Web3.to_hex(tx_data[15]),
-            tx_receipt="0x",
-            messages=[],
-            queue_type=0,
-            queue_position=0,
-            activator=tx_data[6],
-            last_leader=tx_data[6],
-            status=tx_data[2],
-            tx_id=Web3.to_hex(tx_data[11]),
-            read_state_block_range=cls.ReadStateBlockRange.from_transaction_data(latest_block_range),
-            num_of_rounds=len(rounds_data),
-            last_round=cls.LastRound.from_all_data_round(last_round_data) if last_round_data else cls.LastRound(
-                round=0, leader_index=0, votes_committed=0, votes_revealed=0,
-                appeal_bond=0, rotations_left=0, result=0, round_validators=[],
-                validator_votes_hash=[], validator_votes=[],
+            last_round=cls.LastRound.from_light_data(
+                tx_data[21],
+                round_validators,
+                validator_votes,
+                validator_votes_hash,
+                validator_result_hash,
             ),
         )
 
@@ -508,17 +478,20 @@ class GenLayerRawTransaction:
             "sender": self.sender,
             "recipient": self.recipient,
             "num_of_initial_validators": str(self.num_of_initial_validators),
+            "initial_rotations": str(self.initial_rotations),
             "tx_slot": str(self.tx_slot),
             "created_timestamp": str(self.created_timestamp),
             "last_vote_timestamp": str(self.last_vote_timestamp),
             "random_seed": self.random_seed,
             "result": str(self.result),
             "tx_data": self.tx_data,
+            "tx_execution_hash": self.tx_execution_hash,
             "tx_receipt": self.tx_receipt,
             "consensus_data": {
                 "leader_receipt": self._decode_leader_receipt(),
             },
             "messages": self.messages,
+            "consumed_validators": self.consumed_validators,
             "queue_type": str(self.queue_type),
             "queue_position": str(self.queue_position),
             "activator": self.activator,

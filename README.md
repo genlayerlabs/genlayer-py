@@ -23,6 +23,10 @@ To install the GenLayerPY SDK, use the following command:
 $ pip install genlayer-py
 ```
 
+SDK releases follow their corresponding GenLayer protocol release. This
+release targets the current resolution-kernel train; use the matching older SDK
+release when connecting to an older deployment.
+
 Here’s how to initialize the client and connect to the GenLayer Simulator:
 
 ### Reading a Transaction
@@ -254,18 +258,24 @@ client.top_up_fees(
     },
 )
 
-client.top_up_and_submit_appeal(
-    transaction_id=tx_hash,
-    value=1_400,
-    distribution={
-        "appealRounds": 1,
-        "rotations": [0, 0],
-    },
-)
+quote = client.get_appeal_quote(tx_hash)
+if client.can_appeal(tx_hash, expected_decision_id=quote["decision_id"]):
+    client.top_up_and_submit_appeal(
+        transaction_id=tx_hash,
+        expected_decision_id=quote["decision_id"],
+        value=quote["total"],
+        distribution={
+            "appealRounds": 1,
+            "rotations": [0, 0],
+        },
+    )
 ```
 
 `top_up_fees` returns the backend RPC hash. On network backends this is the EVM
 transaction hash; on Studio/localnet it is the target GenLayer transaction id.
+Appeal commands are guarded by the quoted decision id so a stale request cannot
+bind to a newer decision. If the id and value are omitted, the SDK refreshes
+this lightweight quote automatically.
 
 ### Checking execution results
 
@@ -305,6 +315,18 @@ Transactions can emit messages to other contracts. These messages create new chi
 ```python
 tx = client.get_transaction(transaction_hash=tx_hash)
 
+# `status` is the protocol's current projected status. The exact stored state
+# and finalization readiness are available separately.
+print(tx["status_name"])
+print(tx["stored_status_name"])
+print(tx["resolution_action"])
+print(tx["can_finalize"])
+
+# The train stores the execution hash, not the old receipt bytes.
+print(tx["tx_execution_hash"])
+# `tx_receipt` remains present but is `None` when the
+# protocol cannot supply the old bytes.
+
 # Messages emitted by the contract during execution
 print(tx["messages"])
 # [{"messageType": 1, "recipient": "0x...", "value": 0, "data": "0x...", "onAcceptance": True, "saltNonce": 0}, ...]
@@ -313,6 +335,20 @@ print(tx["messages"])
 child_tx_ids = client.get_triggered_transaction_ids(transaction_hash=tx_hash)
 print(child_tx_ids)
 # ["0xabc...", "0xdef..."]
+```
+
+### Active and joined validators
+
+The active set contains only validators currently eligible for protocol
+duties. The joined registry is broader and can include validators that are not
+yet selectable, are under-staked, or are otherwise unavailable.
+
+```python
+active = client.active_validators()
+active_count = client.active_validators_count()
+
+joined = client.joined_validators()
+joined_count = client.joined_validators_count()
 ```
 
 ### Debugging transaction execution

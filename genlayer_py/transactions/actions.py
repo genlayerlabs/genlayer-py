@@ -6,7 +6,7 @@ import warnings
 from typing import Any, Dict, List, Literal, Optional
 from web3 import Web3
 from web3.types import _Hash32
-from eth_typing import HexStr
+from eth_typing import Address, HexStr
 from web3.logs import DISCARD
 
 from genlayer_py.config import transaction_config
@@ -16,7 +16,14 @@ from genlayer_py.types import (
     EXECUTION_RESULT_NUMBER_TO_NAME,
     TRANSACTION_STATUS_NAME_TO_NUMBER,
     TRANSACTION_STATUS_NUMBER_TO_NAME,
+    RESOLUTION_ACTION_NUMBER_TO_NAME,
     is_decided_state,
+)
+from genlayer_py.consensus.abi import (
+    ADDRESS_MANAGER_ABI,
+    CONSENSUS_DATA_BIG_ROUNDS_ABI,
+    ROUNDS_STORAGE_READ_ABI,
+    TRANSACTION_MANAGER_READ_ABI,
 )
 from genlayer_py.exceptions import GenLayerError
 from typing import TYPE_CHECKING
@@ -70,6 +77,7 @@ if TYPE_CHECKING:
 
 
 _did_warn_wait_for_transaction_receipt_status = False
+TRANSACTION_ARRAY_PAGE_SIZE = 64
 
 
 def _warn_deprecated_receipt_status() -> None:
@@ -108,9 +116,10 @@ def _has_reached_wait_target(transaction_status: str, target: dict) -> bool:
     if target["wait_until"] == "decided":
         return is_decided_state(transaction_status)
     if target["wait_until"] == "finalized":
-        return transaction_status == TRANSACTION_STATUS_NAME_TO_NUMBER[
-            TransactionStatus.FINALIZED
-        ]
+        return (
+            transaction_status
+            == TRANSACTION_STATUS_NAME_TO_NUMBER[TransactionStatus.FINALIZED]
+        )
     legacy_status = target["legacy_status"]
     return (
         legacy_status is not None
@@ -211,32 +220,210 @@ def wait_for_transaction_receipt(
     )
 
 
-def _read_transaction_data(consensus_data_contract, consensus_data_abi, transaction_hash):
-    """Read the stored transaction record from whichever surface the chain offers.
+def _call_at_block(contract_function, block_number: int):
+    return contract_function.call(block_identifier=block_number)
 
-    getTransactionData(txId, timestamp) answered with a projection evaluated at a
-    caller-supplied clock. The resolution-kernel train splits that apart: the
-    stored record is getStoredTransactionData(txId), and the projection lives
-    behind getTransactionLifecycle. Chains are upgraded independently, so pick
-    whichever read the chain's own ABI actually offers rather than assuming.
 
-    Both return the same 23-field struct -- only field [0] was renamed
-    (currentTimestamp -> observedAt) -- so the positional decode downstream is
-    unaffected by which one answered.
-    """
-    has_stored_read = any(
-        isinstance(entry, dict) and entry.get("name") == "getStoredTransactionData"
-        for entry in consensus_data_abi
+def _address_manager(
+    self: GenLayerClient,
+    consensus_data_contract,
+    block_number: int,
+):
+    address_manager_address = _call_at_block(
+        consensus_data_contract.functions.addressManager(), block_number
+    )
+    return self.w3.eth.contract(
+        address=address_manager_address, abi=ADDRESS_MANAGER_ABI
     )
 
-    if has_stored_read:
-        return consensus_data_contract.functions.getStoredTransactionData(
-            transaction_hash
-        ).call()
 
-    return consensus_data_contract.functions.getTransactionData(
-        transaction_hash, int(time.time())
-    ).call()
+def _resolve_contract(
+    self: GenLayerClient,
+    address_manager,
+    name: str,
+    abi: List[dict],
+    block_number: int,
+):
+    contract_address = _call_at_block(
+        address_manager.functions.getAddressNonZero(name), block_number
+    )
+    return self.w3.eth.contract(address=contract_address, abi=abi)
+
+
+def _read_round_validators(
+    big_rounds_contract,
+    transaction_hash: _Hash32,
+    round_number: int,
+    validators_count: int,
+    block_number: int,
+) -> List[Address]:
+    validators: List[Address] = []
+    for offset in range(0, validators_count, TRANSACTION_ARRAY_PAGE_SIZE):
+        page, total = _call_at_block(
+            big_rounds_contract.functions.getRoundValidatorsPaged(
+                transaction_hash,
+                round_number,
+                offset,
+                TRANSACTION_ARRAY_PAGE_SIZE,
+            ),
+            block_number,
+        )
+        if total != validators_count:
+            raise GenLayerError(
+                "Inconsistent transaction committee size at fixed block "
+                f"{block_number}: expected {validators_count}, got {total}"
+            )
+        validators.extend(page)
+
+    if len(validators) != validators_count:
+        raise GenLayerError(
+            "Incomplete transaction committee at fixed block "
+            f"{block_number}: expected {validators_count}, got {len(validators)}"
+        )
+    return validators
+
+
+def _read_consumed_validators(
+    big_rounds_contract,
+    transaction_hash: _Hash32,
+    validators_count: int,
+    block_number: int,
+) -> List[Address]:
+    validators: List[Address] = []
+    for offset in range(0, validators_count, TRANSACTION_ARRAY_PAGE_SIZE):
+        page, total = _call_at_block(
+            big_rounds_contract.functions.getConsumedValidatorsPaged(
+                transaction_hash,
+                offset,
+                TRANSACTION_ARRAY_PAGE_SIZE,
+            ),
+            block_number,
+        )
+        if total != validators_count:
+            raise GenLayerError(
+                "Inconsistent consumed-validator count at fixed block "
+                f"{block_number}: expected {validators_count}, got {total}"
+            )
+        validators.extend(page)
+
+    if len(validators) != validators_count:
+        raise GenLayerError(
+            "Incomplete consumed-validator set at fixed block "
+            f"{block_number}: expected {validators_count}, got {len(validators)}"
+        )
+    return validators
+
+
+def _read_train_transaction_data(
+    self: GenLayerClient,
+    consensus_data_contract,
+    transaction_hash: _Hash32,
+    block_number: int,
+):
+    """Compose one bounded transaction snapshot from train read surfaces."""
+    address_manager = _address_manager(self, consensus_data_contract, block_number)
+    big_rounds = _resolve_contract(
+        self,
+        address_manager,
+        "ConsensusDataBigRounds",
+        CONSENSUS_DATA_BIG_ROUNDS_ABI,
+        block_number,
+    )
+    transaction_manager = _resolve_contract(
+        self,
+        address_manager,
+        "TransactionManager",
+        TRANSACTION_MANAGER_READ_ABI,
+        block_number,
+    )
+    rounds_storage = _resolve_contract(
+        self,
+        address_manager,
+        "RoundsStorage",
+        ROUNDS_STORAGE_READ_ABI,
+        block_number,
+    )
+
+    tx_data = _call_at_block(
+        big_rounds.functions.getStoredTransactionDataLight(transaction_hash),
+        block_number,
+    )
+    last_round = tx_data[21]
+    round_number = last_round[0]
+    validators_count = last_round[7]
+    validators = _read_round_validators(
+        big_rounds,
+        transaction_hash,
+        round_number,
+        validators_count,
+        block_number,
+    )
+    consumed_validators = _read_consumed_validators(
+        big_rounds,
+        transaction_hash,
+        tx_data[22],
+        block_number,
+    )
+    validator_votes = _call_at_block(
+        rounds_storage.functions.getValidatorVotes(transaction_hash, round_number),
+        block_number,
+    )
+    validator_votes_hash = _call_at_block(
+        rounds_storage.functions.getValidatorVotesHash(transaction_hash, round_number),
+        block_number,
+    )
+    validator_result_hash = _call_at_block(
+        rounds_storage.functions.getValidatorResultHash(transaction_hash, round_number),
+        block_number,
+    )
+    tx_execution_result = _call_at_block(
+        transaction_manager.functions.getTxExecutionResult(transaction_hash),
+        block_number,
+    )
+    num_of_initial_validators = _call_at_block(
+        transaction_manager.functions.getNumOfInitialValidators(transaction_hash),
+        block_number,
+    )
+
+    for label, values in (
+        ("validator votes", validator_votes),
+        ("validator vote hashes", validator_votes_hash),
+        ("validator result hashes", validator_result_hash),
+    ):
+        if len(values) != validators_count:
+            raise GenLayerError(
+                f"Incomplete {label} at fixed block {block_number}: "
+                f"expected {validators_count}, got {len(values)}"
+            )
+
+    return (
+        tx_data,
+        validators,
+        validator_votes,
+        validator_votes_hash,
+        validator_result_hash,
+        consumed_validators,
+        tx_execution_result,
+        num_of_initial_validators,
+    )
+
+
+def _read_transaction_lifecycle(
+    consensus_data_contract,
+    transaction_hash: _Hash32,
+    block_number: int,
+):
+    lifecycle = _call_at_block(
+        consensus_data_contract.functions.getTransactionLifecycle(transaction_hash, 0),
+        block_number,
+    )
+    stored_status, resolution, latest_decision, decision_active = lifecycle
+    decision_id = latest_decision[1] if decision_active else 0
+    can_finalize, _, _ = _call_at_block(
+        consensus_data_contract.functions.canFinalize(transaction_hash, 0, decision_id),
+        block_number,
+    )
+    return stored_status, resolution[2], resolution[3], can_finalize
 
 
 def get_transaction(
@@ -254,23 +441,59 @@ def get_transaction(
         )
         transaction["status"] = int(TRANSACTION_STATUS_NAME_TO_NUMBER[localnet_status])
         transaction["status_name"] = localnet_status
+        transaction["stored_status"] = transaction["status"]
+        transaction["stored_status_name"] = localnet_status
         return _decode_localnet_transaction(transaction)
-    # Decode for testnet — call both to get messages + txExecutionResult
+    # Decode one fixed-block train snapshot. The light record and split array
+    # reads avoid the oversized aggregate getTransactionAllData response.
     consensus_data_contract = self.w3.eth.contract(
         address=self.chain.consensus_data_contract["address"],
         abi=self.chain.consensus_data_contract["abi"],
     )
-    tx_data = _read_transaction_data(
+    block_number = self.w3.eth.block_number
+    (
+        tx_data,
+        validators,
+        validator_votes,
+        validator_votes_hash,
+        validator_result_hash,
+        consumed_validators,
+        tx_execution_result,
+        num_of_initial_validators,
+    ) = _read_train_transaction_data(
+        self,
         consensus_data_contract,
-        self.chain.consensus_data_contract["abi"],
         transaction_hash,
+        block_number,
     )
-    tx_all_data, rounds_data = consensus_data_contract.functions.getTransactionAllData(
-        transaction_hash
-    ).call()
-    raw_transaction = GenLayerRawTransaction.from_transaction_data(tx_data)
-    raw_transaction.tx_execution_result = tx_all_data[1]
+    stored_status, projected_status, resolution_action, can_finalize = (
+        _read_transaction_lifecycle(
+            consensus_data_contract, transaction_hash, block_number
+        )
+    )
+    raw_transaction = GenLayerRawTransaction.from_transaction_data_light(
+        tx_data,
+        validators,
+        validator_votes,
+        validator_votes_hash,
+        validator_result_hash,
+        consumed_validators,
+        tx_execution_result,
+        num_of_initial_validators,
+    )
     decoded_transaction = raw_transaction.decode()
+    decoded_transaction["status"] = str(projected_status)
+    decoded_transaction["status_name"] = TRANSACTION_STATUS_NUMBER_TO_NAME[
+        str(projected_status)
+    ].value
+    decoded_transaction["stored_status"] = str(stored_status)
+    decoded_transaction["stored_status_name"] = TRANSACTION_STATUS_NUMBER_TO_NAME[
+        str(stored_status)
+    ].value
+    decoded_transaction["resolution_action"] = RESOLUTION_ACTION_NUMBER_TO_NAME[
+        str(resolution_action)
+    ].value
+    decoded_transaction["can_finalize"] = can_finalize
     decoded_transaction["triggered_transactions"] = _decode_triggered_txs(
         self, decoded_transaction
     )
@@ -353,7 +576,16 @@ def debug_trace_transaction(
 ) -> Dict[str, Any]:
     response = self.provider.make_request(
         method="gen_dbg_traceTransaction",
-        params=[{"txID": Web3.to_hex(transaction_hash) if isinstance(transaction_hash, bytes) else transaction_hash, "round": round}],
+        params=[
+            {
+                "txID": (
+                    Web3.to_hex(transaction_hash)
+                    if isinstance(transaction_hash, bytes)
+                    else transaction_hash
+                ),
+                "round": round,
+            }
+        ],
     )
     return response.get("result", {})
 

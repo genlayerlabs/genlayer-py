@@ -143,8 +143,15 @@ class TestWaitForTransactionReceipt:
 
     def test_wait_for_accepted_with_all_decided_states(self, mock_client):
         """Test that ACCEPTED status accepts all decided states"""
-        decided_statuses = ["5", "6", "8", "7", "11", "12"]  # ACCEPTED, UNDETERMINED, CANCELED, FINALIZED, VALIDATORS_TIMEOUT, LEADER_TIMEOUT
-        
+        decided_statuses = [
+            "5",
+            "6",
+            "8",
+            "7",
+            "11",
+            "12",
+        ]  # ACCEPTED, UNDETERMINED, CANCELED, FINALIZED, VALIDATORS_TIMEOUT, LEADER_TIMEOUT
+
         for status_num in decided_statuses:
             mock_transaction = {
                 "hash": "0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
@@ -157,16 +164,16 @@ class TestWaitForTransactionReceipt:
                 "nonce": "1",
                 "created_at": "2023-01-01T00:00:00Z",
             }
-            
+
             mock_client.get_transaction.return_value = mock_transaction
-            
+
             result = wait_for_transaction_receipt(
                 self=mock_client,
                 transaction_hash="0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
                 status=TransactionStatus.ACCEPTED,
                 full_transaction=True,
             )
-            
+
             assert result == mock_transaction
 
     def test_wait_until_decided_resolves_on_undetermined(self, mock_client):
@@ -206,9 +213,18 @@ class TestWaitForTransactionReceipt:
                 full_transaction=True,
             )
 
-        assert TRANSACTION_STATUS_NUMBER_TO_NAME["13"] == TransactionStatus.LEADER_REVEALING
-        assert TRANSACTION_STATUS_NUMBER_TO_NAME["11"] == TransactionStatus.VALIDATORS_TIMEOUT
-        assert TRANSACTION_STATUS_NUMBER_TO_NAME["12"] == TransactionStatus.LEADER_TIMEOUT
+        assert not hasattr(TransactionStatus, "READY_TO_FINALIZE")
+        assert (
+            TRANSACTION_STATUS_NUMBER_TO_NAME["13"]
+            == TransactionStatus.LEADER_REVEALING
+        )
+        assert (
+            TRANSACTION_STATUS_NUMBER_TO_NAME["11"]
+            == TransactionStatus.VALIDATORS_TIMEOUT
+        )
+        assert (
+            TRANSACTION_STATUS_NUMBER_TO_NAME["12"] == TransactionStatus.LEADER_TIMEOUT
+        )
         assert "14" not in TRANSACTION_STATUS_NUMBER_TO_NAME
 
     def test_wait_for_specific_status_not_affected(self, mock_client):
@@ -224,16 +240,16 @@ class TestWaitForTransactionReceipt:
             "nonce": "1",
             "created_at": "2023-01-01T00:00:00Z",
         }
-        
+
         mock_client.get_transaction.return_value = mock_transaction
-        
+
         result = wait_for_transaction_receipt(
             self=mock_client,
             transaction_hash="0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
             status=TransactionStatus.FINALIZED,
             full_transaction=True,
         )
-        
+
         assert result == mock_transaction
 
 
@@ -248,34 +264,56 @@ class TestDecidedStatesUtility:
             TransactionStatus.LEADER_TIMEOUT,
             TransactionStatus.VALIDATORS_TIMEOUT,
             TransactionStatus.CANCELED,
-            TransactionStatus.FINALIZED
+            TransactionStatus.FINALIZED,
         ]
-        
+
         assert DECIDED_STATES == expected_states
 
     def test_is_decided_state_with_decided_statuses(self):
         """Test is_decided_state returns True for all decided statuses"""
         # ReadyToFinalize was removed at ordinal 11 and the tail shifted down,
         # so VALIDATORS_TIMEOUT is 11 and LEADER_TIMEOUT is 12 now.
-        decided_status_numbers = ["5", "6", "8", "7", "11", "12"]  # ACCEPTED, UNDETERMINED, CANCELED, FINALIZED, VALIDATORS_TIMEOUT, LEADER_TIMEOUT
-        
+        decided_status_numbers = [
+            "5",
+            "6",
+            "8",
+            "7",
+            "11",
+            "12",
+        ]  # ACCEPTED, UNDETERMINED, CANCELED, FINALIZED, VALIDATORS_TIMEOUT, LEADER_TIMEOUT
+
         for status_num in decided_status_numbers:
-            assert is_decided_state(status_num) == True, f"Status {status_num} should be decided"
+            assert (
+                is_decided_state(status_num) == True
+            ), f"Status {status_num} should be decided"
 
     def test_is_decided_state_with_non_decided_statuses(self):
         """Test is_decided_state returns False for non-decided statuses"""
-        non_decided_status_numbers = ["0", "1", "2", "3", "4", "9", "10", "13"]  # UNINITIALIZED, PENDING, PROPOSING, COMMITTING, REVEALING, APPEAL_REVEALING, APPEAL_COMMITTING, LEADER_REVEALING
-        
+        non_decided_status_numbers = [
+            "0",
+            "1",
+            "2",
+            "3",
+            "4",
+            "9",
+            "10",
+            "13",
+        ]  # UNINITIALIZED, PENDING, PROPOSING, COMMITTING, REVEALING, APPEAL_REVEALING, APPEAL_COMMITTING, LEADER_REVEALING
+
         for status_num in non_decided_status_numbers:
-            assert is_decided_state(status_num) == False, f"Status {status_num} should not be decided"
+            assert (
+                is_decided_state(status_num) == False
+            ), f"Status {status_num} should not be decided"
 
     def test_is_decided_state_with_invalid_status(self):
         """Test is_decided_state returns False for invalid statuses"""
         invalid_statuses = ["999", "invalid", "", None]
-        
+
         for status in invalid_statuses:
             if status is not None:
-                assert is_decided_state(status) == False, f"Invalid status {status} should not be decided"
+                assert (
+                    is_decided_state(status) == False
+                ), f"Invalid status {status} should not be decided"
 
 
 class TestIsSuccessful:

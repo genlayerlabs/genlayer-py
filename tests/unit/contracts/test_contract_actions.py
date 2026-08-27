@@ -124,6 +124,19 @@ ADD_TRANSACTION_ABI_WITH_FEES = [
     }
 ]
 
+# Studio refetches its ConsensusMain ABI from the simulator RPC. That embedded
+# consensus predates the resolution-kernel train, so submitAppeal still takes
+# the transaction id alone.
+STUDIO_CONSENSUS_MAIN_ABI = [
+    {
+        "type": "function",
+        "name": "submitAppeal",
+        "stateMutability": "payable",
+        "inputs": [{"name": "_txId", "type": "bytes32"}],
+        "outputs": [],
+    }
+]
+
 SENDER = "0x1111111111111111111111111111111111111111"
 RECIPIENT = "0x2222222222222222222222222222222222222222"
 TX_ID = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -260,7 +273,7 @@ def test_top_up_fees_sends_consensus_call(monkeypatch):
 
 
 def test_top_up_and_submit_appeal_sends_consensus_call_and_returns_tx_id(monkeypatch):
-    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=testnet_asimov.id)
     captured = {}
 
     def fake_send_consensus_call(**kwargs):
@@ -314,7 +327,7 @@ def test_encode_submit_appeal_uses_exact_decision_guarded_selector():
 
 
 def test_appeal_transaction_auto_resolves_latest_quote(monkeypatch):
-    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=testnet_asimov.id)
     captured = {}
 
     monkeypatch.setattr(
@@ -363,7 +376,7 @@ def test_appeal_transaction_auto_resolves_latest_quote(monkeypatch):
 
 
 def test_top_up_and_submit_appeal_auto_resolves_latest_quote(monkeypatch):
-    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=testnet_asimov.id)
     captured = {}
 
     monkeypatch.setattr(
@@ -406,7 +419,7 @@ def test_top_up_and_submit_appeal_auto_resolves_latest_quote(monkeypatch):
 
 
 def test_appeal_auto_quote_failure_is_actionable(monkeypatch):
-    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=testnet_asimov.id)
     monkeypatch.setattr(
         contract_actions,
         "get_appeal_quote",
@@ -421,7 +434,7 @@ def test_appeal_auto_quote_failure_is_actionable(monkeypatch):
 
 
 def test_get_appeal_quote_uses_consensus_data_without_full_transaction(monkeypatch):
-    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=testnet_asimov.id)
     quote_call = Mock(return_value=(42, 4_000, 321, 999))
     estimate = Mock(return_value=SimpleNamespace(call=quote_call))
     contract = SimpleNamespace(
@@ -444,7 +457,7 @@ def test_get_appeal_quote_uses_consensus_data_without_full_transaction(monkeypat
 
 
 def test_get_min_appeal_bond_returns_the_full_train_charge(monkeypatch):
-    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=testnet_asimov.id)
     monkeypatch.setattr(
         contract_actions,
         "get_appeal_quote",
@@ -465,7 +478,7 @@ def test_get_appeal_charge_returns_the_full_train_charge(monkeypatch):
 
 
 def test_can_appeal_passes_the_exact_active_decision_id(monkeypatch):
-    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=testnet_asimov.id)
     client.chain.appeals_contract = {
         "address": "0x4444444444444444444444444444444444444444",
         "abi": [],
@@ -489,7 +502,7 @@ def test_can_appeal_passes_the_exact_active_decision_id(monkeypatch):
 
 
 def test_can_appeal_returns_false_without_an_active_decision(monkeypatch):
-    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=testnet_asimov.id)
     client.chain.appeals_contract = {
         "address": "0x4444444444444444444444444444444444444444",
         "abi": [],
@@ -508,6 +521,166 @@ def test_can_appeal_returns_false_without_an_active_decision(monkeypatch):
 
     assert contract_actions.can_appeal(client, TX_ID) is False
     appeals_contract.assert_not_called()
+
+
+def _forbid_train_reads(monkeypatch):
+    """Turns every resolution-kernel train read into a hard failure."""
+    train_read = Mock(side_effect=AssertionError("train read on a studio chain"))
+    monkeypatch.setattr(contract_actions, "_consensus_data_contract", train_read)
+    monkeypatch.setattr(contract_actions, "_get_active_decision_id", train_read)
+    monkeypatch.setattr(contract_actions, "get_appeal_quote", train_read)
+    return train_read
+
+
+def test_appeal_transaction_on_studio_keeps_the_pre_train_call_shape(monkeypatch):
+    client = _make_client(STUDIO_CONSENSUS_MAIN_ABI)
+    train_read = _forbid_train_reads(monkeypatch)
+    captured = {}
+
+    def fake_send_consensus_call(**kwargs):
+        captured.update(kwargs)
+        return "0xevmtx"
+
+    monkeypatch.setattr(
+        contract_actions,
+        "_send_consensus_call",
+        fake_send_consensus_call,
+    )
+
+    result = contract_actions.appeal_transaction(
+        self=client,
+        transaction_id=TX_ID,
+        value=1234,
+    )
+
+    selector = eth_utils.keccak(text="submitAppeal(bytes32)")[:4].hex()
+    assert result == TX_ID
+    assert captured["value"] == 1234
+    assert captured["operation_name"] == "Appeal"
+    assert captured["encoded_data"] == f"0x{selector}{TX_ID[2:]}"
+    train_read.assert_not_called()
+
+
+def test_top_up_and_submit_appeal_on_studio_keeps_the_pre_train_call_shape(monkeypatch):
+    client = _make_client(STUDIO_CONSENSUS_MAIN_ABI)
+    train_read = _forbid_train_reads(monkeypatch)
+    captured = {}
+
+    def fake_send_consensus_call(**kwargs):
+        captured.update(kwargs)
+        return "0xevmtx"
+
+    monkeypatch.setattr(
+        contract_actions,
+        "_send_consensus_call",
+        fake_send_consensus_call,
+    )
+
+    result = contract_actions.top_up_and_submit_appeal(
+        self=client,
+        transaction_id=TX_ID,
+        value=1234,
+        distribution={"appealRounds": 1, "rotations": [0, 1]},
+    )
+
+    selector = eth_utils.keccak(
+        text=f"topUpAndSubmitAppeal(bytes32,{FEES_DISTRIBUTION_ABI_TYPE})"
+    )[:4].hex()
+    assert result == TX_ID
+    assert captured["value"] == 1234
+    assert captured["operation_name"] == "Top up and submit appeal"
+    assert captured["encoded_data"].startswith(f"0x{selector}")
+    decoded_tx_id, distribution = abi_decode(
+        ("bytes32", FEES_DISTRIBUTION_ABI_TYPE),
+        Web3.to_bytes(hexstr=captured["encoded_data"][10:]),
+    )
+    assert decoded_tx_id == Web3.to_bytes(hexstr=TX_ID)
+    assert distribution[2] == 1
+    train_read.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "action",
+    (
+        contract_actions.get_appeal_quote,
+        contract_actions.get_appeal_charge,
+        contract_actions.get_min_appeal_bond,
+    ),
+)
+def test_appeal_quote_reads_on_studio_report_the_pre_train_bond_error(
+    action, monkeypatch
+):
+    client = _make_client(STUDIO_CONSENSUS_MAIN_ABI)
+    train_read = Mock(side_effect=AssertionError("train read on a studio chain"))
+    monkeypatch.setattr(contract_actions, "_consensus_data_contract", train_read)
+
+    with pytest.raises(
+        GenLayerError,
+        match="fee_manager_contract/rounds_storage_contract not configured",
+    ):
+        action(client, TX_ID)
+
+    train_read.assert_not_called()
+
+
+def test_studio_appeals_require_an_explicit_value(monkeypatch):
+    client = _make_client(STUDIO_CONSENSUS_MAIN_ABI)
+    train_read = _forbid_train_reads(monkeypatch)
+    send_consensus_call = Mock()
+    monkeypatch.setattr(
+        contract_actions,
+        "_send_consensus_call",
+        send_consensus_call,
+    )
+
+    with pytest.raises(GenLayerError, match="Cannot auto-resolve appeal bond"):
+        contract_actions.appeal_transaction(self=client, transaction_id=TX_ID)
+    with pytest.raises(GenLayerError, match="Cannot auto-resolve appeal bond"):
+        contract_actions.top_up_and_submit_appeal(
+            self=client,
+            transaction_id=TX_ID,
+            distribution={"appealRounds": 1},
+        )
+
+    send_consensus_call.assert_not_called()
+    train_read.assert_not_called()
+
+
+def test_studio_appeals_reject_the_train_decision_guard(monkeypatch):
+    client = _make_client(STUDIO_CONSENSUS_MAIN_ABI)
+    train_read = _forbid_train_reads(monkeypatch)
+    send_consensus_call = Mock()
+    monkeypatch.setattr(
+        contract_actions,
+        "_send_consensus_call",
+        send_consensus_call,
+    )
+
+    with pytest.raises(GenLayerError, match="expected_decision_id is not supported"):
+        contract_actions.appeal_transaction(
+            self=client,
+            transaction_id=TX_ID,
+            value=1234,
+            expected_decision_id=42,
+        )
+    with pytest.raises(GenLayerError, match="expected_decision_id is not supported"):
+        contract_actions.top_up_and_submit_appeal(
+            self=client,
+            transaction_id=TX_ID,
+            distribution={"appealRounds": 1},
+            value=1234,
+            expected_decision_id=42,
+        )
+
+    send_consensus_call.assert_not_called()
+    train_read.assert_not_called()
+
+
+def test_encode_submit_appeal_still_requires_a_decision_id_on_the_train_shape():
+    client = _make_client(CONSENSUS_MAIN_ABI, chain_id=testnet_asimov.id)
+
+    with pytest.raises(ValueError, match="submitAppeal requires expected_decision_id"):
+        contract_actions._encode_submit_appeal_data(self=client, transaction_id=TX_ID)
 
 
 def test_send_consensus_call_returns_localnet_rpc_hash_without_waiting(monkeypatch):
@@ -554,9 +727,9 @@ def test_revert_selector_formatter_names_fee_errors():
     assert contract_actions._format_rpc_error(error).endswith("(FeeValueMustBeNonZero)")
 
 
-def _make_client(add_transaction_abi):
+def _make_client(add_transaction_abi, chain_id=localnet.id):
     chain = SimpleNamespace(
-        id=61999,
+        id=chain_id,
         consensus_main_contract={
             "address": "0x3333333333333333333333333333333333333333",
             "abi": add_transaction_abi,

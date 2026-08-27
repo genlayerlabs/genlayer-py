@@ -186,6 +186,8 @@ client.get_contract_schema_for_code(contract_code: AnyStr)
 Appeals a consensus transaction to trigger a new round of validation.
 Returns the original transaction_id (appeals operate on the same tx).
 Missing decision/value inputs are filled from the latest appeal quote.
+Studio chains predate that quote: they take the pre-train call shape,
+reject ``expected_decision_id``, and require an explicit ``value``.
 
 ```python
 client.appeal_transaction(transaction_id: HexStr, account: Optional = None, value: Optional = None, expected_decision_id: Optional = None)
@@ -224,7 +226,9 @@ client.top_up_fees(transaction_id: HexStr, distribution: FeesDistributionInput, 
 Deposits appeal funding and submits the exact active decision.
 
 When ``expected_decision_id`` or ``value`` is omitted, the SDK obtains
-both from the lightweight consensus appeal quote.
+both from the lightweight consensus appeal quote. Studio chains predate
+that quote: they take the pre-train call shape, reject
+``expected_decision_id``, and require an explicit ``value``.
 
 ```python
 client.top_up_and_submit_appeal(transaction_id: HexStr, distribution: FeesDistributionInput, account: Optional = None, value: Optional = None, expected_decision_id: Optional = None)
@@ -262,6 +266,7 @@ client.can_appeal(transaction_id: HexStr, expected_decision_id: Optional = None)
 ### get_appeal_quote
 
 Returns the latest decision id, appeal charges, and deadline.
+Not available on studio chains, whose consensus predates the quote.
 
 ```python
 client.get_appeal_quote(transaction_id: HexStr)
@@ -278,6 +283,7 @@ client.get_appeal_quote(transaction_id: HexStr)
 ### get_appeal_charge
 
 Returns the full appeal payment (bond plus induced-work funding).
+Not available on studio chains, whose consensus predates the quote.
 
 ```python
 client.get_appeal_charge(transaction_id: HexStr)

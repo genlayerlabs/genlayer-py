@@ -339,7 +339,9 @@ class GenLayerClient(Eth):
         """Deposits appeal funding and submits the exact active decision.
 
         When ``expected_decision_id`` or ``value`` is omitted, the SDK obtains
-        both from the lightweight consensus appeal quote.
+        both from the lightweight consensus appeal quote. Studio chains predate
+        that quote: they take the pre-train call shape, reject
+        ``expected_decision_id``, and require an explicit ``value``.
         """
         return top_up_and_submit_appeal(
             self=self,
@@ -415,6 +417,8 @@ class GenLayerClient(Eth):
         """Appeals a consensus transaction to trigger a new round of validation.
         Returns the original transaction_id (appeals operate on the same tx).
         Missing decision/value inputs are filled from the latest appeal quote.
+        Studio chains predate that quote: they take the pre-train call shape,
+        reject ``expected_decision_id``, and require an explicit ``value``.
         """
         return appeal_transaction(
             self=self,
@@ -449,11 +453,15 @@ class GenLayerClient(Eth):
         )
 
     def get_appeal_quote(self, transaction_id: HexStr) -> Dict[str, int]:
-        """Returns the latest decision id, appeal charges, and deadline."""
+        """Returns the latest decision id, appeal charges, and deadline.
+        Not available on studio chains, whose consensus predates the quote.
+        """
         return get_appeal_quote(self=self, transaction_id=transaction_id)
 
     def get_appeal_charge(self, transaction_id: HexStr) -> int:
-        """Returns the full appeal payment (bond plus induced-work funding)."""
+        """Returns the full appeal payment (bond plus induced-work funding).
+        Not available on studio chains, whose consensus predates the quote.
+        """
         return get_appeal_charge(self=self, transaction_id=transaction_id)
 
     def get_min_appeal_bond(self, transaction_id: HexStr) -> int:

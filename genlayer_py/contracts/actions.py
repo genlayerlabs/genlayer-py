@@ -233,12 +233,30 @@ def appeal_transaction(
 
     Appeals emit AppealStarted/TransactionActivated events (not NewTransaction),
     so we send the EVM tx directly instead of going through _send_transaction.
+    Studio chains take the pre-train ``submitAppeal(bytes32)`` call shape, which
+    binds to no decision and cannot quote a value.
     """
     sender_account = account if account is not None else self.local_account
     if sender_account is None:
         raise GenLayerError("No account set.")
     if self.chain.consensus_main_contract is None:
         raise GenLayerError("Consensus main contract not configured.")
+    if _is_studio_chain(self):
+        resolved_value = _resolve_studio_appeal_value(value, expected_decision_id)
+        encoded_data = _encode_submit_appeal_data(
+            self=self,
+            transaction_id=transaction_id,
+            pre_train_appeal_shape=True,
+        )
+        _send_consensus_call(
+            self=self,
+            encoded_data=encoded_data,
+            sender_account=sender_account,
+            value=resolved_value,
+            operation_name="Appeal",
+        )
+        return transaction_id
+
     expected_decision_id, resolved_value = _resolve_appeal_parameters(
         self,
         transaction_id,
@@ -302,8 +320,28 @@ def top_up_and_submit_appeal(
     """Deposits appeal fee budget and submits an appeal in one consensus call.
 
     Returns the original GenLayer transaction id, matching appeal_transaction.
+    Studio chains take the pre-train
+    ``topUpAndSubmitAppeal(bytes32, FeesDistribution)`` call shape.
     """
     sender_account = account if account is not None else self.local_account
+    if _is_studio_chain(self):
+        resolved_value = _resolve_studio_appeal_value(value, expected_decision_id)
+        encoded_data = _encode_fee_management_data(
+            self=self,
+            function_name="topUpAndSubmitAppeal",
+            transaction_id=transaction_id,
+            distribution=distribution,
+            pre_train_appeal_shape=True,
+        )
+        _send_consensus_call(
+            self=self,
+            encoded_data=encoded_data,
+            sender_account=sender_account,
+            value=resolved_value,
+            operation_name="Top up and submit appeal",
+        )
+        return transaction_id
+
     expected_decision_id, resolved_value = _resolve_appeal_parameters(
         self,
         transaction_id,
@@ -409,7 +447,10 @@ def get_appeal_quote(
 
     ``total`` is the value to submit: the appeal bond plus induced-work
     funding. Pass ``decision_id`` back to the decision-guarded appeal methods.
+    Studio chains expose no appeal quote and raise instead.
     """
+    if _is_studio_chain(self):
+        raise GenLayerError(STUDIO_APPEAL_QUOTE_UNSUPPORTED)
     contract = _consensus_data_contract(self)
     decision_id, bond, funding, appeal_deadline = (
         contract.functions.estimateLatestAppealCharge(
@@ -510,6 +551,51 @@ def _resolve_appeal_parameters(
     )
 
 
+# Studio chains run the studio-embedded consensus, which predates the
+# resolution-kernel train: its ConsensusData exposes neither
+# getTransactionLifecycle nor estimateLatestAppealCharge, and its ConsensusMain
+# keeps the decision-free appeal call shapes. The appeal actions therefore keep
+# their pre-train behaviour there, recovered from the v0.19-dev base.
+STUDIO_APPEAL_QUOTE_UNSUPPORTED = (
+    "fee_manager_contract/rounds_storage_contract not configured for this chain"
+)
+STUDIO_APPEAL_VALUE_UNRESOLVABLE = (
+    "Cannot auto-resolve appeal bond: fee_manager_contract/rounds_storage_contract"
+    " not configured for this chain."
+)
+STUDIO_DECISION_GUARD_UNSUPPORTED = (
+    "expected_decision_id is not supported on this chain (studio consensus"
+    " predates the resolution-kernel train)."
+)
+
+
+def _is_studio_chain(self: GenLayerClient) -> bool:
+    """Reports whether the client targets the studio-embedded consensus.
+
+    localnet and studionet share chain id 61999, the same check
+    ``transactions.actions.get_transaction`` uses to take its studio path.
+    """
+    return self.chain.id == localnet.id
+
+
+def _resolve_studio_appeal_value(
+    value: Optional[int],
+    expected_decision_id: Optional[int],
+) -> int:
+    """Resolves the appeal value with pre-train semantics.
+
+    Studio's submitAppeal binds to no decision, so a decision guard cannot be
+    honoured there. The pre-train resolver read the bond through
+    FeeManager/RoundsStorage, neither of which studio chains configure, so an
+    omitted value already raised on studio before the train adaptation.
+    """
+    if expected_decision_id is not None:
+        raise GenLayerError(STUDIO_DECISION_GUARD_UNSUPPORTED)
+    if value is None:
+        raise GenLayerError(STUDIO_APPEAL_VALUE_UNRESOLVABLE)
+    return value
+
+
 def _to_bytes32(self: GenLayerClient, hex_str: HexStr) -> bytes:
     """Convert a hex string to bytes32."""
     if hex_str.startswith("0x"):
@@ -593,8 +679,14 @@ def _json_safe_rpc_value(value):
 def _encode_submit_appeal_data(
     self: GenLayerClient,
     transaction_id: HexStr,
-    expected_decision_id: int,
+    expected_decision_id: Optional[int] = None,
+    pre_train_appeal_shape: bool = False,
 ):
+    """Encodes submitAppeal against the chain's own ConsensusMain ABI.
+
+    ``pre_train_appeal_shape`` selects the studio-embedded ``submitAppeal(bytes32)``
+    entrypoint, which carries no decision id.
+    """
     consensus_main_contract = self.w3.eth.contract(
         abi=self.chain.consensus_main_contract["abi"]
     )
@@ -603,10 +695,12 @@ def _encode_submit_appeal_data(
         transaction_id = transaction_id[2:]
     if len(transaction_id) > 64:
         raise ValueError("transaction_id too long for bytes32")
-    params = abi_encode(
-        contract_fn.argument_types,
-        [self.w3.to_bytes(hexstr=transaction_id), expected_decision_id],
-    )
+    arguments = [self.w3.to_bytes(hexstr=transaction_id)]
+    if not pre_train_appeal_shape:
+        if expected_decision_id is None:
+            raise ValueError("submitAppeal requires expected_decision_id")
+        arguments.append(expected_decision_id)
+    params = abi_encode(contract_fn.argument_types, arguments)
     function_selector = eth_utils.keccak(text=contract_fn.signature)[:4].hex()
     encoded_data = "0x" + function_selector + params.hex()
     return encoded_data
@@ -626,14 +720,21 @@ def _encode_fee_management_data(
     transaction_id: HexStr,
     distribution: FeesDistributionInput,
     expected_decision_id: Optional[int] = None,
+    pre_train_appeal_shape: bool = False,
 ):
+    """Encodes a fee management call.
+
+    ``pre_train_appeal_shape`` selects the studio-embedded
+    ``topUpAndSubmitAppeal(bytes32, FeesDistribution)`` entrypoint, which
+    carries no decision id.
+    """
     if function_name not in ("topUpFees", "topUpAndSubmitAppeal"):
         raise ValueError(f"Unsupported fee management function: {function_name}")
 
     tx_bytes = _to_bytes32(self, transaction_id)
     fees_distribution = create_fees_distribution(distribution)
     fees_tuple = fees_distribution_to_abi_tuple(fees_distribution)
-    if function_name == "topUpAndSubmitAppeal":
+    if function_name == "topUpAndSubmitAppeal" and not pre_train_appeal_shape:
         if expected_decision_id is None:
             raise ValueError("topUpAndSubmitAppeal requires expected_decision_id")
         argument_types = TOP_UP_AND_SUBMIT_APPEAL_ARGUMENT_TYPES

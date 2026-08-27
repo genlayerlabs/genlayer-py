@@ -102,9 +102,7 @@ def main():
     from genlayer_py.client.genlayer_client import GenLayerClient
     from genlayer_py.types.transactions import (
         ExecutionResult,
-        ResolutionAction,
         TransactionResult,
-        TransactionStatus,
         VoteType,
     )
 
@@ -138,8 +136,11 @@ def main():
         "get_appeal_quote",
         "get_appeal_charge",
         "get_min_appeal_bond",
+        "wait_for_decision",
+        "wait_for_finalization",
         "wait_for_transaction_receipt",
         "get_transaction",
+        "get_transaction_lifecycle",
         "get_triggered_transaction_ids",
         "debug_trace_transaction",
     ]
@@ -151,8 +152,6 @@ def main():
     # Enums
     lines.append("## Types and Enums\n")
     for name, enum_class in [
-        ("TransactionStatus", TransactionStatus),
-        ("ResolutionAction", ResolutionAction),
         ("TransactionResult", TransactionResult),
         ("ExecutionResult", ExecutionResult),
         ("VoteType", VoteType),

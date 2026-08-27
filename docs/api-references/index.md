@@ -45,21 +45,20 @@ transaction = client.get_transaction(hash=transaction_hash)
 ```python
 from genlayer_py import create_client
 from genlayer_py.chains import localnet
-from genlayer_py.types import TransactionStatus
 
 client = create_client(chain=localnet)
 
 # Get simplified receipt (default - removes binary data, keeps execution results)
 receipt = client.wait_for_transaction_receipt(
     transaction_hash="0x...",
-    status=TransactionStatus.FINALIZED,
+    wait_until="finalized",
     full_transaction=False  # Default - simplified for readability
 )
 
 # Get complete receipt with all fields
 full_receipt = client.wait_for_transaction_receipt(
     transaction_hash="0x...",
-    status=TransactionStatus.FINALIZED,
+    wait_until="finalized",
     full_transaction=True  # Complete receipt with all internal data
 )
 ```
@@ -102,7 +101,7 @@ transaction_hash = client.write_contract(
 )
 receipt = client.wait_for_transaction_receipt(
     hash=transaction_hash,
-    status=TransactionStatus.FINALIZED, // or ACCEPTED
+    wait_until="finalized",
     full_transaction=False  // False by default - returns simplified receipt for better readability
 )
 ```
@@ -281,13 +280,13 @@ A transaction can be finalized by consensus but still have a failed execution. A
 ```python
 from genlayer_py import create_client, create_account
 from genlayer_py.chains import testnet_bradbury
-from genlayer_py.types import TransactionStatus, ExecutionResult
+from genlayer_py.types import ExecutionResult
 
 client = create_client(chain=testnet_bradbury, account=create_account())
 
 receipt = client.wait_for_transaction_receipt(
     transaction_hash=tx_hash,
-    status=TransactionStatus.FINALIZED,
+    wait_until="finalized",
 )
 
 if receipt.get("tx_execution_result_name") == ExecutionResult.FINISHED_WITH_RETURN.value:
@@ -312,12 +311,19 @@ Transactions can emit messages to other contracts. These messages create new chi
 ```python
 tx = client.get_transaction(transaction_hash=tx_hash)
 
-# `status` is the protocol's current projected status. The exact stored state
-# and finalization readiness are available separately.
-print(tx["status_name"])
-print(tx["stored_status_name"])
-print(tx["resolution_action"])
-print(tx["can_finalize"])
+# The default lifecycle is derived only from stored chain state.
+print(tx["lifecycle"])
+# {"state": "processing", "phase": "revealing"}
+# {"state": "decided", "outcome": "accepted"}
+
+# Protocol projection/action details are available only through the explicit
+# advanced API.
+raw_lifecycle = client.get_transaction_lifecycle(transaction_hash=tx_hash)
+print(raw_lifecycle["stored_status_name"])
+print(raw_lifecycle["projected_status_name"])
+print(raw_lifecycle["resolution_action_name"])
+print(raw_lifecycle["resolution_source_name"])
+# `resolution_action_name == "Finalize"` is the authoritative readiness verdict.
 
 # The train stores the execution hash, not the old receipt bytes.
 print(tx["tx_execution_hash"])

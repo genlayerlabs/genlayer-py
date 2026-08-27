@@ -7,7 +7,6 @@ from hexbytes import HexBytes
 from typing import AnyStr, Literal
 from genlayer_py.types import (
     GenLayerChain,
-    TransactionStatus,
     CalldataEncodable,
     GenLayerTransaction,
     ContractSchema,
@@ -42,11 +41,15 @@ from genlayer_py.contracts.actions import (
 )
 from genlayer_py.chains.actions import initialize_consensus_smart_contract
 from genlayer_py.transactions.actions import (
+    wait_for_decision,
+    wait_for_finalization,
     wait_for_transaction_receipt,
     get_transaction,
+    get_transaction_lifecycle,
     get_triggered_transaction_ids,
     debug_trace_transaction,
 )
+from genlayer_py.types.transactions import ProtocolTransactionLifecycle
 from genlayer_py.staking.actions import (
     validator_join,
     validator_deposit,
@@ -356,18 +359,48 @@ class GenLayerClient(Eth):
     def wait_for_transaction_receipt(
         self,
         transaction_hash: _Hash32,
-        status: Optional[TransactionStatus] = None,
-        wait_until: Optional[Literal["decided", "finalized"]] = None,
+        wait_until: Literal["decided", "finalized"] = "decided",
         interval: int = transaction_config.wait_interval,
         retries: int = transaction_config.retries,
         full_transaction: bool = False,
     ) -> GenLayerTransaction:
-        """Polls until a transaction reaches the specified status. Returns the transaction receipt."""
+        """Poll for a stored decision (default) or stored finalization."""
         return wait_for_transaction_receipt(
             self=self,
             transaction_hash=transaction_hash,
-            status=status,
             wait_until=wait_until,
+            interval=interval,
+            retries=retries,
+            full_transaction=full_transaction,
+        )
+
+    def wait_for_decision(
+        self,
+        transaction_hash: _Hash32,
+        interval: int = transaction_config.wait_interval,
+        retries: int = transaction_config.retries,
+        full_transaction: bool = False,
+    ) -> GenLayerTransaction:
+        """Poll until the stored transaction state is decided or terminal."""
+        return wait_for_decision(
+            self=self,
+            transaction_hash=transaction_hash,
+            interval=interval,
+            retries=retries,
+            full_transaction=full_transaction,
+        )
+
+    def wait_for_finalization(
+        self,
+        transaction_hash: _Hash32,
+        interval: int = transaction_config.wait_interval,
+        retries: int = transaction_config.retries,
+        full_transaction: bool = False,
+    ) -> GenLayerTransaction:
+        """Poll until the stored transaction state is finalized."""
+        return wait_for_finalization(
+            self=self,
+            transaction_hash=transaction_hash,
             interval=interval,
             retries=retries,
             full_transaction=full_transaction,
@@ -377,16 +410,26 @@ class GenLayerClient(Eth):
         self,
         transaction_hash: _Hash32,
     ) -> GenLayerTransaction:
-        """Fetches projected/stored status, resolution/finalization readiness,
-        execution result, and consensus details.
+        """Fetch transaction data with a stable stored-state ``lifecycle``.
 
-        ``status`` is projected while ``stored_status`` is the exact chain
-        record. Finalization readiness is ``resolution_action == "FINALIZE"``
-        together with ``can_finalize``. The train exposes
-        ``tx_execution_hash``; legacy receipt bytes are unavailable, so
-        ``tx_receipt`` is ``None``.
+        The lifecycle's ``state`` is one of processing, decided, finalized, or
+        canceled. Processing carries ``phase`` and decided carries ``outcome``.
+        The train exposes ``tx_execution_hash``; legacy receipt bytes are
+        unavailable, so ``tx_receipt`` is ``None``.
         """
         return get_transaction(self=self, transaction_hash=transaction_hash)
+
+    def get_transaction_lifecycle(
+        self,
+        transaction_hash: _Hash32,
+        timestamp: Optional[int] = None,
+    ) -> ProtocolTransactionLifecycle:
+        """Return advanced stored/projected/action protocol lifecycle data."""
+        return get_transaction_lifecycle(
+            self=self,
+            transaction_hash=transaction_hash,
+            timestamp=timestamp,
+        )
 
     def get_triggered_transaction_ids(
         self,

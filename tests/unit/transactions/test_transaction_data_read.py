@@ -1,8 +1,10 @@
 """Train-only transaction reads use bounded surfaces at one block snapshot."""
 
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import genlayer_py.transactions.actions as transaction_actions
+import pytest
 from genlayer_py.consensus.abi import (
     CONSENSUS_DATA_ABI,
     CONSENSUS_DATA_ABI_V06,
@@ -16,6 +18,12 @@ from genlayer_py.types import (
     ExecutionResult,
     VoteType,
 )
+from genlayer_py.types.transactions import (
+    ProtocolTransactionStatus,
+    ResolutionAction,
+    ResolutionSource,
+)
+from genlayer_py.chains import localnet
 
 TX_HASH = "0x" + "ab" * 32
 CONSENSUS_DATA_ADDRESS = "0x" + "11" * 20
@@ -125,7 +133,26 @@ def _client_and_contracts():
             ],
         }
     )
-    resolution = (TX_HASH, 5, 6, 6)
+    resolution = (
+        TX_HASH,
+        5,
+        6,
+        6,
+        1,
+        bytes(32),
+        6,
+        0,
+        0,
+        bytes(32),
+        bytes(32),
+        0,
+        0,
+        0,
+        0,
+        bytes(32),
+        0,
+        1_000,
+    )
     latest_decision = (True, 42)
     consensus_data = _Contract(
         {
@@ -214,7 +241,7 @@ def test_train_transaction_read_composes_light_and_split_array_surfaces(monkeypa
     )
 
 
-def test_get_transaction_exposes_projected_and_stored_lifecycle(monkeypatch):
+def test_get_transaction_exposes_only_stored_consumer_lifecycle(monkeypatch):
     client, contracts = _client_and_contracts()
     monkeypatch.setattr(
         transaction_actions, "_decode_triggered_txs", lambda self, tx: []
@@ -222,12 +249,12 @@ def test_get_transaction_exposes_projected_and_stored_lifecycle(monkeypatch):
 
     result = transaction_actions.get_transaction(client, TX_HASH)
 
-    assert result["status"] == "6"
-    assert result["status_name"] == "UNDETERMINED"
-    assert result["stored_status"] == "5"
-    assert result["stored_status_name"] == "ACCEPTED"
-    assert result["resolution_action"] == "FINALIZE"
-    assert result["can_finalize"] is True
+    assert result["lifecycle"] == {"state": "decided", "outcome": "accepted"}
+    assert "status" not in result
+    assert "status_name" not in result
+    assert "stored_status" not in result
+    assert "resolution_action" not in result
+    assert "can_finalize" not in result
     assert result["last_round"]["round_validators"] == VALIDATORS
     assert result["last_round"]["validator_votes"] == [1, 2, 3]
     assert result["last_round"]["validator_result_hash"] == [
@@ -243,8 +270,102 @@ def test_get_transaction_exposes_projected_and_stored_lifecycle(monkeypatch):
     assert result["initial_rotations"] == "3"
 
     lifecycle_calls = contracts[CONSENSUS_DATA_ADDRESS].calls
+    assert not any(call[0] == "getTransactionLifecycle" for call in lifecycle_calls)
+    assert not any(call[0] == "canFinalize" for call in lifecycle_calls)
+
+
+def test_advanced_transaction_lifecycle_keeps_projection_explicit():
+    client, contracts = _client_and_contracts()
+
+    result = transaction_actions.get_transaction_lifecycle(client, TX_HASH)
+
+    assert result == {
+        "stored_status": 5,
+        "stored_status_name": ProtocolTransactionStatus.ACCEPTED,
+        "projected_status": 6,
+        "projected_status_name": ProtocolTransactionStatus.UNDETERMINED,
+        "resolution_action": 6,
+        "resolution_action_name": ResolutionAction.FINALIZE,
+        "resolution_source": 6,
+        "resolution_source_name": ResolutionSource.FULL_REVEAL,
+        "decision_id": "42",
+        "decision_active": True,
+        "evaluated_at": 1_000,
+    }
+    lifecycle_calls = contracts[CONSENSUS_DATA_ADDRESS].calls
     assert ("getTransactionLifecycle", (TX_HASH, 0), 123) in lifecycle_calls
-    assert ("canFinalize", (TX_HASH, 0, 42), 123) in lifecycle_calls
+    assert not any(call[0] == "canFinalize" for call in lifecycle_calls)
+
+
+def test_local_transaction_lifecycle_decodes_the_exact_node_rpc_schema():
+    provider = Mock()
+    provider.make_request.return_value = {
+        "result": {
+            "storedStatus": "Accepted",
+            "storedStatusCode": 5,
+            "projectedStatus": "Undetermined",
+            "projectedStatusCode": 6,
+            "resolutionAction": "Finalize",
+            "resolutionActionCode": 6,
+            "resolutionSource": "FullReveal",
+            "resolutionSourceCode": 6,
+            "decisionId": "42",
+            "decisionActive": True,
+            "evaluatedAt": 1_000,
+        }
+    }
+    client = SimpleNamespace(
+        chain=SimpleNamespace(id=localnet.id),
+        provider=provider,
+    )
+
+    result = transaction_actions.get_transaction_lifecycle(
+        client, bytes.fromhex("ab" * 32), timestamp=999
+    )
+
+    assert result == {
+        "stored_status": 5,
+        "stored_status_name": ProtocolTransactionStatus.ACCEPTED,
+        "projected_status": 6,
+        "projected_status_name": ProtocolTransactionStatus.UNDETERMINED,
+        "resolution_action": 6,
+        "resolution_action_name": ResolutionAction.FINALIZE,
+        "resolution_source": 6,
+        "resolution_source_name": ResolutionSource.FULL_REVEAL,
+        "decision_id": "42",
+        "decision_active": True,
+        "evaluated_at": 1_000,
+    }
+    provider.make_request.assert_called_once_with(
+        method="gen_getTransactionLifecycle",
+        params=[{"txId": TX_HASH, "timestamp": 999}],
+    )
+
+
+def test_local_transaction_lifecycle_rejects_code_name_drift():
+    provider = Mock()
+    provider.make_request.return_value = {
+        "result": {
+            "storedStatus": "Finalized",
+            "storedStatusCode": 5,
+            "projectedStatus": "Undetermined",
+            "projectedStatusCode": 6,
+            "resolutionAction": "Finalize",
+            "resolutionActionCode": 6,
+            "resolutionSource": "FullReveal",
+            "resolutionSourceCode": 6,
+            "decisionId": None,
+            "decisionActive": False,
+            "evaluatedAt": 1_000,
+        }
+    }
+    client = SimpleNamespace(
+        chain=SimpleNamespace(id=localnet.id),
+        provider=provider,
+    )
+
+    with pytest.raises(transaction_actions.GenLayerError, match="storedStatus"):
+        transaction_actions.get_transaction_lifecycle(client, TX_HASH)
 
 
 def test_packaged_consensus_abis_expose_only_the_train_lifecycle_signature():

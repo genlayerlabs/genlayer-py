@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 
 from genlayer_py import create_client, create_account
 from genlayer_py.chains import localnet, studionet, testnet_asimov
-from genlayer_py.types import TransactionStatus
 from genlayer_py.assertions import tx_execution_succeeded
 
 # Load environment variables from .env file
@@ -86,7 +85,7 @@ def test_intelligent_oracle_factory_pattern(chain_config):
     # Wait for registry deployment
     registry_wait_kwargs = {
         "transaction_hash": registry_deploy_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
         "retries": 80,
     }
 
@@ -150,7 +149,7 @@ def test_intelligent_oracle_factory_pattern(chain_config):
         # Wait for create_new_prediction_market transaction
         create_wait_kwargs = {
             "transaction_hash": create_tx_hash,
-            "status": TransactionStatus.FINALIZED,
+            "wait_until": "finalized",
             "retries": 80,
         }
 
@@ -211,7 +210,7 @@ def test_intelligent_oracle_factory_pattern(chain_config):
         # Wait for resolve transaction
         resolve_wait_kwargs = {
             "transaction_hash": resolve_tx_hash,
-            "status": TransactionStatus.FINALIZED,
+            "wait_until": "finalized",
             "retries": 80,
         }
 

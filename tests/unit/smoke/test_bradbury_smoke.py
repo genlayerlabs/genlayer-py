@@ -121,7 +121,12 @@ class TestBradburyTransactionRead:
             "NONDET_DISAGREE",
             "DETERMINISTIC_VIOLATION",
         ]
-        assert tx["status_name"] is not None
+        assert tx["lifecycle"]["state"] in {
+            "processing",
+            "decided",
+            "finalized",
+            "canceled",
+        }
         assert tx["result_name"] is not None
 
     def test_get_transaction_includes_messages(self):

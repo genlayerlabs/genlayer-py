@@ -313,19 +313,56 @@ client.get_min_appeal_bond(transaction_id: HexStr)
 
 ---
 
-### wait_for_transaction_receipt
+### wait_for_decision
 
-Polls until a transaction reaches the specified status. Returns the transaction receipt.
+Poll until the stored transaction state is decided or terminal.
 
 ```python
-client.wait_for_transaction_receipt(transaction_hash: Union, status: Optional = None, wait_until: Optional = None, interval: int = 3000, retries: int = 10, full_transaction: bool = False)
+client.wait_for_decision(transaction_hash: Union, interval: int = 3000, retries: int = 10, full_transaction: bool = False)
 ```
 
 | Parameter | Type | Required | Default |
 |-----------|------|----------|---------|
 | transaction_hash | `Union` | yes |  |
-| status | `Optional` | no | None |
-| wait_until | `Optional` | no | None |
+| interval | `int` | no | 3000 |
+| retries | `int` | no | 10 |
+| full_transaction | `bool` | no | False |
+
+**Returns:** `GenLayerTransaction`
+
+---
+
+### wait_for_finalization
+
+Poll until the stored transaction state is finalized.
+
+```python
+client.wait_for_finalization(transaction_hash: Union, interval: int = 3000, retries: int = 10, full_transaction: bool = False)
+```
+
+| Parameter | Type | Required | Default |
+|-----------|------|----------|---------|
+| transaction_hash | `Union` | yes |  |
+| interval | `int` | no | 3000 |
+| retries | `int` | no | 10 |
+| full_transaction | `bool` | no | False |
+
+**Returns:** `GenLayerTransaction`
+
+---
+
+### wait_for_transaction_receipt
+
+Poll for a stored decision (default) or stored finalization.
+
+```python
+client.wait_for_transaction_receipt(transaction_hash: Union, wait_until: Literal = 'decided', interval: int = 3000, retries: int = 10, full_transaction: bool = False)
+```
+
+| Parameter | Type | Required | Default |
+|-----------|------|----------|---------|
+| transaction_hash | `Union` | yes |  |
+| wait_until | `Literal` | no | 'decided' |
 | interval | `int` | no | 3000 |
 | retries | `int` | no | 10 |
 | full_transaction | `bool` | no | False |
@@ -336,14 +373,12 @@ client.wait_for_transaction_receipt(transaction_hash: Union, status: Optional = 
 
 ### get_transaction
 
-Fetches projected/stored status, resolution/finalization readiness,
-execution result, and consensus details.
+Fetch transaction data with a stable stored-state ``lifecycle``.
 
-``status`` is projected while ``stored_status`` is the exact chain
-record. Finalization readiness is ``resolution_action == "FINALIZE"``
-together with ``can_finalize``. The train exposes
-``tx_execution_hash``; legacy receipt bytes are unavailable, so
-``tx_receipt`` is ``None``.
+The lifecycle's ``state`` is one of processing, decided, finalized, or
+canceled. Processing carries ``phase`` and decided carries ``outcome``.
+The train exposes ``tx_execution_hash``; legacy receipt bytes are
+unavailable, so ``tx_receipt`` is ``None``.
 
 ```python
 client.get_transaction(transaction_hash: Union)
@@ -354,6 +389,23 @@ client.get_transaction(transaction_hash: Union)
 | transaction_hash | `Union` | yes |  |
 
 **Returns:** `GenLayerTransaction`
+
+---
+
+### get_transaction_lifecycle
+
+Return advanced stored/projected/action protocol lifecycle data.
+
+```python
+client.get_transaction_lifecycle(transaction_hash: Union, timestamp: Optional = None)
+```
+
+| Parameter | Type | Required | Default |
+|-----------|------|----------|---------|
+| transaction_hash | `Union` | yes |  |
+| timestamp | `Optional` | no | None |
+
+**Returns:** `ProtocolTransactionLifecycle`
 
 ---
 
@@ -391,45 +443,6 @@ client.debug_trace_transaction(transaction_hash: Union, round: int = 0)
 ---
 
 ## Types and Enums
-
-### TransactionStatus
-
-Status of a GenLayer transaction in the consensus lifecycle.
-
-```python
-TransactionStatus.UNINITIALIZED = "UNINITIALIZED"
-TransactionStatus.PENDING = "PENDING"
-TransactionStatus.PROPOSING = "PROPOSING"
-TransactionStatus.COMMITTING = "COMMITTING"
-TransactionStatus.REVEALING = "REVEALING"
-TransactionStatus.ACCEPTED = "ACCEPTED"
-TransactionStatus.UNDETERMINED = "UNDETERMINED"
-TransactionStatus.FINALIZED = "FINALIZED"
-TransactionStatus.CANCELED = "CANCELED"
-TransactionStatus.APPEAL_REVEALING = "APPEAL_REVEALING"
-TransactionStatus.APPEAL_COMMITTING = "APPEAL_COMMITTING"
-TransactionStatus.VALIDATORS_TIMEOUT = "VALIDATORS_TIMEOUT"
-TransactionStatus.LEADER_TIMEOUT = "LEADER_TIMEOUT"
-TransactionStatus.LEADER_REVEALING = "LEADER_REVEALING"
-```
-
----
-
-### ResolutionAction
-
-Action projected by the transaction lifecycle resolution kernel.
-
-```python
-ResolutionAction.NO_OP = "NO_OP"
-ResolutionAction.CANCEL = "CANCEL"
-ResolutionAction.REPLACE_ACTOR = "REPLACE_ACTOR"
-ResolutionAction.ROTATE_LEADER = "ROTATE_LEADER"
-ResolutionAction.RESOLVE_APPEAL = "RESOLVE_APPEAL"
-ResolutionAction.MATERIALIZE_DECISION = "MATERIALIZE_DECISION"
-ResolutionAction.FINALIZE = "FINALIZE"
-```
-
----
 
 ### TransactionResult
 

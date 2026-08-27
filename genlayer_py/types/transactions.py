@@ -3,7 +3,17 @@ import rlp
 import base64
 from genlayer_py.abi import calldata
 from enum import Enum
-from typing import Dict, Optional, Any, TypedDict, List, Tuple, Literal, Union
+from typing import (
+    Dict,
+    Optional,
+    Any,
+    TypedDict,
+    List,
+    Tuple,
+    Literal,
+    Union,
+    NotRequired,
+)
 from eth_typing import Address, HexStr
 from web3 import Web3
 from dataclasses import dataclass
@@ -11,35 +21,57 @@ from genlayer_py.utils.jsonifier import RESULT_CODES
 from genlayer_py.consensus.consensus_main import decode_tx_data
 
 
-class TransactionStatus(str, Enum):
-    """Status of a GenLayer transaction in the consensus lifecycle."""
+class ProtocolTransactionStatus(str, Enum):
+    """Raw transaction status stored by the consensus contracts.
 
-    UNINITIALIZED = "UNINITIALIZED"
-    PENDING = "PENDING"
-    PROPOSING = "PROPOSING"
-    COMMITTING = "COMMITTING"
-    REVEALING = "REVEALING"
-    ACCEPTED = "ACCEPTED"
-    UNDETERMINED = "UNDETERMINED"
-    FINALIZED = "FINALIZED"
-    CANCELED = "CANCELED"
-    APPEAL_REVEALING = "APPEAL_REVEALING"
-    APPEAL_COMMITTING = "APPEAL_COMMITTING"
-    VALIDATORS_TIMEOUT = "VALIDATORS_TIMEOUT"
-    LEADER_TIMEOUT = "LEADER_TIMEOUT"
-    LEADER_REVEALING = "LEADER_REVEALING"
+    This protocol enum is intentionally advanced API. Consumer-facing
+    transactions expose a small ``lifecycle`` value discriminated by ``state``
+    instead.
+    """
+
+    UNINITIALIZED = "Uninitialized"
+    PENDING = "Pending"
+    PROPOSING = "Proposing"
+    COMMITTING = "Committing"
+    REVEALING = "Revealing"
+    ACCEPTED = "Accepted"
+    UNDETERMINED = "Undetermined"
+    FINALIZED = "Finalized"
+    CANCELED = "Canceled"
+    APPEAL_REVEALING = "AppealRevealing"
+    APPEAL_COMMITTING = "AppealCommitting"
+    VALIDATORS_TIMEOUT = "ValidatorsTimeout"
+    LEADER_TIMEOUT = "LeaderTimeout"
+    LEADER_REVEALING = "LeaderRevealing"
 
 
 class ResolutionAction(str, Enum):
     """Action projected by the transaction lifecycle resolution kernel."""
 
-    NO_OP = "NO_OP"
-    CANCEL = "CANCEL"
-    REPLACE_ACTOR = "REPLACE_ACTOR"
-    ROTATE_LEADER = "ROTATE_LEADER"
-    RESOLVE_APPEAL = "RESOLVE_APPEAL"
-    MATERIALIZE_DECISION = "MATERIALIZE_DECISION"
-    FINALIZE = "FINALIZE"
+    NO_OP = "NoOp"
+    CANCEL = "Cancel"
+    REPLACE_ACTOR = "ReplaceActor"
+    ROTATE_LEADER = "RotateLeader"
+    RESOLVE_APPEAL = "ResolveAppeal"
+    MATERIALIZE_DECISION = "MaterializeDecision"
+    FINALIZE = "Finalize"
+
+
+class ResolutionSource(str, Enum):
+    """Protocol trigger that produced a transaction resolution plan."""
+
+    UNSPECIFIED = "Unspecified"
+    ACTIVATION_INSUFFICIENT_VALIDATORS = "ActivationInsufficientValidators"
+    PROPOSAL_HANGING = "ProposalHanging"
+    LEADER_RECEIPT_TIMEOUT = "LeaderReceiptTimeout"
+    COMMIT_HANGING = "CommitHanging"
+    LEADER_REVEAL_HANGING = "LeaderRevealHanging"
+    FULL_REVEAL = "FullReveal"
+    REVEAL_DEADLINE = "RevealDeadline"
+    APPEAL_COMMIT_HANGING = "AppealCommitHanging"
+    APPEAL_FULL_REVEAL = "AppealFullReveal"
+    APPEAL_REVEAL_DEADLINE = "AppealRevealDeadline"
+    SELECTION_DEPLETED = "SelectionDepleted"
 
 
 RESOLUTION_ACTION_NUMBER_TO_NAME = {
@@ -52,58 +84,147 @@ RESOLUTION_ACTION_NUMBER_TO_NAME = {
     "6": ResolutionAction.FINALIZE,
 }
 
-
-# Finalization readiness is a lifecycle resolution action, not a stored or
-# projected transaction status. Removing ReadyToFinalize at ordinal 11 shifted
-# the three statuses above it down.
-TRANSACTION_STATUS_NUMBER_TO_NAME = {
-    "0": TransactionStatus.UNINITIALIZED,
-    "1": TransactionStatus.PENDING,
-    "2": TransactionStatus.PROPOSING,
-    "3": TransactionStatus.COMMITTING,
-    "4": TransactionStatus.REVEALING,
-    "5": TransactionStatus.ACCEPTED,
-    "6": TransactionStatus.UNDETERMINED,
-    "7": TransactionStatus.FINALIZED,
-    "8": TransactionStatus.CANCELED,
-    "9": TransactionStatus.APPEAL_REVEALING,
-    "10": TransactionStatus.APPEAL_COMMITTING,
-    "11": TransactionStatus.VALIDATORS_TIMEOUT,
-    "12": TransactionStatus.LEADER_TIMEOUT,
-    "13": TransactionStatus.LEADER_REVEALING,
+RESOLUTION_SOURCE_NUMBER_TO_NAME = {
+    str(number): source for number, source in enumerate(ResolutionSource)
 }
 
-TRANSACTION_STATUS_NAME_TO_NUMBER = {
-    TransactionStatus.UNINITIALIZED: "0",
-    TransactionStatus.PENDING: "1",
-    TransactionStatus.PROPOSING: "2",
-    TransactionStatus.COMMITTING: "3",
-    TransactionStatus.REVEALING: "4",
-    TransactionStatus.ACCEPTED: "5",
-    TransactionStatus.UNDETERMINED: "6",
-    TransactionStatus.FINALIZED: "7",
-    TransactionStatus.CANCELED: "8",
-    TransactionStatus.APPEAL_REVEALING: "9",
-    TransactionStatus.APPEAL_COMMITTING: "10",
-    TransactionStatus.VALIDATORS_TIMEOUT: "11",
-    TransactionStatus.LEADER_TIMEOUT: "12",
-    TransactionStatus.LEADER_REVEALING: "13",
-}
 
-DECIDED_STATES = [
-    TransactionStatus.ACCEPTED,
-    TransactionStatus.UNDETERMINED,
-    TransactionStatus.LEADER_TIMEOUT,
-    TransactionStatus.VALIDATORS_TIMEOUT,
-    TransactionStatus.CANCELED,
-    TransactionStatus.FINALIZED,
+TransactionProcessingPhase = Literal[
+    "uninitialized",
+    "pending",
+    "proposing",
+    "committing",
+    "revealing",
+    "appeal_revealing",
+    "appeal_committing",
+    "leader_revealing",
+]
+TransactionDecisionOutcome = Literal[
+    "accepted", "undetermined", "validators_timeout", "leader_timeout"
 ]
 
 
-def is_decided_state(status: str) -> bool:
-    return status in [
-        TRANSACTION_STATUS_NAME_TO_NUMBER[state] for state in DECIDED_STATES
-    ]
+class ProcessingTransactionLifecycle(TypedDict):
+    state: Literal["processing"]
+    phase: TransactionProcessingPhase
+
+
+class DecidedTransactionLifecycle(TypedDict):
+    state: Literal["decided"]
+    outcome: TransactionDecisionOutcome
+
+
+class FinalizedTransactionLifecycle(TypedDict):
+    state: Literal["finalized"]
+    outcome: NotRequired[TransactionDecisionOutcome]
+
+
+class CanceledTransactionLifecycle(TypedDict):
+    state: Literal["canceled"]
+
+
+TransactionLifecycle = Union[
+    ProcessingTransactionLifecycle,
+    DecidedTransactionLifecycle,
+    FinalizedTransactionLifecycle,
+    CanceledTransactionLifecycle,
+]
+
+
+class ProtocolTransactionLifecycle(TypedDict):
+    """Advanced resolution-kernel view for one fixed block snapshot."""
+
+    stored_status: int
+    stored_status_name: ProtocolTransactionStatus
+    projected_status: int
+    projected_status_name: ProtocolTransactionStatus
+    resolution_action: int
+    resolution_action_name: ResolutionAction
+    resolution_source: int
+    resolution_source_name: ResolutionSource
+    decision_id: Optional[str]
+    decision_active: bool
+    evaluated_at: int
+
+
+# Current train protocol ordinals. Finalization readiness is a resolution
+# verdict, not a stored or projected transaction status.
+PROTOCOL_TRANSACTION_STATUS_NUMBER_TO_NAME = {
+    "0": ProtocolTransactionStatus.UNINITIALIZED,
+    "1": ProtocolTransactionStatus.PENDING,
+    "2": ProtocolTransactionStatus.PROPOSING,
+    "3": ProtocolTransactionStatus.COMMITTING,
+    "4": ProtocolTransactionStatus.REVEALING,
+    "5": ProtocolTransactionStatus.ACCEPTED,
+    "6": ProtocolTransactionStatus.UNDETERMINED,
+    "7": ProtocolTransactionStatus.FINALIZED,
+    "8": ProtocolTransactionStatus.CANCELED,
+    "9": ProtocolTransactionStatus.APPEAL_REVEALING,
+    "10": ProtocolTransactionStatus.APPEAL_COMMITTING,
+    "11": ProtocolTransactionStatus.VALIDATORS_TIMEOUT,
+    "12": ProtocolTransactionStatus.LEADER_TIMEOUT,
+    "13": ProtocolTransactionStatus.LEADER_REVEALING,
+}
+
+PROTOCOL_TRANSACTION_STATUS_NAME_TO_NUMBER = {
+    status: str(number) for number, status in enumerate(ProtocolTransactionStatus)
+}
+
+_PROCESSING_PHASE_BY_PROTOCOL_STATUS: Dict[
+    ProtocolTransactionStatus, TransactionProcessingPhase
+] = {
+    ProtocolTransactionStatus.UNINITIALIZED: "uninitialized",
+    ProtocolTransactionStatus.PENDING: "pending",
+    ProtocolTransactionStatus.PROPOSING: "proposing",
+    ProtocolTransactionStatus.COMMITTING: "committing",
+    ProtocolTransactionStatus.REVEALING: "revealing",
+    ProtocolTransactionStatus.APPEAL_REVEALING: "appeal_revealing",
+    ProtocolTransactionStatus.APPEAL_COMMITTING: "appeal_committing",
+    ProtocolTransactionStatus.LEADER_REVEALING: "leader_revealing",
+}
+
+
+def transaction_lifecycle_from_protocol_status(
+    status: Union[int, str, ProtocolTransactionStatus],
+) -> TransactionLifecycle:
+    """Map every stored protocol status to the stable consumer lifecycle."""
+
+    if isinstance(status, ProtocolTransactionStatus):
+        protocol_status = status
+    elif isinstance(status, int) or (isinstance(status, str) and status.isdigit()):
+        try:
+            protocol_status = PROTOCOL_TRANSACTION_STATUS_NUMBER_TO_NAME[str(status)]
+        except KeyError as exc:
+            raise ValueError(f"Unknown protocol transaction status: {status}") from exc
+    else:
+        try:
+            status_text = str(status)
+            protocol_status = (
+                ProtocolTransactionStatus[status_text]
+                if status_text in ProtocolTransactionStatus.__members__
+                else ProtocolTransactionStatus(status_text)
+            )
+        except ValueError as exc:
+            raise ValueError(f"Unknown protocol transaction status: {status}") from exc
+
+    if protocol_status in _PROCESSING_PHASE_BY_PROTOCOL_STATUS:
+        return {
+            "state": "processing",
+            "phase": _PROCESSING_PHASE_BY_PROTOCOL_STATUS[protocol_status],
+        }
+    if protocol_status == ProtocolTransactionStatus.ACCEPTED:
+        return {"state": "decided", "outcome": "accepted"}
+    if protocol_status == ProtocolTransactionStatus.UNDETERMINED:
+        return {"state": "decided", "outcome": "undetermined"}
+    if protocol_status == ProtocolTransactionStatus.VALIDATORS_TIMEOUT:
+        return {"state": "decided", "outcome": "validators_timeout"}
+    if protocol_status == ProtocolTransactionStatus.LEADER_TIMEOUT:
+        return {"state": "decided", "outcome": "leader_timeout"}
+    if protocol_status == ProtocolTransactionStatus.FINALIZED:
+        return {"state": "finalized"}
+    if protocol_status == ProtocolTransactionStatus.CANCELED:
+        return {"state": "canceled"}
+    raise AssertionError(f"Unmapped protocol transaction status: {protocol_status}")
 
 
 class TransactionResult(str, Enum):
@@ -138,6 +259,34 @@ TRANSACTION_RESULT_NAME_TO_NUMBER = {
     TransactionResult.DETERMINISTIC_VIOLATION: "4",
     TransactionResult.NO_MAJORITY: "5",
 }
+
+
+def transaction_outcome_from_protocol_result(
+    result: Union[int, str, TransactionResult],
+) -> Optional[TransactionDecisionOutcome]:
+    """Return an application outcome when a finalized record preserves one."""
+
+    if isinstance(result, TransactionResult):
+        result_name = result
+    elif isinstance(result, int) or (isinstance(result, str) and result.isdigit()):
+        result_name = TRANSACTION_RESULT_NUMBER_TO_NAME.get(str(result))
+    else:
+        try:
+            result_name = TransactionResult(str(result))
+        except ValueError:
+            result_name = None
+
+    if result_name == TransactionResult.MAJORITY_AGREE:
+        return "accepted"
+    if result_name == TransactionResult.MAJORITY_TIMEOUT:
+        return "validators_timeout"
+    if result_name in (
+        TransactionResult.MAJORITY_DISAGREE,
+        TransactionResult.DETERMINISTIC_VIOLATION,
+        TransactionResult.NO_MAJORITY,
+    ):
+        return "undetermined"
+    return None
 
 
 class ExecutionResult(str, Enum):
@@ -279,13 +428,9 @@ class GenLayerTransaction(TypedDict, total=False):
     # lastLeader: testnet
     last_leader: Optional[Address]
 
-    # status: localnet: TransactionStatus // status: testnet: number
-    status: Optional[TransactionStatus]
-    status_name: Optional[TransactionStatus]
-    stored_status: Optional[str]
-    stored_status_name: Optional[TransactionStatus]
-    resolution_action: Optional[ResolutionAction]
-    can_finalize: Optional[bool]
+    # Stable consumer lifecycle. Raw protocol values are returned only by
+    # GenLayerClient.get_transaction_lifecycle().
+    lifecycle: TransactionLifecycle
 
     # hash: localnet // txId: testnet// hash: localnet // txId: testnet
     hash: Optional[HexStr]
@@ -473,6 +618,11 @@ class GenLayerRawTransaction:
         )
 
     def decode(self) -> GenLayerTransaction:
+        lifecycle = transaction_lifecycle_from_protocol_status(self.status)
+        if lifecycle["state"] == "finalized":
+            outcome = transaction_outcome_from_protocol_result(self.result)
+            if outcome is not None:
+                lifecycle["outcome"] = outcome
         return {
             "current_timestamp": str(self.current_timestamp),
             "sender": self.sender,
@@ -496,13 +646,12 @@ class GenLayerRawTransaction:
             "queue_position": str(self.queue_position),
             "activator": self.activator,
             "last_leader": self.last_leader,
-            "status": str(self.status),
+            "lifecycle": lifecycle,
             "tx_id": self.tx_id,
             "read_state_block_range": self.read_state_block_range.decode(),
             "num_of_rounds": str(self.num_of_rounds),
             "last_round": self.last_round.decode(),
             "tx_data_decoded": self._decode_input_data(),
-            "status_name": TRANSACTION_STATUS_NUMBER_TO_NAME[str(self.status)].value,
             "result_name": TRANSACTION_RESULT_NUMBER_TO_NAME[str(self.result)].value,
             "tx_execution_result": self.tx_execution_result,
             "tx_execution_result_name": EXECUTION_RESULT_NUMBER_TO_NAME.get(

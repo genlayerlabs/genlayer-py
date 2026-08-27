@@ -25,16 +25,12 @@ def test_create_client_endpoint_does_not_mutate_caller_chain_config():
     with patch.object(GenLayerClient, "initialize_consensus_smart_contract"):
         client = create_client(chain=chain, endpoint="http://override.invalid:8545")
 
-    assert client.chain.rpc_urls["default"]["http"] == [
-        "http://override.invalid:8545"
-    ]
+    assert client.chain.rpc_urls["default"]["http"] == ["http://override.invalid:8545"]
     assert chain.rpc_urls["default"]["http"] == original_endpoints
 
 
 def test_read_contract_uses_explicit_account_when_client_has_no_default():
-    account = SimpleNamespace(
-        address="0x1111111111111111111111111111111111111111"
-    )
+    account = SimpleNamespace(address="0x1111111111111111111111111111111111111111")
     provider = Mock()
     provider.make_request.return_value = {"result": ""}
     client = SimpleNamespace(local_account=None, provider=provider)
@@ -62,7 +58,7 @@ def test_calldata_decoder_rejects_truncated_length_prefixed_bytes():
 
 def test_is_successful_recognizes_localnet_consensus_receipt():
     transaction = {
-        "status_name": "FINALIZED",
+        "lifecycle": {"state": "finalized"},
         "consensus_data": {
             "leader_receipt": [
                 {

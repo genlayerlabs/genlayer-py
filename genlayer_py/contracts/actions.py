@@ -872,7 +872,11 @@ def estimate_fees_distribution(
     options: Optional[FeeEstimateOptions] = None,
 ) -> FeesDistribution:
     policy = get_current_fee_policy(self)
-    return build_estimated_fees_distribution(options, policy)
+    return build_estimated_fees_distribution(
+        options,
+        policy,
+        self.chain.default_consensus_max_rotations,
+    )
 
 
 def estimate_transaction_fees(
@@ -888,7 +892,11 @@ def _estimate_transaction_fees_with_policy(
     options: Optional[FeeEstimateOptions],
     policy: FeePolicyQuote,
 ) -> TransactionFeeEstimate:
-    distribution = build_estimated_fees_distribution(options, policy)
+    distribution = build_estimated_fees_distribution(
+        options,
+        policy,
+        self.chain.default_consensus_max_rotations,
+    )
 
     if self.chain.fee_manager_contract and self.chain.fee_manager_contract.get(
         "address"

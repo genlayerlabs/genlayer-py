@@ -1104,6 +1104,7 @@ def test_build_estimated_fees_distribution_adds_caps_and_message_bucket():
             ]
         },
         policy,
+        default_consensus_max_rotations=3,
     )
 
     assert distribution["leaderTimeunitsAllocation"] == 100
@@ -1115,6 +1116,42 @@ def test_build_estimated_fees_distribution_adds_caps_and_message_bucket():
     assert distribution["maxPriceGenPerTimeUnit"] == 12
     assert distribution["storageFeeMaxGasPrice"] == 24
     assert distribution["receiptFeeMaxGasPrice"] == 36
+
+
+def test_build_estimated_fees_distribution_funds_each_round_with_default_rotations():
+    policy = {
+        "enabled": True,
+        "genPerTimeUnit": 10,
+        "storageUnitPrice": 20,
+        "receiptGasPrice": 30,
+        "executionBudgetFloor": 1_234,
+    }
+
+    distribution = build_estimated_fees_distribution(
+        {"appealRounds": 2},
+        policy,
+        default_consensus_max_rotations=3,
+    )
+
+    assert distribution["rotations"] == [3, 3, 3]
+
+
+def test_build_estimated_fees_distribution_preserves_explicit_zero_rotations():
+    policy = {
+        "enabled": True,
+        "genPerTimeUnit": 10,
+        "storageUnitPrice": 20,
+        "receiptGasPrice": 30,
+        "executionBudgetFloor": 1_234,
+    }
+
+    distribution = build_estimated_fees_distribution(
+        {"rotations": [0]},
+        policy,
+        default_consensus_max_rotations=3,
+    )
+
+    assert distribution["rotations"] == [0]
 
 
 def test_build_estimated_fees_distribution_preserves_explicit_execution_budget_with_messages():
@@ -1139,6 +1176,7 @@ def test_build_estimated_fees_distribution_preserves_explicit_execution_budget_w
             ],
         },
         policy,
+        default_consensus_max_rotations=3,
     )
 
     assert distribution["executionBudgetPerRound"] == 42
@@ -1168,6 +1206,7 @@ def test_estimate_transaction_fees_uses_studio_fee_config():
         chain=SimpleNamespace(
             fee_manager_contract=None,
             default_number_of_initial_validators=5,
+            default_consensus_max_rotations=3,
         ),
         provider=SimpleNamespace(
             make_request=Mock(
@@ -1201,7 +1240,8 @@ def test_estimate_transaction_fees_uses_studio_fee_config():
         }
     )
     assert estimate["distribution"]["executionBudgetPerRound"] == 3_000_000_000
-    assert estimate["feeValue"] == 3_000_011_000
+    assert estimate["distribution"]["rotations"] == [3]
+    assert estimate["feeValue"] == 12_000_044_000
 
 
 def test_extract_studio_fee_policy_fallback_includes_message_reveal_leg():
@@ -1234,6 +1274,7 @@ def test_estimate_transaction_fees_derives_message_bucket_from_allocations():
         chain=SimpleNamespace(
             fee_manager_contract=None,
             default_number_of_initial_validators=5,
+            default_consensus_max_rotations=3,
         ),
         provider=SimpleNamespace(
             make_request=Mock(
@@ -1283,7 +1324,8 @@ def test_estimate_transaction_fees_derives_message_bucket_from_allocations():
     assert estimate["distribution"]["executionBudgetPerRound"] == (
         3_000_000_000 + 30 * DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM
     )
-    assert estimate["feeValue"] == 3_000_311_080
+    assert estimate["distribution"]["rotations"] == [3]
+    assert estimate["feeValue"] == 12_001_244_080
     assert estimate["messageAllocations"] == message_allocations
     assert estimate["message_allocations"] == message_allocations
 
@@ -1293,6 +1335,7 @@ def test_estimate_transaction_fees_from_simulation_builds_trusted_preset():
         chain=SimpleNamespace(
             fee_manager_contract=None,
             default_number_of_initial_validators=5,
+            default_consensus_max_rotations=3,
         ),
         provider=SimpleNamespace(
             make_request=Mock(
@@ -1357,7 +1400,8 @@ def test_estimate_transaction_fees_from_simulation_builds_trusted_preset():
     }
     assert estimate["distribution"]["executionBudgetPerRound"] == 602_117
     assert estimate["distribution"]["totalMessageFees"] == 6
-    assert estimate["feeValue"] == 613_123
+    assert estimate["distribution"]["rotations"] == [3]
+    assert estimate["feeValue"] == 2_452_474
 
 
 def test_simulation_execution_budget_uses_floor_without_default_gas_clobber():
@@ -1365,6 +1409,7 @@ def test_simulation_execution_budget_uses_floor_without_default_gas_clobber():
         chain=SimpleNamespace(
             fee_manager_contract=None,
             default_number_of_initial_validators=5,
+            default_consensus_max_rotations=3,
         ),
         provider=SimpleNamespace(
             make_request=Mock(
@@ -1513,7 +1558,8 @@ def test_estimate_transaction_fees_for_write_uses_studio_estimate_rpc():
     )
     request_params = sim_call.kwargs["params"][0]
     assert request_params["value"] == hex(7)
-    assert request_params["fees"]["feeValue"] == 100_021_110
+    assert request_params["fees"]["feeValue"] == 400_084_110
+    assert request_params["fees"]["distribution"]["rotations"] == [3]
     assert request_params["fees"]["distribution"]["totalMessageFees"] == 110
     assert request_params["fees"]["messageAllocations"][0]["budget"] == 110
     assert (
@@ -1527,6 +1573,7 @@ def test_estimate_transaction_fees_for_write_uses_studio_estimate_rpc():
     assert estimate["simulation"]["feeReport"]["totalEstimatedFee"] == "501664"
     assert estimate["distribution"]["executionBudgetPerRound"] == 100_000_000
     assert estimate["distribution"]["totalMessageFees"] == 110
+    assert estimate["distribution"]["rotations"] == [0]
     assert estimate["messageAllocations"][0]["budget"] == 110
     assert estimate["feeValue"] == 100_011_110
 
@@ -1542,6 +1589,7 @@ def test_estimate_transaction_fees_from_simulation_preserves_mode2_allocations()
         chain=SimpleNamespace(
             fee_manager_contract=None,
             default_number_of_initial_validators=5,
+            default_consensus_max_rotations=3,
         ),
         provider=SimpleNamespace(
             make_request=Mock(
@@ -1585,7 +1633,8 @@ def test_estimate_transaction_fees_from_simulation_preserves_mode2_allocations()
     assert estimate["messageAllocations"][0]["budget"] == 50
     assert estimate["messageAllocations"][0]["feeParams"] == fee_params
     assert estimate["distribution"]["totalMessageFees"] == 50
-    assert estimate["feeValue"] == 11_050
+    assert estimate["distribution"]["rotations"] == [3]
+    assert estimate["feeValue"] == 44_050
 
 
 def test_write_contract_refreshes_consensus_abi_before_add_transaction_encoding(

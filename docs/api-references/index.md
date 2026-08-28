@@ -117,7 +117,6 @@ estimate = client.estimate_transaction_fees(
     {
         "leaderTimeunitsAllocation": 100,
         "validatorTimeunitsAllocation": 200,
-        "rotations": [0],
     }
 )
 
@@ -132,6 +131,11 @@ tx_hash = client.write_contract(
     },
 )
 ```
+
+When `rotations` is omitted, estimates fund
+`chain.default_consensus_max_rotations` for the initial round and every enabled
+appeal round. Pass an explicit list, including `[0]`, when the application wants
+to fund a different number of rotations.
 
 If `fees["distribution"]` is provided without `feeValue`, the SDK derives the
 fee deposit from FeeManager on network backends, or from `sim_getFeeConfig` on

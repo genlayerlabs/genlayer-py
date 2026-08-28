@@ -9,6 +9,8 @@ from genlayer_py.consensus.abi import (
     CONSENSUS_DATA_ABI,
     CONSENSUS_DATA_ABI_V06,
     CONSENSUS_DATA_BIG_ROUNDS_ABI,
+    CONSENSUS_MAIN_ABI,
+    CONSENSUS_MAIN_ABI_V06,
     ROUNDS_STORAGE_READ_ABI,
     TRANSACTION_MANAGER_READ_ABI,
 )
@@ -388,6 +390,65 @@ def test_packaged_consensus_abis_expose_only_the_train_lifecycle_signature():
         for entry in CONSENSUS_DATA_BIG_ROUNDS_ABI
         if entry.get("type") == "function"
     }
+
+    for abi in (CONSENSUS_MAIN_ABI, CONSENSUS_MAIN_ABI_V06):
+        functions = {
+            entry["name"]: entry for entry in abi if entry.get("type") == "function"
+        }
+        assert [item["type"] for item in functions["addTransaction"]["inputs"]] == [
+            "tuple"
+        ]
+        assert [item["type"] for item in functions["deploySalted"]["inputs"]] == [
+            "tuple"
+        ]
+        assert [item["type"] for item in functions["topUpFees"]["inputs"]] == [
+            "bytes32",
+            "tuple",
+        ]
+        assert [
+            item["type"] for item in functions["topUpAndSubmitAppeal"]["inputs"]
+        ] == ["bytes32", "uint256", "tuple"]
+        assert [item["type"] for item in functions["submitAppeal"]["inputs"]] == [
+            "bytes32",
+            "uint256",
+        ]
+        assert [
+            item["type"] for item in functions["finalizeTransaction"]["inputs"]
+        ] == ["bytes32", "uint256"]
+        add_params = functions["addTransaction"]["inputs"][0]["components"]
+        assert [item["type"] for item in add_params] == [
+            "address",
+            "address",
+            "uint256",
+            "uint256",
+            "uint256",
+            "uint256",
+            "uint256",
+            "tuple",
+            "bytes",
+            "tuple[]",
+        ]
+        assert [item["type"] for item in add_params[7]["components"]] == [
+            "uint256",
+            "uint256",
+            "uint256",
+            "uint256",
+            "uint256",
+            "uint256",
+            "uint256[]",
+            "uint256",
+            "uint256",
+            "uint256",
+        ]
+        assert [item["type"] for item in add_params[9]["components"]] == [
+            "uint8",
+            "bool",
+            "uint256",
+            "address",
+            "bytes32",
+            "uint256",
+            "bytes",
+        ]
     assert big_round_functions == {
         "getStoredTransactionDataLight",
         "getRoundValidatorsPaged",

@@ -11,6 +11,32 @@
 	},
 	{
 		"inputs": [],
+		"name": "CanNotAppeal",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "attemptedConsumption",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "budget",
+				"type": "uint256"
+			}
+		],
+		"name": "ExecutionBudgetExceeded",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "InsufficientFees",
+		"type": "error"
+	},
+	{
+		"inputs": [],
 		"name": "InvalidDeploymentWithSalt",
 		"type": "error"
 	},
@@ -26,7 +52,12 @@
 	},
 	{
 		"inputs": [],
-		"name": "InvalidVote",
+		"name": "LegacyProposeReceiptRetired",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "MessageFeesTotalMustBeNonZero",
 		"type": "error"
 	},
 	{
@@ -63,7 +94,7 @@
 	},
 	{
 		"inputs": [],
-		"name": "TransactionCanNotBeFinalized",
+		"name": "RollupBudgetBelowFloor",
 		"type": "error"
 	},
 	{
@@ -140,6 +171,31 @@
 			{
 				"indexed": true,
 				"internalType": "address",
+				"name": "appealer",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "AppealBondReturned",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "bytes32",
+				"name": "txId",
+				"type": "bytes32"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
 				"name": "appellant",
 				"type": "address"
 			},
@@ -157,6 +213,37 @@
 			}
 		],
 		"name": "AppealStarted",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "bytes32",
+				"name": "txId",
+				"type": "bytes32"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "appealer",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "bondReturned",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "profitUnpaid",
+				"type": "uint256"
+			}
+		],
+		"name": "AppealerProfitPayoutFailed",
 		"type": "event"
 	},
 	{
@@ -263,6 +350,31 @@
 			}
 		],
 		"name": "CreatedTransaction",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "bytes32",
+				"name": "txId",
+				"type": "bytes32"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "sender",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "FeesRefunded",
 		"type": "event"
 	},
 	{
@@ -427,6 +539,43 @@
 			}
 		],
 		"name": "ProcessIdlenessAccepted",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "bytes32",
+				"name": "txId",
+				"type": "bytes32"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "receiptFee",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "gasPrice",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "estimatedGas",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "receiptBytes",
+				"type": "uint256"
+			}
+		],
+		"name": "ReceiptFeeEstimated",
 		"type": "event"
 	},
 	{
@@ -649,6 +798,37 @@
 				"type": "bytes32"
 			},
 			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "chunkIndex",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "address[]",
+				"name": "recipients",
+				"type": "address[]"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256[]",
+				"name": "amounts",
+				"type": "uint256[]"
+			}
+		],
+		"name": "UnifiedFeesDistributed",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "bytes32",
+				"name": "txId",
+				"type": "bytes32"
+			},
+			{
 				"indexed": true,
 				"internalType": "address",
 				"name": "recipient",
@@ -859,34 +1039,150 @@
 	{
 		"inputs": [
 			{
-				"internalType": "address",
-				"name": "_sender",
-				"type": "address"
-			},
-			{
-				"internalType": "address",
-				"name": "_recipient",
-				"type": "address"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_numOfInitialValidators",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_maxRotations",
-				"type": "uint256"
-			},
-			{
-				"internalType": "bytes",
-				"name": "_calldata",
-				"type": "bytes"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_validUntil",
-				"type": "uint256"
+				"components": [
+					{
+						"internalType": "address",
+						"name": "sender",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "recipient",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "numOfInitialValidators",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "maxRotations",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "validUntil",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "saltNonce",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "userValue",
+						"type": "uint256"
+					},
+					{
+						"components": [
+							{
+								"internalType": "uint256",
+								"name": "leaderTimeunitsAllocation",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "validatorTimeunitsAllocation",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "appealRounds",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "executionBudgetPerRound",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "executionConsumed",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "totalMessageFees",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256[]",
+								"name": "rotations",
+								"type": "uint256[]"
+							},
+							{
+								"internalType": "uint256",
+								"name": "maxPriceGenPerTimeUnit",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "storageFeeMaxGasPrice",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "receiptFeeMaxGasPrice",
+								"type": "uint256"
+							}
+						],
+						"internalType": "struct IFeeManager.FeesDistribution",
+						"name": "feesDistribution",
+						"type": "tuple"
+					},
+					{
+						"internalType": "bytes",
+						"name": "txCalldata",
+						"type": "bytes"
+					},
+					{
+						"components": [
+							{
+								"internalType": "enum IMessages.MessageType",
+								"name": "messageType",
+								"type": "uint8"
+							},
+							{
+								"internalType": "bool",
+								"name": "onAcceptance",
+								"type": "bool"
+							},
+							{
+								"internalType": "uint256",
+								"name": "parentIndex",
+								"type": "uint256"
+							},
+							{
+								"internalType": "address",
+								"name": "recipient",
+								"type": "address"
+							},
+							{
+								"internalType": "bytes32",
+								"name": "callKey",
+								"type": "bytes32"
+							},
+							{
+								"internalType": "uint256",
+								"name": "budget",
+								"type": "uint256"
+							},
+							{
+								"internalType": "bytes",
+								"name": "feeParams",
+								"type": "bytes"
+							}
+						],
+						"internalType": "struct IMessages.MessageFeeAllocationNode[]",
+						"name": "messageAllocations",
+						"type": "tuple[]"
+					}
+				],
+				"internalType": "struct IConsensusMainWithFees.AddTransactionParams",
+				"name": "_params",
+				"type": "tuple"
 			}
 		],
 		"name": "addTransaction",
@@ -951,39 +1247,184 @@
 	{
 		"inputs": [
 			{
-				"internalType": "address",
-				"name": "_sender",
-				"type": "address"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_numOfInitialValidators",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_maxRotations",
-				"type": "uint256"
-			},
-			{
-				"internalType": "bytes",
-				"name": "_calldata",
-				"type": "bytes"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_saltNonce",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_validUntil",
-				"type": "uint256"
+				"components": [
+					{
+						"internalType": "address",
+						"name": "sender",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "recipient",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "numOfInitialValidators",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "maxRotations",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "validUntil",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "saltNonce",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "userValue",
+						"type": "uint256"
+					},
+					{
+						"components": [
+							{
+								"internalType": "uint256",
+								"name": "leaderTimeunitsAllocation",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "validatorTimeunitsAllocation",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "appealRounds",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "executionBudgetPerRound",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "executionConsumed",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "totalMessageFees",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256[]",
+								"name": "rotations",
+								"type": "uint256[]"
+							},
+							{
+								"internalType": "uint256",
+								"name": "maxPriceGenPerTimeUnit",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "storageFeeMaxGasPrice",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "receiptFeeMaxGasPrice",
+								"type": "uint256"
+							}
+						],
+						"internalType": "struct IFeeManager.FeesDistribution",
+						"name": "feesDistribution",
+						"type": "tuple"
+					},
+					{
+						"internalType": "bytes",
+						"name": "txCalldata",
+						"type": "bytes"
+					},
+					{
+						"components": [
+							{
+								"internalType": "enum IMessages.MessageType",
+								"name": "messageType",
+								"type": "uint8"
+							},
+							{
+								"internalType": "bool",
+								"name": "onAcceptance",
+								"type": "bool"
+							},
+							{
+								"internalType": "uint256",
+								"name": "parentIndex",
+								"type": "uint256"
+							},
+							{
+								"internalType": "address",
+								"name": "recipient",
+								"type": "address"
+							},
+							{
+								"internalType": "bytes32",
+								"name": "callKey",
+								"type": "bytes32"
+							},
+							{
+								"internalType": "uint256",
+								"name": "budget",
+								"type": "uint256"
+							},
+							{
+								"internalType": "bytes",
+								"name": "feeParams",
+								"type": "bytes"
+							}
+						],
+						"internalType": "struct IMessages.MessageFeeAllocationNode[]",
+						"name": "messageAllocations",
+						"type": "tuple[]"
+					}
+				],
+				"internalType": "struct IConsensusMainWithFees.AddTransactionParams",
+				"name": "_params",
+				"type": "tuple"
 			}
 		],
 		"name": "deploySalted",
 		"outputs": [],
 		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "_txId",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_expectedDecisionId",
+				"type": "uint256"
+			}
+		],
+		"name": "estimateAppealCharge",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "bond",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "funding",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
 		"type": "function"
 	},
 	{
@@ -1323,7 +1764,7 @@
 						"type": "tuple[]"
 					}
 				],
-				"internalType": "struct IConsensusMain.LeaderRevealVoteParams",
+				"internalType": "struct IConsensusMainWithFees.LeaderRevealVoteParams",
 				"name": "leaderRevealVoteParams",
 				"type": "tuple"
 			}
@@ -1394,6 +1835,87 @@
 		"inputs": [
 			{
 				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			},
+			{
+				"internalType": "bytes",
+				"name": "",
+				"type": "bytes"
+			},
+			{
+				"internalType": "bytes",
+				"name": "",
+				"type": "bytes"
+			}
+		],
+		"name": "proposeReceipt",
+		"outputs": [],
+		"stateMutability": "pure",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "_txId",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "_txExecutionHash",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_processingBlock",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_storageFeeUsed",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bytes",
+				"name": "_eqBlocksOutputs",
+				"type": "bytes"
+			},
+			{
+				"internalType": "bytes",
+				"name": "_vrfProof",
+				"type": "bytes"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "_expectedAttemptId",
+				"type": "bytes32"
+			}
+		],
+		"name": "proposeReceipt",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
 				"name": "_txId",
 				"type": "bytes32"
 			},
@@ -1424,6 +1946,54 @@
 			}
 		],
 		"name": "proposeReceipt",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "_txId",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "_txExecutionHash",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_processingBlock",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_storageFeeUsed",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bytes",
+				"name": "_eqBlocksOutputs",
+				"type": "bytes"
+			},
+			{
+				"internalType": "bytes",
+				"name": "_vrfProof",
+				"type": "bytes"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_reportedMessageFeesTotal",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "_expectedAttemptId",
+				"type": "bytes32"
+			}
+		],
+		"name": "proposeReceiptWithMessages",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -1574,6 +2144,175 @@
 			}
 		],
 		"name": "submitAppeal",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "_txId",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_expectedDecisionId",
+				"type": "uint256"
+			}
+		],
+		"name": "topUpAndProgressFinalization",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "finalized",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "_txId",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_expectedDecisionId",
+				"type": "uint256"
+			},
+			{
+				"components": [
+					{
+						"internalType": "uint256",
+						"name": "leaderTimeunitsAllocation",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "validatorTimeunitsAllocation",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "appealRounds",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "executionBudgetPerRound",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "executionConsumed",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "totalMessageFees",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "rotations",
+						"type": "uint256[]"
+					},
+					{
+						"internalType": "uint256",
+						"name": "maxPriceGenPerTimeUnit",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "storageFeeMaxGasPrice",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "receiptFeeMaxGasPrice",
+						"type": "uint256"
+					}
+				],
+				"internalType": "struct IFeeManager.FeesDistribution",
+				"name": "",
+				"type": "tuple"
+			}
+		],
+		"name": "topUpAndSubmitAppeal",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "_txId",
+				"type": "bytes32"
+			},
+			{
+				"components": [
+					{
+						"internalType": "uint256",
+						"name": "leaderTimeunitsAllocation",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "validatorTimeunitsAllocation",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "appealRounds",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "executionBudgetPerRound",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "executionConsumed",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "totalMessageFees",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "rotations",
+						"type": "uint256[]"
+					},
+					{
+						"internalType": "uint256",
+						"name": "maxPriceGenPerTimeUnit",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "storageFeeMaxGasPrice",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "receiptFeeMaxGasPrice",
+						"type": "uint256"
+					}
+				],
+				"internalType": "struct IFeeManager.FeesDistribution",
+				"name": "_feesDistribution",
+				"type": "tuple"
+			}
+		],
+		"name": "topUpFees",
 		"outputs": [],
 		"stateMutability": "payable",
 		"type": "function"

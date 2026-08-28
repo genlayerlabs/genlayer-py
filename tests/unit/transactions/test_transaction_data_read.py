@@ -1,7 +1,7 @@
 """Train-only transaction reads use bounded surfaces at one block snapshot."""
 
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import genlayer_py.transactions.actions as transaction_actions
 import pytest
@@ -368,6 +368,77 @@ def test_local_transaction_lifecycle_rejects_code_name_drift():
 
     with pytest.raises(transaction_actions.GenLayerError, match="storedStatus"):
         transaction_actions.get_transaction_lifecycle(client, TX_HASH)
+
+
+def test_local_transaction_lifecycle_uses_stored_status_when_rpc_is_absent():
+    provider = Mock()
+    provider.make_request.side_effect = [
+        {"error": {"code": -32601, "message": "Method not found"}},
+        {"result": {"status": "ACCEPTED"}},
+    ]
+    client = SimpleNamespace(
+        chain=SimpleNamespace(id=localnet.id),
+        provider=provider,
+    )
+
+    result = transaction_actions.get_transaction_lifecycle(
+        client, bytes.fromhex("ab" * 32), timestamp=999
+    )
+
+    assert result == {
+        "stored_status": 5,
+        "stored_status_name": ProtocolTransactionStatus.ACCEPTED,
+        "projected_status": 5,
+        "projected_status_name": ProtocolTransactionStatus.ACCEPTED,
+        "resolution_action": 0,
+        "resolution_action_name": ResolutionAction.NO_OP,
+        "resolution_source": 0,
+        "resolution_source_name": ResolutionSource.UNSPECIFIED,
+        "decision_id": None,
+        "decision_active": False,
+        "evaluated_at": 999,
+    }
+    assert provider.make_request.call_args_list == [
+        call(
+            method="gen_getTransactionLifecycle",
+            params=[{"txId": TX_HASH, "timestamp": 999}],
+        ),
+        call(method="eth_getTransactionByHash", params=[TX_HASH]),
+    ]
+
+
+def test_local_transaction_lifecycle_maps_activated_to_pending():
+    provider = Mock()
+    provider.make_request.side_effect = [
+        {"error": {"code": -32601, "message": "Method not found"}},
+        {"result": {"status": "ACTIVATED"}},
+    ]
+    client = SimpleNamespace(
+        chain=SimpleNamespace(id=localnet.id),
+        provider=provider,
+    )
+
+    result = transaction_actions.get_transaction_lifecycle(client, TX_HASH)
+
+    assert result["stored_status_name"] == ProtocolTransactionStatus.PENDING
+    assert result["projected_status_name"] == ProtocolTransactionStatus.PENDING
+    assert result["decision_active"] is False
+
+
+def test_local_transaction_lifecycle_does_not_hide_real_rpc_failures():
+    provider = Mock()
+    provider.make_request.return_value = {
+        "error": {"code": -32000, "message": "execution reverted"}
+    }
+    client = SimpleNamespace(
+        chain=SimpleNamespace(id=localnet.id),
+        provider=provider,
+    )
+
+    with pytest.raises(transaction_actions.GenLayerError, match="execution reverted"):
+        transaction_actions.get_transaction_lifecycle(client, TX_HASH)
+
+    provider.make_request.assert_called_once()
 
 
 def test_packaged_consensus_abis_expose_only_the_train_lifecycle_signature():

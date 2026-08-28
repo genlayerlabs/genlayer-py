@@ -274,7 +274,9 @@ if client.can_appeal(tx_hash, expected_decision_id=quote["decision_id"]):
 transaction hash; on Studio/localnet it is the target GenLayer transaction id.
 Appeal commands are guarded by the quoted decision id so a stale request cannot
 bind to a newer decision. If the id and value are omitted, the SDK refreshes
-this lightweight quote automatically.
+this lightweight quote automatically. This applies to deployed Consensus.
+Current Studio uses its native decision-free appeal methods: pass ``value``
+explicitly and omit ``expected_decision_id``.
 
 ### Checking execution results
 
@@ -327,6 +329,8 @@ print(raw_lifecycle["projected_status_name"])
 print(raw_lifecycle["resolution_action_name"])
 print(raw_lifecycle["resolution_source_name"])
 # `resolution_action_name == "Finalize"` is the authoritative readiness verdict.
+# On current Studio without the advanced lifecycle RPC, only stored status is
+# provable; projection repeats it and resolution/decision fields stay inactive.
 
 # The train stores the execution hash, not the old receipt bytes.
 print(tx["tx_execution_hash"])

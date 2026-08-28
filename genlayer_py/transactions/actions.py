@@ -14,6 +14,7 @@ from genlayer_py.types import (
     EXECUTION_RESULT_NUMBER_TO_NAME,
 )
 from genlayer_py.types.transactions import (
+    PROTOCOL_TRANSACTION_STATUS_NAME_TO_NUMBER,
     PROTOCOL_TRANSACTION_STATUS_NUMBER_TO_NAME,
     RESOLUTION_ACTION_NUMBER_TO_NAME,
     RESOLUTION_SOURCE_NUMBER_TO_NAME,
@@ -543,6 +544,89 @@ def _decode_rpc_transaction_lifecycle(result: Any) -> ProtocolTransactionLifecyc
     }
 
 
+_METHOD_NOT_FOUND_CODE = -32601
+_METHOD_NOT_FOUND_MESSAGES = (
+    "method not found",
+    "does not exist",
+    "method not supported",
+)
+
+
+def _is_method_not_found_error(error: Any) -> bool:
+    """Recognize only an explicit JSON-RPC missing-method response."""
+    seen = set()
+    current = error
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, dict):
+            code = current.get("code")
+            message = current.get("message")
+            current = current.get("error") or current.get("cause")
+        else:
+            code = getattr(current, "code", None)
+            message = getattr(current, "message", None) or str(current)
+            current = getattr(current, "__cause__", None)
+        if code == _METHOD_NOT_FOUND_CODE:
+            return True
+        if isinstance(message, str) and any(
+            marker in message.lower() for marker in _METHOD_NOT_FOUND_MESSAGES
+        ):
+            return True
+    return False
+
+
+def _studio_protocol_status(value: Any) -> ProtocolTransactionStatus:
+    """Normalize the stored status exposed by the current Studio transaction."""
+    if value == "ACTIVATED":
+        return ProtocolTransactionStatus.PENDING
+    if isinstance(value, ProtocolTransactionStatus):
+        return value
+    if isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
+        return PROTOCOL_TRANSACTION_STATUS_NUMBER_TO_NAME[str(value)]
+    if isinstance(value, str) and value in ProtocolTransactionStatus.__members__:
+        return ProtocolTransactionStatus[value]
+    return ProtocolTransactionStatus(value)
+
+
+def _studio_transaction_lifecycle_fallback(
+    self: GenLayerClient,
+    transaction_hash: _Hash32,
+    timestamp: Optional[int],
+    cause: Any,
+) -> ProtocolTransactionLifecycle:
+    """Expose only the lifecycle facts current Studio can prove."""
+    try:
+        response = self.provider.make_request(
+            method="eth_getTransactionByHash", params=[transaction_hash]
+        )
+        transaction = response.get("result") if isinstance(response, dict) else None
+        if not isinstance(transaction, dict):
+            raise ValueError("missing transaction")
+        status_name = _studio_protocol_status(transaction.get("status"))
+        status_code = int(PROTOCOL_TRANSACTION_STATUS_NAME_TO_NUMBER[status_name])
+    except Exception as exc:
+        if isinstance(cause, BaseException):
+            raise cause
+        raise GenLayerError(
+            "gen_getTransactionLifecycle is unavailable and Studio did not return "
+            "a readable stored transaction status"
+        ) from exc
+
+    return {
+        "stored_status": status_code,
+        "stored_status_name": status_name,
+        "projected_status": status_code,
+        "projected_status_name": status_name,
+        "resolution_action": 0,
+        "resolution_action_name": RESOLUTION_ACTION_NUMBER_TO_NAME["0"],
+        "resolution_source": 0,
+        "resolution_source_name": RESOLUTION_SOURCE_NUMBER_TO_NAME["0"],
+        "decision_id": None,
+        "decision_active": False,
+        "evaluated_at": timestamp if timestamp is not None else int(time.time()),
+    }
+
+
 def get_transaction_lifecycle(
     self: GenLayerClient,
     transaction_hash: _Hash32,
@@ -555,18 +639,31 @@ def get_transaction_lifecycle(
     """
 
     if self.chain.id == localnet.id:
-        params: Dict[str, Any] = {
-            "txId": (
-                Web3.to_hex(transaction_hash)
-                if isinstance(transaction_hash, bytes)
-                else transaction_hash
-            )
-        }
+        tx_id = (
+            Web3.to_hex(transaction_hash)
+            if isinstance(transaction_hash, bytes)
+            else transaction_hash
+        )
+        params: Dict[str, Any] = {"txId": tx_id}
         if timestamp is not None:
             params["timestamp"] = timestamp
-        response = self.provider.make_request(
-            method="gen_getTransactionLifecycle", params=[params]
-        )
+        try:
+            response = self.provider.make_request(
+                method="gen_getTransactionLifecycle", params=[params]
+            )
+        except Exception as exc:
+            if _is_method_not_found_error(exc):
+                return _studio_transaction_lifecycle_fallback(
+                    self, tx_id, timestamp, exc
+                )
+            raise
+        error = response.get("error") if isinstance(response, dict) else None
+        if error is not None:
+            if _is_method_not_found_error(error):
+                return _studio_transaction_lifecycle_fallback(
+                    self, tx_id, timestamp, error
+                )
+            raise GenLayerError(f"gen_getTransactionLifecycle failed: {error}")
         return _decode_rpc_transaction_lifecycle(response.get("result"))
 
     consensus_data_contract = self.w3.eth.contract(

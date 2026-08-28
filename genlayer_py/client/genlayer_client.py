@@ -339,11 +339,11 @@ class GenLayerClient(Eth):
         value: Optional[int] = None,
         expected_decision_id: Optional[int] = None,
     ) -> HexStr:
-        """Deposits appeal funding and submits the exact active decision.
+        """Deposits appeal funding and submits an appeal.
 
-        When ``expected_decision_id`` or ``value`` is omitted, the SDK obtains
-        both from the target's authoritative appeal quote. Studio exposes the
-        quote over JSON-RPC; deployed Consensus exposes it through ConsensusData.
+        On deployed Consensus, omitted decision/value inputs are resolved from
+        the authoritative appeal quote. Current Studio requires an explicit
+        value and does not accept ``expected_decision_id``.
         """
         return top_up_and_submit_appeal(
             self=self,
@@ -423,7 +423,12 @@ class GenLayerClient(Eth):
         transaction_hash: _Hash32,
         timestamp: Optional[int] = None,
     ) -> ProtocolTransactionLifecycle:
-        """Return advanced stored/projected/action protocol lifecycle data."""
+        """Return advanced stored/projected/action protocol lifecycle data.
+
+        If current Studio does not expose the advanced RPC, only its provable
+        stored status is returned: projection repeats it, resolution is
+        NoOp/Unspecified, and decision identity is inactive.
+        """
         return get_transaction_lifecycle(
             self=self,
             transaction_hash=transaction_hash,
@@ -458,8 +463,9 @@ class GenLayerClient(Eth):
     ):
         """Appeals a consensus transaction to trigger a new round of validation.
         Returns the original transaction_id (appeals operate on the same tx).
-        Missing decision/value inputs are filled from the target's authoritative
-        latest-decision appeal quote.
+        Deployed Consensus fills missing decision/value inputs from its
+        authoritative quote. Current Studio requires an explicit value and does
+        not accept ``expected_decision_id``.
         """
         return appeal_transaction(
             self=self,
@@ -486,7 +492,10 @@ class GenLayerClient(Eth):
         transaction_id: HexStr,
         expected_decision_id: Optional[int] = None,
     ) -> bool:
-        """Checks whether the exact active decision can be appealed."""
+        """Checks whether the exact active decision can be appealed on a network.
+
+        This decision-bound read is not available on current Studio.
+        """
         return can_appeal(
             self=self,
             transaction_id=transaction_id,
@@ -494,11 +503,17 @@ class GenLayerClient(Eth):
         )
 
     def get_appeal_quote(self, transaction_id: HexStr) -> Dict[str, int]:
-        """Returns the latest decision id, appeal charges, and deadline."""
+        """Returns a network's latest decision id, appeal charges, and deadline.
+
+        Current Studio has no decision-bound quote surface.
+        """
         return get_appeal_quote(self=self, transaction_id=transaction_id)
 
     def get_appeal_charge(self, transaction_id: HexStr) -> int:
-        """Returns the full appeal payment (bond plus induced-work funding)."""
+        """Returns the full appeal payment (bond plus induced-work funding).
+
+        Current Studio has no decision-bound quote surface.
+        """
         return get_appeal_charge(self=self, transaction_id=transaction_id)
 
     def get_min_appeal_bond(self, transaction_id: HexStr) -> int:

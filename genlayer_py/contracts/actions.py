@@ -852,6 +852,9 @@ def get_current_fee_policy(self: GenLayerClient) -> FeePolicyQuote:
                 execution_budget_floor,
                 local_execution_budget_floor,
             ),
+            # Live networks quote through FeeManager.calculateRoundFees; this
+            # field is only consumed by Studio's local mirror.
+            "timeUnitOverlayBps": 0,
         }
 
     try:

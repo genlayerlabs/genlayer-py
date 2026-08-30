@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Any, Optional, TypedDict, Union
+from typing import Any, NotRequired, Optional, TypedDict, Union
 
 from eth_abi import encode as abi_encode
 from eth_typing import HexStr
@@ -110,6 +110,7 @@ class FeePolicyQuote(TypedDict):
     storageUnitPrice: int
     receiptGasPrice: int
     executionBudgetFloor: int
+    timeUnitOverlayBps: NotRequired[int]
 
 
 class FeeEstimateOptions(FeesDistributionInput, total=False):
@@ -654,6 +655,10 @@ def extract_studio_fee_policy(config: Any) -> FeePolicyQuote:
         policy.get("receiptGasPrice"),
         "policy.receiptGasPrice",
     )
+    time_unit_overlay_bps = _int_from_unknown(
+        policy.get("timeUnitOverlayBps", 0),
+        "policy.timeUnitOverlayBps",
+    )
     intrinsic_gas = _int_from_unknown(
         policy.get("intrinsicGas", DEFAULT_INTRINSIC_GAS),
         "policy.intrinsicGas",
@@ -714,6 +719,7 @@ def extract_studio_fee_policy(config: Any) -> FeePolicyQuote:
         "storageUnitPrice": storage_unit_price,
         "receiptGasPrice": receipt_gas_price,
         "executionBudgetFloor": execution_budget_floor,
+        "timeUnitOverlayBps": time_unit_overlay_bps,
     }
 
 
@@ -1214,6 +1220,16 @@ def _calculate_fee_for_round(
     )
 
 
+def _validators_per_round_safe(round_index: int) -> int:
+    return VALIDATORS_PER_ROUND[
+        min(max(0, int(round_index)), len(VALIDATORS_PER_ROUND) - 1)
+    ]
+
+
+def _successful_appeal_profit(appeal_bond: int) -> int:
+    return appeal_bond + appeal_bond // 2
+
+
 def calculate_local_round_fees(
     distribution: FeesDistribution,
     num_of_initial_validators: int,
@@ -1238,10 +1254,8 @@ def calculate_local_round_fees(
         raise ValueError("MaxPriceExceeded")
 
     start_index = _validator_index(num_of_initial_validators)
-    if start_index + distribution["appealRounds"] * 2 >= len(VALIDATORS_PER_ROUND):
-        raise ValueError("InvalidNumOfValidators")
 
-    total = _calculate_fee_for_round(
+    taxable_work = _calculate_fee_for_round(
         VALIDATORS_PER_ROUND[start_index],
         distribution["rotations"][0] + 1,
         distribution["leaderTimeunitsAllocation"],
@@ -1256,22 +1270,51 @@ def calculate_local_round_fees(
         elif offset % 2 == 1:
             rotations_this_round = 1
 
-        total += _calculate_fee_for_round(
-            VALIDATORS_PER_ROUND[start_index + offset],
+        # Consensus indexes appeal/next-normal committees by absolute round
+        # and saturates at the published ladder. Only round zero uses the
+        # caller-selected initial committee.
+        taxable_work += _calculate_fee_for_round(
+            _validators_per_round_safe(offset),
             rotations_this_round,
             distribution["leaderTimeunitsAllocation"],
             distribution["validatorTimeunitsAllocation"],
         )
 
-    if policy["genPerTimeUnit"] > 0:
-        total *= policy["genPerTimeUnit"]
+    price_cap = distribution["maxPriceGenPerTimeUnit"]
+    if price_cap > 0:
+        taxable_work *= price_cap
+
+    appeal_profit_reserve = 0
+    for appeal_ordinal in range(distribution["appealRounds"]):
+        next_normal_bond = _calculate_fee_for_round(
+            _validators_per_round_safe((appeal_ordinal + 1) * 2),
+            distribution["rotations"][appeal_ordinal + 1] + 1,
+            distribution["leaderTimeunitsAllocation"],
+            distribution["validatorTimeunitsAllocation"],
+        )
+        if price_cap > 0:
+            next_normal_bond *= price_cap
+        appeal_profit_reserve += _successful_appeal_profit(next_normal_bond)
+
+    overlay_bps = int(policy.get("timeUnitOverlayBps", 0))
+    if overlay_bps < 0 or overlay_bps >= 10_000:
+        raise ValueError("InvalidTimeUnitOverlayBps")
+    overlay = (
+        taxable_work * overlay_bps // (10_000 - overlay_bps)
+        if overlay_bps > 0
+        else 0
+    )
 
     leader_rounds = sum(
         rotations + 1
         for rotations in distribution["rotations"]
     ) + distribution["appealRounds"]
-    total += distribution["executionBudgetPerRound"] * leader_rounds
-    return total
+    return (
+        taxable_work
+        + appeal_profit_reserve
+        + overlay
+        + distribution["executionBudgetPerRound"] * leader_rounds
+    )
 
 
 def build_add_transaction_params_tuple(

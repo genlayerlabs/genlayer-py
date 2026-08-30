@@ -1201,6 +1201,33 @@ def test_calculate_local_round_fees_matches_consensus_initial_round():
     assert calculate_local_round_fees(distribution, 5, policy) == 11_000
 
 
+def test_calculate_local_round_fees_matches_cap_overlay_appeal_reserve_and_ladder():
+    distribution = create_fees_distribution(
+        {
+            "leaderTimeunitsAllocation": 100,
+            "validatorTimeunitsAllocation": 200,
+            "appealRounds": 1,
+            "rotations": [0, 0],
+            "executionBudgetPerRound": 0,
+            "maxPriceGenPerTimeUnit": 12,
+        }
+    )
+    policy = {
+        "enabled": True,
+        "genPerTimeUnit": 10,
+        "storageUnitPrice": 0,
+        "receiptGasPrice": 0,
+        "executionBudgetFloor": 0,
+        "timeUnitOverlayBps": 1_500,
+    }
+
+    # Taxable work: (5-validator round 0 + absolute rounds 1 and 2) * cap
+    # = (1100 + 1500 + 2300) * 12 = 58800.
+    # Appeal profit reserve: 1.5 * (2300 * 12) = 41400.
+    # Overlay: floor(58800 * 1500 / 8500) = 10376.
+    assert calculate_local_round_fees(distribution, 5, policy) == 110_576
+
+
 def test_estimate_transaction_fees_uses_studio_fee_config():
     client = SimpleNamespace(
         chain=SimpleNamespace(
@@ -1325,7 +1352,7 @@ def test_estimate_transaction_fees_derives_message_bucket_from_allocations():
         3_000_000_000 + 30 * DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM
     )
     assert estimate["distribution"]["rotations"] == [3]
-    assert estimate["feeValue"] == 12_001_244_080
+    assert estimate["feeValue"] == 12_001_252_880
     assert estimate["messageAllocations"] == message_allocations
     assert estimate["message_allocations"] == message_allocations
 

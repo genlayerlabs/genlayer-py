@@ -124,16 +124,18 @@ ADD_TRANSACTION_ABI_WITH_FEES = [
     }
 ]
 
-# Studio refetches its ConsensusMain ABI from the simulator RPC. Its current
-# native appeal entrypoint carries only the transaction id.
+# Studio refetches its decision-bound ConsensusMain ABI from the simulator RPC.
 STUDIO_CONSENSUS_MAIN_ABI = [
     {
         "type": "function",
         "name": "submitAppeal",
         "stateMutability": "payable",
-        "inputs": [{"name": "_txId", "type": "bytes32"}],
+        "inputs": [
+            {"name": "_txId", "type": "bytes32"},
+            {"name": "_expectedDecisionId", "type": "uint256"},
+        ],
         "outputs": [],
-    }
+    },
 ]
 
 SENDER = "0x1111111111111111111111111111111111111111"
@@ -526,12 +528,29 @@ def _forbid_train_reads(monkeypatch):
     train_read = Mock(side_effect=AssertionError("train read on a Studio chain"))
     monkeypatch.setattr(contract_actions, "_consensus_data_contract", train_read)
     monkeypatch.setattr(contract_actions, "_get_active_decision_id", train_read)
-    monkeypatch.setattr(contract_actions, "get_appeal_quote", train_read)
     return train_read
 
 
-def test_appeal_transaction_on_studio_keeps_the_native_call_shape(monkeypatch):
+def _make_studio_client():
     client = _make_client(STUDIO_CONSENSUS_MAIN_ABI)
+    client.provider.make_request = Mock(
+        return_value={
+            "result": {
+                "decisionId": "42",
+                "bond": "4000",
+                "funding": "321",
+                "appealDeadline": "999",
+            }
+        }
+    )
+    client.get_transaction_lifecycle = Mock(
+        return_value={"decision_active": True, "decision_id": 42}
+    )
+    return client
+
+
+def test_appeal_transaction_on_studio_binds_the_active_decision(monkeypatch):
+    client = _make_studio_client()
     train_read = _forbid_train_reads(monkeypatch)
     captured = {}
 
@@ -551,16 +570,20 @@ def test_appeal_transaction_on_studio_keeps_the_native_call_shape(monkeypatch):
         value=1234,
     )
 
-    selector = eth_utils.keccak(text="submitAppeal(bytes32)")[:4].hex()
+    selector = eth_utils.keccak(text="submitAppeal(bytes32,uint256)")[:4].hex()
     assert result == TX_ID
     assert captured["value"] == 1234
     assert captured["operation_name"] == "Appeal"
-    assert captured["encoded_data"] == f"0x{selector}{TX_ID[2:]}"
+    assert captured["encoded_data"].startswith(f"0x{selector}")
+    assert abi_decode(
+        ("bytes32", "uint256"),
+        Web3.to_bytes(hexstr=captured["encoded_data"][10:]),
+    ) == (Web3.to_bytes(hexstr=TX_ID), 42)
     train_read.assert_not_called()
 
 
-def test_top_up_and_submit_appeal_on_studio_keeps_the_native_call_shape(monkeypatch):
-    client = _make_client(STUDIO_CONSENSUS_MAIN_ABI)
+def test_top_up_and_submit_appeal_on_studio_binds_the_active_decision(monkeypatch):
+    client = _make_studio_client()
     train_read = _forbid_train_reads(monkeypatch)
     captured = {}
 
@@ -582,17 +605,18 @@ def test_top_up_and_submit_appeal_on_studio_keeps_the_native_call_shape(monkeypa
     )
 
     selector = eth_utils.keccak(
-        text=f"topUpAndSubmitAppeal(bytes32,{FEES_DISTRIBUTION_ABI_TYPE})"
+        text=f"topUpAndSubmitAppeal(bytes32,uint256,{FEES_DISTRIBUTION_ABI_TYPE})"
     )[:4].hex()
     assert result == TX_ID
     assert captured["value"] == 1234
     assert captured["operation_name"] == "Top up and submit appeal"
     assert captured["encoded_data"].startswith(f"0x{selector}")
-    decoded_tx_id, distribution = abi_decode(
-        ("bytes32", FEES_DISTRIBUTION_ABI_TYPE),
+    decoded_tx_id, decision_id, distribution = abi_decode(
+        ("bytes32", "uint256", FEES_DISTRIBUTION_ABI_TYPE),
         Web3.to_bytes(hexstr=captured["encoded_data"][10:]),
     )
     assert decoded_tx_id == Web3.to_bytes(hexstr=TX_ID)
+    assert decision_id == 42
     assert distribution[2] == 1
     train_read.assert_not_called()
 
@@ -605,68 +629,84 @@ def test_top_up_and_submit_appeal_on_studio_keeps_the_native_call_shape(monkeypa
         contract_actions.get_min_appeal_bond,
     ),
 )
-def test_appeal_quote_reads_on_studio_report_unavailable(action, monkeypatch):
-    client = _make_client(STUDIO_CONSENSUS_MAIN_ABI)
+def test_appeal_quote_reads_use_studio_authoritative_rpc(action, monkeypatch):
+    client = _make_studio_client()
     train_read = Mock(side_effect=AssertionError("train read on a Studio chain"))
     monkeypatch.setattr(contract_actions, "_consensus_data_contract", train_read)
 
-    with pytest.raises(GenLayerError, match="not available on current Studio"):
-        action(client, TX_ID)
+    result = action(client, TX_ID)
+    if action is contract_actions.get_appeal_quote:
+        assert result == {
+            "decision_id": 42,
+            "bond": 4_000,
+            "funding": 321,
+            "total": 4_321,
+            "appeal_deadline": 999,
+        }
+    else:
+        assert result == 4_321
 
     train_read.assert_not_called()
 
 
-def test_studio_appeals_require_an_explicit_value(monkeypatch):
-    client = _make_client(STUDIO_CONSENSUS_MAIN_ABI)
+def test_studio_appeals_auto_resolve_the_authoritative_value(monkeypatch):
+    client = _make_studio_client()
     train_read = _forbid_train_reads(monkeypatch)
-    send_consensus_call = Mock()
+    send_consensus_call = Mock(return_value="0xevmtx")
     monkeypatch.setattr(
         contract_actions,
         "_send_consensus_call",
         send_consensus_call,
     )
 
-    with pytest.raises(GenLayerError, match="pass value explicitly"):
-        contract_actions.appeal_transaction(self=client, transaction_id=TX_ID)
-    with pytest.raises(GenLayerError, match="pass value explicitly"):
-        contract_actions.top_up_and_submit_appeal(
-            self=client,
-            transaction_id=TX_ID,
-            distribution={"appealRounds": 1},
-        )
+    contract_actions.appeal_transaction(self=client, transaction_id=TX_ID)
+    contract_actions.top_up_and_submit_appeal(
+        self=client,
+        transaction_id=TX_ID,
+        distribution={"appealRounds": 1},
+    )
 
-    send_consensus_call.assert_not_called()
+    assert [call.kwargs["value"] for call in send_consensus_call.call_args_list] == [
+        4_321,
+        4_321,
+    ]
     train_read.assert_not_called()
 
 
-def test_studio_appeals_reject_the_train_decision_guard(monkeypatch):
-    client = _make_client(STUDIO_CONSENSUS_MAIN_ABI)
+def test_studio_appeals_accept_an_explicit_decision_guard(monkeypatch):
+    client = _make_studio_client()
     train_read = _forbid_train_reads(monkeypatch)
-    send_consensus_call = Mock()
+    send_consensus_call = Mock(return_value="0xevmtx")
     monkeypatch.setattr(
         contract_actions,
         "_send_consensus_call",
         send_consensus_call,
     )
 
-    with pytest.raises(GenLayerError, match="expected_decision_id is not supported"):
-        contract_actions.appeal_transaction(
-            self=client,
-            transaction_id=TX_ID,
-            value=1234,
-            expected_decision_id=42,
-        )
-    with pytest.raises(GenLayerError, match="expected_decision_id is not supported"):
-        contract_actions.top_up_and_submit_appeal(
-            self=client,
-            transaction_id=TX_ID,
-            distribution={"appealRounds": 1},
-            value=1234,
-            expected_decision_id=42,
-        )
+    contract_actions.appeal_transaction(
+        self=client,
+        transaction_id=TX_ID,
+        value=1234,
+        expected_decision_id=42,
+    )
+    contract_actions.top_up_and_submit_appeal(
+        self=client,
+        transaction_id=TX_ID,
+        distribution={"appealRounds": 1},
+        value=1234,
+        expected_decision_id=42,
+    )
 
-    send_consensus_call.assert_not_called()
+    assert send_consensus_call.call_count == 2
+    client.provider.make_request.assert_not_called()
     train_read.assert_not_called()
+
+
+def test_can_appeal_on_studio_uses_the_active_decision_quote():
+    client = _make_studio_client()
+
+    assert contract_actions.can_appeal(client, TX_ID) is True
+    client.get_transaction_lifecycle.assert_called_once_with(TX_ID)
 
 
 def test_encode_submit_appeal_still_requires_a_decision_id_on_the_train_shape():

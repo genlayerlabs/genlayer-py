@@ -3,7 +3,17 @@ import rlp
 import base64
 from genlayer_py.abi import calldata
 from enum import Enum
-from typing import Dict, Optional, Any, TypedDict, List, Tuple, Literal, Union
+from typing import (
+    Dict,
+    Optional,
+    Any,
+    TypedDict,
+    List,
+    Tuple,
+    Literal,
+    Union,
+    NotRequired,
+)
 from eth_typing import Address, HexStr
 from web3 import Web3
 from dataclasses import dataclass
@@ -11,76 +21,215 @@ from genlayer_py.utils.jsonifier import RESULT_CODES
 from genlayer_py.consensus.consensus_main import decode_tx_data
 
 
-class TransactionStatus(str, Enum):
-    """Status of a GenLayer transaction in the consensus lifecycle."""
-    UNINITIALIZED = "UNINITIALIZED"
-    PENDING = "PENDING"
-    PROPOSING = "PROPOSING"
-    COMMITTING = "COMMITTING"
-    REVEALING = "REVEALING"
-    ACCEPTED = "ACCEPTED"
-    UNDETERMINED = "UNDETERMINED"
-    FINALIZED = "FINALIZED"
-    CANCELED = "CANCELED"
-    APPEAL_REVEALING = "APPEAL_REVEALING"
-    APPEAL_COMMITTING = "APPEAL_COMMITTING"
-    READY_TO_FINALIZE = "READY_TO_FINALIZE"
-    VALIDATORS_TIMEOUT = "VALIDATORS_TIMEOUT"
-    LEADER_TIMEOUT = "LEADER_TIMEOUT"
-    LEADER_REVEALING = "LEADER_REVEALING"
+class ProtocolTransactionStatus(str, Enum):
+    """Raw transaction status stored by the consensus contracts.
+
+    This protocol enum is intentionally advanced API. Consumer-facing
+    transactions expose a small ``lifecycle`` value discriminated by ``state``
+    instead.
+    """
+
+    UNINITIALIZED = "Uninitialized"
+    PENDING = "Pending"
+    PROPOSING = "Proposing"
+    COMMITTING = "Committing"
+    REVEALING = "Revealing"
+    ACCEPTED = "Accepted"
+    UNDETERMINED = "Undetermined"
+    FINALIZED = "Finalized"
+    CANCELED = "Canceled"
+    APPEAL_REVEALING = "AppealRevealing"
+    APPEAL_COMMITTING = "AppealCommitting"
+    VALIDATORS_TIMEOUT = "ValidatorsTimeout"
+    LEADER_TIMEOUT = "LeaderTimeout"
+    LEADER_REVEALING = "LeaderRevealing"
 
 
-TRANSACTION_STATUS_NUMBER_TO_NAME = {
-    "0": TransactionStatus.UNINITIALIZED,
-    "1": TransactionStatus.PENDING,
-    "2": TransactionStatus.PROPOSING,
-    "3": TransactionStatus.COMMITTING,
-    "4": TransactionStatus.REVEALING,
-    "5": TransactionStatus.ACCEPTED,
-    "6": TransactionStatus.UNDETERMINED,
-    "7": TransactionStatus.FINALIZED,
-    "8": TransactionStatus.CANCELED,
-    "9": TransactionStatus.APPEAL_REVEALING,
-    "10": TransactionStatus.APPEAL_COMMITTING,
-    "11": TransactionStatus.READY_TO_FINALIZE,
-    "12": TransactionStatus.VALIDATORS_TIMEOUT,
-    "13": TransactionStatus.LEADER_TIMEOUT,
-    "14": TransactionStatus.LEADER_REVEALING,
+class ResolutionAction(str, Enum):
+    """Action projected by the transaction lifecycle resolution kernel."""
+
+    NO_OP = "NoOp"
+    CANCEL = "Cancel"
+    REPLACE_ACTOR = "ReplaceActor"
+    ROTATE_LEADER = "RotateLeader"
+    RESOLVE_APPEAL = "ResolveAppeal"
+    MATERIALIZE_DECISION = "MaterializeDecision"
+    FINALIZE = "Finalize"
+
+
+class ResolutionSource(str, Enum):
+    """Protocol trigger that produced a transaction resolution plan."""
+
+    UNSPECIFIED = "Unspecified"
+    ACTIVATION_INSUFFICIENT_VALIDATORS = "ActivationInsufficientValidators"
+    PROPOSAL_HANGING = "ProposalHanging"
+    LEADER_RECEIPT_TIMEOUT = "LeaderReceiptTimeout"
+    COMMIT_HANGING = "CommitHanging"
+    LEADER_REVEAL_HANGING = "LeaderRevealHanging"
+    FULL_REVEAL = "FullReveal"
+    REVEAL_DEADLINE = "RevealDeadline"
+    APPEAL_COMMIT_HANGING = "AppealCommitHanging"
+    APPEAL_FULL_REVEAL = "AppealFullReveal"
+    APPEAL_REVEAL_DEADLINE = "AppealRevealDeadline"
+    SELECTION_DEPLETED = "SelectionDepleted"
+
+
+RESOLUTION_ACTION_NUMBER_TO_NAME = {
+    "0": ResolutionAction.NO_OP,
+    "1": ResolutionAction.CANCEL,
+    "2": ResolutionAction.REPLACE_ACTOR,
+    "3": ResolutionAction.ROTATE_LEADER,
+    "4": ResolutionAction.RESOLVE_APPEAL,
+    "5": ResolutionAction.MATERIALIZE_DECISION,
+    "6": ResolutionAction.FINALIZE,
 }
 
-TRANSACTION_STATUS_NAME_TO_NUMBER = {
-    TransactionStatus.UNINITIALIZED: "0",
-    TransactionStatus.PENDING: "1",
-    TransactionStatus.PROPOSING: "2",
-    TransactionStatus.COMMITTING: "3",
-    TransactionStatus.REVEALING: "4",
-    TransactionStatus.ACCEPTED: "5",
-    TransactionStatus.UNDETERMINED: "6",
-    TransactionStatus.FINALIZED: "7",
-    TransactionStatus.CANCELED: "8",
-    TransactionStatus.APPEAL_REVEALING: "9",
-    TransactionStatus.APPEAL_COMMITTING: "10",
-    TransactionStatus.READY_TO_FINALIZE: "11",
-    TransactionStatus.VALIDATORS_TIMEOUT: "12",
-    TransactionStatus.LEADER_TIMEOUT: "13",
-    TransactionStatus.LEADER_REVEALING: "14",
+RESOLUTION_SOURCE_NUMBER_TO_NAME = {
+    str(number): source for number, source in enumerate(ResolutionSource)
 }
 
-DECIDED_STATES = [
-    TransactionStatus.ACCEPTED,
-    TransactionStatus.UNDETERMINED,
-    TransactionStatus.LEADER_TIMEOUT,
-    TransactionStatus.VALIDATORS_TIMEOUT,
-    TransactionStatus.CANCELED,
-    TransactionStatus.FINALIZED
+
+TransactionProcessingPhase = Literal[
+    "uninitialized",
+    "pending",
+    "proposing",
+    "committing",
+    "revealing",
+    "appeal_revealing",
+    "appeal_committing",
+    "leader_revealing",
+]
+TransactionDecisionOutcome = Literal[
+    "accepted", "undetermined", "validators_timeout", "leader_timeout"
 ]
 
-def is_decided_state(status: str) -> bool:
-    return status in [TRANSACTION_STATUS_NAME_TO_NUMBER[state] for state in DECIDED_STATES]
+
+class ProcessingTransactionLifecycle(TypedDict):
+    state: Literal["processing"]
+    phase: TransactionProcessingPhase
+
+
+class DecidedTransactionLifecycle(TypedDict):
+    state: Literal["decided"]
+    outcome: TransactionDecisionOutcome
+
+
+class FinalizedTransactionLifecycle(TypedDict):
+    state: Literal["finalized"]
+    outcome: NotRequired[TransactionDecisionOutcome]
+
+
+class CanceledTransactionLifecycle(TypedDict):
+    state: Literal["canceled"]
+
+
+TransactionLifecycle = Union[
+    ProcessingTransactionLifecycle,
+    DecidedTransactionLifecycle,
+    FinalizedTransactionLifecycle,
+    CanceledTransactionLifecycle,
+]
+
+
+class ProtocolTransactionLifecycle(TypedDict):
+    """Advanced resolution-kernel view for one fixed block snapshot."""
+
+    stored_status: int
+    stored_status_name: ProtocolTransactionStatus
+    projected_status: int
+    projected_status_name: ProtocolTransactionStatus
+    resolution_action: int
+    resolution_action_name: ResolutionAction
+    resolution_source: int
+    resolution_source_name: ResolutionSource
+    decision_id: Optional[str]
+    decision_active: bool
+    evaluated_at: int
+
+
+# Current train protocol ordinals. Finalization readiness is a resolution
+# verdict, not a stored or projected transaction status.
+PROTOCOL_TRANSACTION_STATUS_NUMBER_TO_NAME = {
+    "0": ProtocolTransactionStatus.UNINITIALIZED,
+    "1": ProtocolTransactionStatus.PENDING,
+    "2": ProtocolTransactionStatus.PROPOSING,
+    "3": ProtocolTransactionStatus.COMMITTING,
+    "4": ProtocolTransactionStatus.REVEALING,
+    "5": ProtocolTransactionStatus.ACCEPTED,
+    "6": ProtocolTransactionStatus.UNDETERMINED,
+    "7": ProtocolTransactionStatus.FINALIZED,
+    "8": ProtocolTransactionStatus.CANCELED,
+    "9": ProtocolTransactionStatus.APPEAL_REVEALING,
+    "10": ProtocolTransactionStatus.APPEAL_COMMITTING,
+    "11": ProtocolTransactionStatus.VALIDATORS_TIMEOUT,
+    "12": ProtocolTransactionStatus.LEADER_TIMEOUT,
+    "13": ProtocolTransactionStatus.LEADER_REVEALING,
+}
+
+PROTOCOL_TRANSACTION_STATUS_NAME_TO_NUMBER = {
+    status: str(number) for number, status in enumerate(ProtocolTransactionStatus)
+}
+
+_PROCESSING_PHASE_BY_PROTOCOL_STATUS: Dict[
+    ProtocolTransactionStatus, TransactionProcessingPhase
+] = {
+    ProtocolTransactionStatus.UNINITIALIZED: "uninitialized",
+    ProtocolTransactionStatus.PENDING: "pending",
+    ProtocolTransactionStatus.PROPOSING: "proposing",
+    ProtocolTransactionStatus.COMMITTING: "committing",
+    ProtocolTransactionStatus.REVEALING: "revealing",
+    ProtocolTransactionStatus.APPEAL_REVEALING: "appeal_revealing",
+    ProtocolTransactionStatus.APPEAL_COMMITTING: "appeal_committing",
+    ProtocolTransactionStatus.LEADER_REVEALING: "leader_revealing",
+}
+
+
+def transaction_lifecycle_from_protocol_status(
+    status: Union[int, str, ProtocolTransactionStatus],
+) -> TransactionLifecycle:
+    """Map every stored protocol status to the stable consumer lifecycle."""
+
+    if isinstance(status, ProtocolTransactionStatus):
+        protocol_status = status
+    elif isinstance(status, int) or (isinstance(status, str) and status.isdigit()):
+        try:
+            protocol_status = PROTOCOL_TRANSACTION_STATUS_NUMBER_TO_NAME[str(status)]
+        except KeyError as exc:
+            raise ValueError(f"Unknown protocol transaction status: {status}") from exc
+    else:
+        try:
+            status_text = str(status)
+            protocol_status = (
+                ProtocolTransactionStatus[status_text]
+                if status_text in ProtocolTransactionStatus.__members__
+                else ProtocolTransactionStatus(status_text)
+            )
+        except ValueError as exc:
+            raise ValueError(f"Unknown protocol transaction status: {status}") from exc
+
+    if protocol_status in _PROCESSING_PHASE_BY_PROTOCOL_STATUS:
+        return {
+            "state": "processing",
+            "phase": _PROCESSING_PHASE_BY_PROTOCOL_STATUS[protocol_status],
+        }
+    if protocol_status == ProtocolTransactionStatus.ACCEPTED:
+        return {"state": "decided", "outcome": "accepted"}
+    if protocol_status == ProtocolTransactionStatus.UNDETERMINED:
+        return {"state": "decided", "outcome": "undetermined"}
+    if protocol_status == ProtocolTransactionStatus.VALIDATORS_TIMEOUT:
+        return {"state": "decided", "outcome": "validators_timeout"}
+    if protocol_status == ProtocolTransactionStatus.LEADER_TIMEOUT:
+        return {"state": "decided", "outcome": "leader_timeout"}
+    if protocol_status == ProtocolTransactionStatus.FINALIZED:
+        return {"state": "finalized"}
+    if protocol_status == ProtocolTransactionStatus.CANCELED:
+        return {"state": "canceled"}
+    raise AssertionError(f"Unmapped protocol transaction status: {protocol_status}")
 
 
 class TransactionResult(str, Enum):
     """Consensus voting result across validators."""
+
     IDLE = "IDLE"
     AGREE = "AGREE"
     DISAGREE = "DISAGREE"
@@ -112,13 +261,43 @@ TRANSACTION_RESULT_NAME_TO_NUMBER = {
 }
 
 
+def transaction_outcome_from_protocol_result(
+    result: Union[int, str, TransactionResult],
+) -> Optional[TransactionDecisionOutcome]:
+    """Return an application outcome when a finalized record preserves one."""
+
+    if isinstance(result, TransactionResult):
+        result_name = result
+    elif isinstance(result, int) or (isinstance(result, str) and result.isdigit()):
+        result_name = TRANSACTION_RESULT_NUMBER_TO_NAME.get(str(result))
+    else:
+        try:
+            result_name = TransactionResult(str(result))
+        except ValueError:
+            result_name = None
+
+    if result_name == TransactionResult.MAJORITY_AGREE:
+        return "accepted"
+    if result_name == TransactionResult.MAJORITY_TIMEOUT:
+        return "validators_timeout"
+    if result_name in (
+        TransactionResult.MAJORITY_DISAGREE,
+        TransactionResult.DETERMINISTIC_VIOLATION,
+        TransactionResult.NO_MAJORITY,
+    ):
+        return "undetermined"
+    return None
+
+
 class ExecutionResult(str, Enum):
     """Result of contract execution by the GenVM."""
+
     NOT_VOTED = "NOT_VOTED"
     FINISHED_WITH_RETURN = "FINISHED_WITH_RETURN"
     FINISHED_WITH_ERROR = "FINISHED_WITH_ERROR"
     TIMEOUT = "TIMEOUT"
     NONDET_DISAGREE = "NONDET_DISAGREE"
+    DETERMINISTIC_VIOLATION = "DETERMINISTIC_VIOLATION"
 
 
 EXECUTION_RESULT_NUMBER_TO_NAME = {
@@ -127,31 +306,37 @@ EXECUTION_RESULT_NUMBER_TO_NAME = {
     "2": ExecutionResult.FINISHED_WITH_ERROR,
     "3": ExecutionResult.TIMEOUT,
     "4": ExecutionResult.NONDET_DISAGREE,
+    "5": ExecutionResult.DETERMINISTIC_VIOLATION,
 }
 
 
 class VoteType(str, Enum):
+    """Validator execution vote recorded for a consensus round."""
+
     NOT_VOTED = "NOT_VOTED"
-    AGREE = "AGREE"
-    DISAGREE = "DISAGREE"
+    FINISHED_WITH_RETURN = "FINISHED_WITH_RETURN"
+    FINISHED_WITH_ERROR = "FINISHED_WITH_ERROR"
     TIMEOUT = "TIMEOUT"
+    NONDET_DISAGREE = "NONDET_DISAGREE"
     DETERMINISTIC_VIOLATION = "DETERMINISTIC_VIOLATION"
 
 
 VOTE_TYPE_NUMBER_TO_NAME = {
     "0": VoteType.NOT_VOTED,
-    "1": VoteType.AGREE,
-    "2": VoteType.DISAGREE,
+    "1": VoteType.FINISHED_WITH_RETURN,
+    "2": VoteType.FINISHED_WITH_ERROR,
     "3": VoteType.TIMEOUT,
-    "4": VoteType.DETERMINISTIC_VIOLATION,
+    "4": VoteType.NONDET_DISAGREE,
+    "5": VoteType.DETERMINISTIC_VIOLATION,
 }
 
 VOTE_TYPE_NAME_TO_NUMBER = {
     VoteType.NOT_VOTED: "0",
-    VoteType.AGREE: "1",
-    VoteType.DISAGREE: "2",
+    VoteType.FINISHED_WITH_RETURN: "1",
+    VoteType.FINISHED_WITH_ERROR: "2",
     VoteType.TIMEOUT: "3",
-    VoteType.DETERMINISTIC_VIOLATION: "4",
+    VoteType.NONDET_DISAGREE: "4",
+    VoteType.DETERMINISTIC_VIOLATION: "5",
 }
 
 
@@ -179,6 +364,7 @@ class DecodedCallData(TypedDict, total=False):
 
 class GenLayerTransaction(TypedDict, total=False):
     """Decoded transaction data returned by get_transaction and wait_for_transaction_receipt."""
+
     # currentTimestamp: testnet
     current_timestamp: Optional[str]
 
@@ -192,6 +378,7 @@ class GenLayerTransaction(TypedDict, total=False):
 
     # numOfInitialValidators: testnet
     num_of_initial_validators: Optional[str]
+    initial_rotations: Optional[str]
 
     # txSlot: testnet
     tx_slot: Optional[str]
@@ -218,11 +405,16 @@ class GenLayerTransaction(TypedDict, total=False):
     tx_data: Optional[HexStr]
     tx_data_decoded: Optional[Dict[str, Any]]
 
-    # txReceipt: testnet
+    # The train stores only the execution hash. `tx_receipt` remains present so
+    # callers can distinguish unavailable legacy bytes (`None`) explicitly.
+    tx_execution_hash: Optional[HexStr]
     tx_receipt: Optional[HexStr]
 
     # messages: testnet
     messages: Optional[List[Any]]
+
+    # consumedValidators: testnet
+    consumed_validators: Optional[List[Address]]
 
     # queueType: testnet
     queue_type: Optional[int]
@@ -236,9 +428,9 @@ class GenLayerTransaction(TypedDict, total=False):
     # lastLeader: testnet
     last_leader: Optional[Address]
 
-    # status: localnet: TransactionStatus // status: testnet: number
-    status: Optional[TransactionStatus]
-    status_name: Optional[TransactionStatus]
+    # Stable consumer lifecycle. Raw protocol values are returned only by
+    # GenLayerClient.get_transaction_lifecycle().
+    lifecycle: TransactionLifecycle
 
     # hash: localnet // txId: testnet// hash: localnet // txId: testnet
     hash: Optional[HexStr]
@@ -301,11 +493,17 @@ class GenLayerRawTransaction:
         result: int
         round_validators: List[Address]
         validator_votes_hash: List[HexStr]
+        validator_result_hash: List[HexStr]
         validator_votes: List[int]
 
         @classmethod
-        def from_transaction_data(
-            cls, tx_data: Tuple
+        def from_light_data(
+            cls,
+            tx_data: Tuple,
+            round_validators: List[Address],
+            validator_votes: List[int],
+            validator_votes_hash: List[HexStr],
+            validator_result_hash: List[HexStr],
         ) -> "GenLayerRawTransaction.LastRound":
             return cls(
                 round=tx_data[0],
@@ -315,29 +513,13 @@ class GenLayerRawTransaction:
                 appeal_bond=tx_data[4],
                 rotations_left=tx_data[5],
                 result=tx_data[6],
-                round_validators=tx_data[7],
-                validator_votes=tx_data[8],
+                round_validators=round_validators,
+                validator_votes=validator_votes,
                 validator_votes_hash=[
-                    Web3.to_hex(vote_hash) for vote_hash in tx_data[9]
+                    Web3.to_hex(vote_hash) for vote_hash in validator_votes_hash
                 ],
-            )
-
-        @classmethod
-        def from_all_data_round(
-            cls, tx_data: Tuple
-        ) -> "GenLayerRawTransaction.LastRound":
-            return cls(
-                round=tx_data[0],
-                leader_index=tx_data[1],
-                votes_committed=tx_data[2],
-                votes_revealed=tx_data[3],
-                appeal_bond=tx_data[4],
-                rotations_left=tx_data[5],
-                result=tx_data[6],
-                round_validators=tx_data[7],
-                validator_votes=tx_data[8],
-                validator_votes_hash=[
-                    Web3.to_hex(vote_hash) for vote_hash in tx_data[9]
+                validator_result_hash=[
+                    Web3.to_hex(result_hash) for result_hash in validator_result_hash
                 ],
             )
 
@@ -352,6 +534,7 @@ class GenLayerRawTransaction:
                 "result": str(self.result),
                 "round_validators": self.round_validators,
                 "validator_votes_hash": self.validator_votes_hash,
+                "validator_result_hash": self.validator_result_hash,
                 "validator_votes": self.validator_votes,
                 "validator_votes_name": [
                     VOTE_TYPE_NUMBER_TO_NAME[str(vote)].value
@@ -363,6 +546,7 @@ class GenLayerRawTransaction:
     sender: Address
     recipient: Address
     num_of_initial_validators: int
+    initial_rotations: int
     tx_slot: int
     created_timestamp: int
     last_vote_timestamp: int
@@ -370,8 +554,10 @@ class GenLayerRawTransaction:
     result: int
     tx_execution_result: int
     tx_data: HexStr
-    tx_receipt: HexStr
+    tx_execution_hash: HexStr
+    tx_receipt: Optional[HexStr]
     messages: List[Any]
+    consumed_validators: List[Address]
     queue_type: int
     queue_position: int
     activator: Address
@@ -383,65 +569,35 @@ class GenLayerRawTransaction:
     last_round: LastRound
 
     @classmethod
-    def from_transaction_data(cls, tx_data: Tuple) -> "GenLayerRawTransaction":
-        # V06/Bradbury ABI returns 23 fields (extra txExecutionHash, eqBlocksOutputs,
-        # consumedValidators; txData split into txCalldata). Asimov returns 21 fields.
-        if len(tx_data) >= 23:
-            return cls._from_v06(tx_data)
-        return cls._from_v04(tx_data)
-
-    @classmethod
-    def _from_v04(cls, tx_data: Tuple) -> "GenLayerRawTransaction":
-        """Asimov / pre-Bradbury ABI (21 fields)."""
+    def from_transaction_data_light(
+        cls,
+        tx_data: Tuple,
+        round_validators: List[Address],
+        validator_votes: List[int],
+        validator_votes_hash: List[HexStr],
+        validator_result_hash: List[HexStr],
+        consumed_validators: List[Address],
+        tx_execution_result: int,
+        num_of_initial_validators: int,
+    ) -> "GenLayerRawTransaction":
+        """Parse the bounded train transaction view and separately read arrays."""
         return cls(
             current_timestamp=tx_data[0],
             sender=tx_data[1],
             recipient=tx_data[2],
-            num_of_initial_validators=tx_data[3],
+            num_of_initial_validators=num_of_initial_validators,
+            initial_rotations=tx_data[3],
             tx_slot=tx_data[4],
             created_timestamp=tx_data[5],
             last_vote_timestamp=tx_data[6],
             random_seed=Web3.to_hex(tx_data[7]),
             result=tx_data[8],
-            tx_execution_result=0,
-            tx_data=Web3.to_hex(tx_data[9]),
-            tx_receipt=Web3.to_hex(tx_data[10]),
-            messages=tx_data[11],
-            queue_type=tx_data[12],
-            queue_position=tx_data[13],
-            activator=tx_data[14],
-            last_leader=tx_data[15],
-            status=tx_data[16],
-            tx_id=Web3.to_hex(tx_data[17]),
-            read_state_block_range=cls.ReadStateBlockRange.from_transaction_data(
-                tx_data[18]
-            ),
-            num_of_rounds=tx_data[19],
-            last_round=cls.LastRound.from_transaction_data(tx_data[20]),
-        )
-
-    @classmethod
-    def _from_v06(cls, tx_data: Tuple) -> "GenLayerRawTransaction":
-        """Bradbury / V06 ABI (23 fields). Fields differ at positions 9-12."""
-        # [9] txExecutionHash (bytes32) — not in v04
-        # [10] txCalldata (bytes) — equivalent to v04's txData
-        # [11] eqBlocksOutputs (bytes) — not in v04
-        # [12+] messages and rest shifted by +1 vs v04
-        # [22] consumedValidators — not in v04
-        return cls(
-            current_timestamp=tx_data[0],
-            sender=tx_data[1],
-            recipient=tx_data[2],
-            num_of_initial_validators=tx_data[3],  # initialRotations in ABI
-            tx_slot=tx_data[4],
-            created_timestamp=tx_data[5],
-            last_vote_timestamp=tx_data[6],
-            random_seed=Web3.to_hex(tx_data[7]),
-            result=tx_data[8],
-            tx_execution_result=0,
-            tx_data=Web3.to_hex(tx_data[10]),  # txCalldata
-            tx_receipt="0x",  # not present in V06; txExecutionHash is at [9]
+            tx_execution_result=tx_execution_result,
+            tx_data=Web3.to_hex(tx_data[10]),
+            tx_execution_hash=Web3.to_hex(tx_data[9]),
+            tx_receipt=None,
             messages=tx_data[12],
+            consumed_validators=consumed_validators,
             queue_type=tx_data[13],
             queue_position=tx_data[14],
             activator=tx_data[15],
@@ -452,72 +608,50 @@ class GenLayerRawTransaction:
                 tx_data[19]
             ),
             num_of_rounds=tx_data[20],
-            last_round=cls.LastRound.from_transaction_data(tx_data[21]),
-        )
-
-    @classmethod
-    def from_all_transaction_data(cls, tx_data: Tuple, rounds_data: List[Tuple]) -> "GenLayerRawTransaction":
-        """Parse getTransactionAllData response which returns (transaction, roundsData[])."""
-        last_round_data = rounds_data[-1] if rounds_data else None
-        latest_block_range = tx_data[18][-1] if tx_data[18] else (0, 0, 0)
-
-        return cls(
-            current_timestamp=0,
-            sender=tx_data[5],
-            recipient=tx_data[6],
-            num_of_initial_validators=tx_data[9],
-            tx_slot=tx_data[8],
-            created_timestamp=0,
-            last_vote_timestamp=0,
-            random_seed=Web3.to_hex(tx_data[13]),
-            result=tx_data[0],
-            tx_execution_result=tx_data[1],
-            tx_data=Web3.to_hex(tx_data[16]),
-            tx_receipt="0x",
-            messages=[],
-            queue_type=0,
-            queue_position=0,
-            activator=tx_data[7],
-            last_leader=tx_data[7],
-            status=tx_data[3],
-            tx_id=Web3.to_hex(tx_data[12]),
-            read_state_block_range=cls.ReadStateBlockRange.from_transaction_data(latest_block_range),
-            num_of_rounds=len(rounds_data),
-            last_round=cls.LastRound.from_all_data_round(last_round_data) if last_round_data else cls.LastRound(
-                round=0, leader_index=0, votes_committed=0, votes_revealed=0,
-                appeal_bond=0, rotations_left=0, result=0, round_validators=[],
-                validator_votes_hash=[], validator_votes=[],
+            last_round=cls.LastRound.from_light_data(
+                tx_data[21],
+                round_validators,
+                validator_votes,
+                validator_votes_hash,
+                validator_result_hash,
             ),
         )
 
     def decode(self) -> GenLayerTransaction:
+        lifecycle = transaction_lifecycle_from_protocol_status(self.status)
+        if lifecycle["state"] == "finalized":
+            outcome = transaction_outcome_from_protocol_result(self.result)
+            if outcome is not None:
+                lifecycle["outcome"] = outcome
         return {
             "current_timestamp": str(self.current_timestamp),
             "sender": self.sender,
             "recipient": self.recipient,
             "num_of_initial_validators": str(self.num_of_initial_validators),
+            "initial_rotations": str(self.initial_rotations),
             "tx_slot": str(self.tx_slot),
             "created_timestamp": str(self.created_timestamp),
             "last_vote_timestamp": str(self.last_vote_timestamp),
             "random_seed": self.random_seed,
             "result": str(self.result),
             "tx_data": self.tx_data,
+            "tx_execution_hash": self.tx_execution_hash,
             "tx_receipt": self.tx_receipt,
             "consensus_data": {
                 "leader_receipt": self._decode_leader_receipt(),
             },
             "messages": self.messages,
+            "consumed_validators": self.consumed_validators,
             "queue_type": str(self.queue_type),
             "queue_position": str(self.queue_position),
             "activator": self.activator,
             "last_leader": self.last_leader,
-            "status": str(self.status),
+            "lifecycle": lifecycle,
             "tx_id": self.tx_id,
             "read_state_block_range": self.read_state_block_range.decode(),
             "num_of_rounds": str(self.num_of_rounds),
             "last_round": self.last_round.decode(),
             "tx_data_decoded": self._decode_input_data(),
-            "status_name": TRANSACTION_STATUS_NUMBER_TO_NAME[str(self.status)].value,
             "result_name": TRANSACTION_RESULT_NUMBER_TO_NAME[str(self.result)].value,
             "tx_execution_result": self.tx_execution_result,
             "tx_execution_result_name": EXECUTION_RESULT_NUMBER_TO_NAME.get(

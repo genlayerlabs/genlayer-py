@@ -72,7 +72,11 @@ def get_contract_schema_for_code(
     if self.chain.id != localnet.id:
         raise GenLayerError("Contract schema is not supported on this network")
 
-    code_bytes = contract_code.encode("utf-8") if isinstance(contract_code, str) else contract_code
+    code_bytes = (
+        contract_code.encode("utf-8")
+        if isinstance(contract_code, str)
+        else contract_code
+    )
     response = self.provider.make_request(
         method="gen_getContractSchemaForCode",
         params=[eth_utils.hexadecimal.encode_hex(code_bytes)],
@@ -223,20 +227,49 @@ def appeal_transaction(
     transaction_id: HexStr,
     account: Optional[LocalAccount] = None,
     value: Optional[int] = None,
+    expected_decision_id: Optional[int] = None,
 ) -> HexStr:
     """Appeals a consensus transaction. Returns the original transaction_id.
 
     Appeals emit AppealStarted/TransactionActivated events (not NewTransaction),
     so we send the EVM tx directly instead of going through _send_transaction.
+    Deployed Consensus binds the appeal to the exact active decision. Current
+    Studio exposes its native ``submitAppeal(bytes32)`` entrypoint instead, so
+    callers must provide the value explicitly and cannot supply a decision id.
     """
     sender_account = account if account is not None else self.local_account
     if sender_account is None:
         raise GenLayerError("No account set.")
     if self.chain.consensus_main_contract is None:
         raise GenLayerError("Consensus main contract not configured.")
-    resolved_value = _resolve_appeal_value(self, transaction_id, value)
+    if _is_studio_chain(self):
+        resolved_value = _resolve_studio_appeal_value(value, expected_decision_id)
+        encoded_data = _encode_submit_appeal_data(
+            self=self,
+            transaction_id=transaction_id,
+            studio_appeal_shape=True,
+        )
+        _send_consensus_call(
+            self=self,
+            encoded_data=encoded_data,
+            sender_account=sender_account,
+            value=resolved_value,
+            operation_name="Appeal",
+        )
+        return transaction_id
 
-    encoded_data = _encode_submit_appeal_data(self=self, transaction_id=transaction_id)
+    expected_decision_id, resolved_value = _resolve_appeal_parameters(
+        self,
+        transaction_id,
+        expected_decision_id=expected_decision_id,
+        value=value,
+    )
+
+    encoded_data = _encode_submit_appeal_data(
+        self=self,
+        transaction_id=transaction_id,
+        expected_decision_id=expected_decision_id,
+    )
 
     _send_consensus_call(
         self=self,
@@ -283,18 +316,45 @@ def top_up_and_submit_appeal(
     distribution: FeesDistributionInput,
     account: Optional[LocalAccount] = None,
     value: Optional[int] = None,
+    expected_decision_id: Optional[int] = None,
 ) -> HexStr:
     """Deposits appeal fee budget and submits an appeal in one consensus call.
 
     Returns the original GenLayer transaction id, matching appeal_transaction.
+    Current Studio exposes the native decision-free call shape. Deployed
+    Consensus uses the decision-bound train shape.
     """
     sender_account = account if account is not None else self.local_account
-    resolved_value = _resolve_appeal_value(self, transaction_id, value)
+    if _is_studio_chain(self):
+        resolved_value = _resolve_studio_appeal_value(value, expected_decision_id)
+        encoded_data = _encode_fee_management_data(
+            self=self,
+            function_name="topUpAndSubmitAppeal",
+            transaction_id=transaction_id,
+            distribution=distribution,
+            studio_appeal_shape=True,
+        )
+        _send_consensus_call(
+            self=self,
+            encoded_data=encoded_data,
+            sender_account=sender_account,
+            value=resolved_value,
+            operation_name="Top up and submit appeal",
+        )
+        return transaction_id
+
+    expected_decision_id, resolved_value = _resolve_appeal_parameters(
+        self,
+        transaction_id,
+        expected_decision_id=expected_decision_id,
+        value=value,
+    )
     encoded_data = _encode_fee_management_data(
         self=self,
         function_name="topUpAndSubmitAppeal",
         transaction_id=transaction_id,
         distribution=distribution,
+        expected_decision_id=expected_decision_id,
     )
     _send_consensus_call(
         self=self,
@@ -314,7 +374,9 @@ def get_round_number(
     if self.chain.rounds_storage_contract is None:
         raise GenLayerError("rounds_storage_contract not configured for this chain")
     contract = self.w3.eth.contract(
-        address=self.w3.to_checksum_address(self.chain.rounds_storage_contract["address"]),
+        address=self.w3.to_checksum_address(
+            self.chain.rounds_storage_contract["address"]
+        ),
         abi=self.chain.rounds_storage_contract["abi"],
     )
     tx_bytes = _to_bytes32(self, transaction_id)
@@ -330,7 +392,9 @@ def get_round_data(
     if self.chain.rounds_storage_contract is None:
         raise GenLayerError("rounds_storage_contract not configured for this chain")
     contract = self.w3.eth.contract(
-        address=self.w3.to_checksum_address(self.chain.rounds_storage_contract["address"]),
+        address=self.w3.to_checksum_address(
+            self.chain.rounds_storage_contract["address"]
+        ),
         abi=self.chain.rounds_storage_contract["abi"],
     )
     tx_bytes = _to_bytes32(self, transaction_id)
@@ -345,7 +409,9 @@ def get_last_round_data(
     if self.chain.rounds_storage_contract is None:
         raise GenLayerError("rounds_storage_contract not configured for this chain")
     contract = self.w3.eth.contract(
-        address=self.w3.to_checksum_address(self.chain.rounds_storage_contract["address"]),
+        address=self.w3.to_checksum_address(
+            self.chain.rounds_storage_contract["address"]
+        ),
         abi=self.chain.rounds_storage_contract["abi"],
     )
     tx_bytes = _to_bytes32(self, transaction_id)
@@ -355,50 +421,165 @@ def get_last_round_data(
 def can_appeal(
     self: GenLayerClient,
     transaction_id: HexStr,
+    expected_decision_id: Optional[int] = None,
 ) -> bool:
-    """Checks if a transaction can be appealed."""
+    """Checks whether the exact active decision can be appealed on a network.
+
+    When no decision id is supplied, the latest active decision is read first.
+    The guarded on-chain call returns ``False`` if that decision changes before
+    it is evaluated. Current Studio does not expose this decision-bound read.
+    """
     if self.chain.appeals_contract is None:
         raise GenLayerError("appeals_contract not configured for this chain")
-    contract = self.w3.eth.contract(
-        address=self.w3.to_checksum_address(self.chain.appeals_contract["address"]),
-        abi=self.chain.appeals_contract["abi"],
-    )
+    if expected_decision_id is None:
+        expected_decision_id = _get_active_decision_id(self, transaction_id)
+        if expected_decision_id is None:
+            return False
+    contract = _appeals_contract(self)
     tx_bytes = _to_bytes32(self, transaction_id)
-    return contract.functions.canAppeal(tx_bytes).call()
+    return contract.functions.canAppeal(tx_bytes, expected_decision_id).call()
+
+
+def get_appeal_quote(
+    self: GenLayerClient,
+    transaction_id: HexStr,
+) -> Dict[str, int]:
+    """Returns the exact latest-decision appeal charge and race guard.
+
+    ``total`` is the value to submit: the appeal bond plus induced-work
+    funding. Pass ``decision_id`` back to the decision-guarded appeal methods.
+    Current Studio exposes no authoritative decision-bound appeal quote.
+    """
+    if _is_studio_chain(self):
+        raise GenLayerError(STUDIO_APPEAL_QUOTE_UNSUPPORTED)
+    contract = _consensus_data_contract(self)
+    decision_id, bond, funding, appeal_deadline = (
+        contract.functions.estimateLatestAppealCharge(
+            _to_bytes32(self, transaction_id)
+        ).call()
+    )
+    return {
+        "decision_id": int(decision_id),
+        "bond": int(bond),
+        "funding": int(funding),
+        "total": int(bond) + int(funding),
+        "appeal_deadline": int(appeal_deadline),
+    }
+
+
+def get_appeal_charge(
+    self: GenLayerClient,
+    transaction_id: HexStr,
+) -> int:
+    """Returns the full payment required to appeal the latest decision."""
+    return get_appeal_quote(self, transaction_id)["total"]
 
 
 def get_min_appeal_bond(
     self: GenLayerClient,
     transaction_id: HexStr,
 ) -> int:
-    """Calculates the minimum bond required to appeal a transaction."""
-    if self.chain.fee_manager_contract is None or self.chain.rounds_storage_contract is None:
-        raise GenLayerError("fee_manager_contract/rounds_storage_contract not configured for this chain")
+    """Deprecated alias for :func:`get_appeal_charge`.
 
-    round_number = get_round_number(self, transaction_id)
-    tx = self.get_transaction(transaction_id)
-    tx_status = int(tx["status"])
+    Despite its historical name, this returns bond plus induced-work funding.
+    """
+    return get_appeal_charge(self, transaction_id)
 
-    fee_contract = self.w3.eth.contract(
-        address=self.w3.to_checksum_address(self.chain.fee_manager_contract["address"]),
-        abi=self.chain.fee_manager_contract["abi"],
+
+def _consensus_data_contract(self: GenLayerClient):
+    if self.chain.consensus_data_contract is None:
+        raise GenLayerError("consensus_data_contract not configured for this chain")
+    return self.w3.eth.contract(
+        address=self.w3.to_checksum_address(
+            self.chain.consensus_data_contract["address"]
+        ),
+        abi=self.chain.consensus_data_contract["abi"],
     )
-    tx_bytes = _to_bytes32(self, transaction_id)
-    return fee_contract.functions.calculateMinAppealBond(tx_bytes, round_number, tx_status).call()
 
 
-def _resolve_appeal_value(
+def _appeals_contract(self: GenLayerClient):
+    if self.chain.appeals_contract is None:
+        raise GenLayerError("appeals_contract not configured for this chain")
+    return self.w3.eth.contract(
+        address=self.w3.to_checksum_address(self.chain.appeals_contract["address"]),
+        abi=self.chain.appeals_contract["abi"],
+    )
+
+
+def _get_active_decision_id(
     self: GenLayerClient,
     transaction_id: HexStr,
+) -> Optional[int]:
+    lifecycle = (
+        _consensus_data_contract(self)
+        .functions.getTransactionLifecycle(_to_bytes32(self, transaction_id), 0)
+        .call()
+    )
+    latest_decision = lifecycle[2]
+    decision_active = lifecycle[3]
+    return int(latest_decision[1]) if decision_active else None
+
+
+def _resolve_appeal_parameters(
+    self: GenLayerClient,
+    transaction_id: HexStr,
+    expected_decision_id: Optional[int],
     value: Optional[int],
-) -> int:
-    if value is not None:
-        return value
-    if self.chain.fee_manager_contract is None or self.chain.rounds_storage_contract is None:
+) -> tuple[int, int]:
+    if expected_decision_id is not None and value is not None:
+        return expected_decision_id, value
+
+    try:
+        quote = get_appeal_quote(self, transaction_id)
+    except Exception as exc:
         raise GenLayerError(
-            "Cannot auto-resolve appeal bond: fee_manager_contract/rounds_storage_contract not configured for this chain."
+            "Cannot quote an active appeal decision. The transaction may not be "
+            "appealable yet; refresh its lifecycle and retry."
+        ) from exc
+
+    if (
+        expected_decision_id is not None
+        and expected_decision_id != quote["decision_id"]
+    ):
+        raise GenLayerError(
+            f"Appeal decision {expected_decision_id} is stale; the latest active "
+            f"decision is {quote['decision_id']}. Refresh and retry."
         )
-    return get_min_appeal_bond(self, transaction_id)
+
+    return (
+        quote["decision_id"] if expected_decision_id is None else expected_decision_id,
+        quote["total"] if value is None else value,
+    )
+
+
+STUDIO_APPEAL_QUOTE_UNSUPPORTED = (
+    "Decision-bound appeal quotes are not available on current Studio."
+)
+STUDIO_APPEAL_VALUE_UNRESOLVABLE = (
+    "Cannot auto-resolve the appeal payment on current Studio; pass value explicitly."
+)
+STUDIO_DECISION_GUARD_UNSUPPORTED = "expected_decision_id is not supported by current Studio's decision-free appeal methods."
+
+
+def _is_studio_chain(self: GenLayerClient) -> bool:
+    """Reports whether the client targets the studio-embedded consensus.
+
+    localnet and studionet share chain id 61999, the same check
+    ``transactions.actions.get_transaction`` uses to take its studio path.
+    """
+    return self.chain.id == localnet.id
+
+
+def _resolve_studio_appeal_value(
+    value: Optional[int],
+    expected_decision_id: Optional[int],
+) -> int:
+    """Require the inputs that current Studio can faithfully honor."""
+    if expected_decision_id is not None:
+        raise GenLayerError(STUDIO_DECISION_GUARD_UNSUPPORTED)
+    if value is None:
+        raise GenLayerError(STUDIO_APPEAL_VALUE_UNRESOLVABLE)
+    return value
 
 
 def _to_bytes32(self: GenLayerClient, hex_str: HexStr) -> bytes:
@@ -477,17 +658,17 @@ def _json_safe_rpc_value(value):
     if isinstance(value, tuple):
         return [_json_safe_rpc_value(item) for item in value]
     if isinstance(value, dict):
-        return {
-            key: _json_safe_rpc_value(item)
-            for key, item in value.items()
-        }
+        return {key: _json_safe_rpc_value(item) for key, item in value.items()}
     return value
 
 
 def _encode_submit_appeal_data(
     self: GenLayerClient,
     transaction_id: HexStr,
+    expected_decision_id: Optional[int] = None,
+    studio_appeal_shape: bool = False,
 ):
+    """Encode the chain's native submitAppeal entrypoint."""
     consensus_main_contract = self.w3.eth.contract(
         abi=self.chain.consensus_main_contract["abi"]
     )
@@ -496,16 +677,23 @@ def _encode_submit_appeal_data(
         transaction_id = transaction_id[2:]
     if len(transaction_id) > 64:
         raise ValueError("transaction_id too long for bytes32")
-    params = abi_encode(
-        contract_fn.argument_types,
-        [self.w3.to_bytes(hexstr=transaction_id)],
-    )
+    arguments = [self.w3.to_bytes(hexstr=transaction_id)]
+    if not studio_appeal_shape:
+        if expected_decision_id is None:
+            raise ValueError("submitAppeal requires expected_decision_id")
+        arguments.append(expected_decision_id)
+    params = abi_encode(contract_fn.argument_types, arguments)
     function_selector = eth_utils.keccak(text=contract_fn.signature)[:4].hex()
     encoded_data = "0x" + function_selector + params.hex()
     return encoded_data
 
 
 FEE_MANAGEMENT_ARGUMENT_TYPES = ("bytes32", FEES_DISTRIBUTION_ABI_TYPE)
+TOP_UP_AND_SUBMIT_APPEAL_ARGUMENT_TYPES = (
+    "bytes32",
+    "uint256",
+    FEES_DISTRIBUTION_ABI_TYPE,
+)
 
 
 def _encode_fee_management_data(
@@ -513,20 +701,28 @@ def _encode_fee_management_data(
     function_name: str,
     transaction_id: HexStr,
     distribution: FeesDistributionInput,
+    expected_decision_id: Optional[int] = None,
+    studio_appeal_shape: bool = False,
 ):
+    """Encode the chain's native fee-management entrypoint."""
     if function_name not in ("topUpFees", "topUpAndSubmitAppeal"):
         raise ValueError(f"Unsupported fee management function: {function_name}")
 
     tx_bytes = _to_bytes32(self, transaction_id)
     fees_distribution = create_fees_distribution(distribution)
-    params = abi_encode(
-        FEE_MANAGEMENT_ARGUMENT_TYPES,
-        [
-            tx_bytes,
-            fees_distribution_to_abi_tuple(fees_distribution),
-        ],
-    )
-    signature = f"{function_name}(bytes32,{FEES_DISTRIBUTION_ABI_TYPE})"
+    fees_tuple = fees_distribution_to_abi_tuple(fees_distribution)
+    if function_name == "topUpAndSubmitAppeal" and not studio_appeal_shape:
+        if expected_decision_id is None:
+            raise ValueError("topUpAndSubmitAppeal requires expected_decision_id")
+        argument_types = TOP_UP_AND_SUBMIT_APPEAL_ARGUMENT_TYPES
+        arguments = [tx_bytes, expected_decision_id, fees_tuple]
+        signature = f"{function_name}(bytes32,uint256,{FEES_DISTRIBUTION_ABI_TYPE})"
+    else:
+        argument_types = FEE_MANAGEMENT_ARGUMENT_TYPES
+        arguments = [tx_bytes, fees_tuple]
+        signature = f"{function_name}(bytes32,{FEES_DISTRIBUTION_ABI_TYPE})"
+
+    params = abi_encode(argument_types, arguments)
     function_selector = eth_utils.keccak(text=signature)[:4].hex()
     return "0x" + function_selector + params.hex()
 
@@ -614,9 +810,13 @@ def _get_default_valid_until() -> int:
 
 
 def get_current_fee_policy(self: GenLayerClient) -> FeePolicyQuote:
-    if self.chain.fee_manager_contract and self.chain.fee_manager_contract.get("address"):
+    if self.chain.fee_manager_contract and self.chain.fee_manager_contract.get(
+        "address"
+    ):
         fee_manager_contract = self.w3.eth.contract(
-            address=self.w3.to_checksum_address(self.chain.fee_manager_contract["address"]),
+            address=self.w3.to_checksum_address(
+                self.chain.fee_manager_contract["address"]
+            ),
             abi=FEE_MANAGER_CALCULATE_ROUND_FEES_ABI,
         )
         gen_per_time_unit = fee_manager_contract.functions.GENPerTimeUnit().call()
@@ -672,7 +872,11 @@ def estimate_fees_distribution(
     options: Optional[FeeEstimateOptions] = None,
 ) -> FeesDistribution:
     policy = get_current_fee_policy(self)
-    return build_estimated_fees_distribution(options, policy)
+    return build_estimated_fees_distribution(
+        options,
+        policy,
+        self.chain.default_consensus_max_rotations,
+    )
 
 
 def estimate_transaction_fees(
@@ -688,11 +892,19 @@ def _estimate_transaction_fees_with_policy(
     options: Optional[FeeEstimateOptions],
     policy: FeePolicyQuote,
 ) -> TransactionFeeEstimate:
-    distribution = build_estimated_fees_distribution(options, policy)
+    distribution = build_estimated_fees_distribution(
+        options,
+        policy,
+        self.chain.default_consensus_max_rotations,
+    )
 
-    if self.chain.fee_manager_contract and self.chain.fee_manager_contract.get("address"):
+    if self.chain.fee_manager_contract and self.chain.fee_manager_contract.get(
+        "address"
+    ):
         fee_manager_contract = self.w3.eth.contract(
-            address=self.w3.to_checksum_address(self.chain.fee_manager_contract["address"]),
+            address=self.w3.to_checksum_address(
+                self.chain.fee_manager_contract["address"]
+            ),
             abi=FEE_MANAGER_CALCULATE_ROUND_FEES_ABI,
         )
         round_fees = fee_manager_contract.functions.calculateRoundFees(
@@ -825,14 +1037,17 @@ def _resolve_transaction_fees(
     num_of_initial_validators: int,
 ) -> NormalizedTransactionFees:
     transaction_fees = normalize_transaction_fees(fees)
-    if (
-        transaction_fees["fee_value"] is not None
-        or not requires_fee_deposit_calculation(transaction_fees["distribution"])
+    if transaction_fees[
+        "fee_value"
+    ] is not None or not requires_fee_deposit_calculation(
+        transaction_fees["distribution"]
     ):
         transaction_fees["fee_value"] = transaction_fees["fee_value"] or 0
         return transaction_fees
 
-    if not self.chain.fee_manager_contract or not self.chain.fee_manager_contract.get("address"):
+    if not self.chain.fee_manager_contract or not self.chain.fee_manager_contract.get(
+        "address"
+    ):
         try:
             policy = get_current_fee_policy(self)
         except GenLayerError as exc:
@@ -880,7 +1095,9 @@ def _encode_add_transaction_data(
         abi=self.chain.consensus_main_contract["abi"]
     )
     contract_fn = consensus_main_contract.get_function_by_name("addTransaction")
-    abi_version = _get_add_transaction_abi_version(self.chain.consensus_main_contract["abi"])
+    abi_version = _get_add_transaction_abi_version(
+        self.chain.consensus_main_contract["abi"]
+    )
     transaction_fees = transaction_fees or normalize_transaction_fees()
     use_fee_aware_transaction = (
         transaction_fees["requires_fee_aware_transaction"] or abi_version == "fees"
@@ -1029,7 +1246,9 @@ def _send_consensus_call(
             method="eth_sendRawTransaction", params=[serialized_transaction]
         )["result"]
     except Exception as exc:
-        raise GenLayerError(f"{operation_name} failed: {_format_rpc_error(exc)}") from exc
+        raise GenLayerError(
+            f"{operation_name} failed: {_format_rpc_error(exc)}"
+        ) from exc
     if self.chain.id == localnet.id:
         return tx_hash
 
@@ -1055,7 +1274,7 @@ def _send_transaction(
 
     if self.chain.consensus_main_contract is None:
         raise GenLayerError(
-            f"Consensus main contract address not found in chain config for \"{self.chain.name}\".",
+            f'Consensus main contract address not found in chain config for "{self.chain.name}".',
         )
 
     try:

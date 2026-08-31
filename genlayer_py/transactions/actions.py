@@ -2,21 +2,32 @@ from __future__ import annotations
 
 from genlayer_py.logging import logger
 import json
-import warnings
 from typing import Any, Dict, List, Literal, Optional
 from web3 import Web3
 from web3.types import _Hash32
-from eth_typing import HexStr
+from eth_typing import Address, HexStr
 from web3.logs import DISCARD
 
 from genlayer_py.config import transaction_config
 from genlayer_py.types import (
-    TransactionStatus,
     ExecutionResult,
     EXECUTION_RESULT_NUMBER_TO_NAME,
-    TRANSACTION_STATUS_NAME_TO_NUMBER,
-    TRANSACTION_STATUS_NUMBER_TO_NAME,
-    is_decided_state,
+)
+from genlayer_py.types.transactions import (
+    PROTOCOL_TRANSACTION_STATUS_NAME_TO_NUMBER,
+    PROTOCOL_TRANSACTION_STATUS_NUMBER_TO_NAME,
+    RESOLUTION_ACTION_NUMBER_TO_NAME,
+    RESOLUTION_SOURCE_NUMBER_TO_NAME,
+    ProtocolTransactionLifecycle,
+    ProtocolTransactionStatus,
+    transaction_lifecycle_from_protocol_status,
+    transaction_outcome_from_protocol_result,
+)
+from genlayer_py.consensus.abi import (
+    ADDRESS_MANAGER_ABI,
+    CONSENSUS_DATA_BIG_ROUNDS_ABI,
+    ROUNDS_STORAGE_READ_ABI,
+    TRANSACTION_MANAGER_READ_ABI,
 )
 from genlayer_py.exceptions import GenLayerError
 from typing import TYPE_CHECKING
@@ -69,65 +80,7 @@ if TYPE_CHECKING:
     from genlayer_py.client import GenLayerClient
 
 
-_did_warn_wait_for_transaction_receipt_status = False
-
-
-def _warn_deprecated_receipt_status() -> None:
-    global _did_warn_wait_for_transaction_receipt_status
-    if _did_warn_wait_for_transaction_receipt_status:
-        return
-    _did_warn_wait_for_transaction_receipt_status = True
-    warnings.warn(
-        "wait_for_transaction_receipt(status=...) is deprecated; use "
-        "wait_until='decided' or wait_until='finalized' instead.",
-        DeprecationWarning,
-        stacklevel=3,
-    )
-
-
-def _resolve_wait_target(
-    status: Optional[TransactionStatus],
-    wait_until: Optional[Literal["decided", "finalized"]],
-) -> dict:
-    if wait_until is not None:
-        if wait_until not in ("decided", "finalized"):
-            raise ValueError("wait_until must be 'decided' or 'finalized'.")
-        return {"wait_until": wait_until, "legacy_status": None, "label": wait_until}
-    if status is None:
-        return {"wait_until": "decided", "legacy_status": None, "label": "decided"}
-
-    _warn_deprecated_receipt_status()
-    if status == TransactionStatus.ACCEPTED:
-        return {"wait_until": "decided", "legacy_status": None, "label": "decided"}
-    if status == TransactionStatus.FINALIZED:
-        return {"wait_until": "finalized", "legacy_status": None, "label": "finalized"}
-    return {"wait_until": None, "legacy_status": status, "label": status.value}
-
-
-def _has_reached_wait_target(transaction_status: str, target: dict) -> bool:
-    if target["wait_until"] == "decided":
-        return is_decided_state(transaction_status)
-    if target["wait_until"] == "finalized":
-        return transaction_status == TRANSACTION_STATUS_NAME_TO_NUMBER[
-            TransactionStatus.FINALIZED
-        ]
-    legacy_status = target["legacy_status"]
-    return (
-        legacy_status is not None
-        and transaction_status == TRANSACTION_STATUS_NAME_TO_NUMBER[legacy_status]
-    )
-
-
-def _normalize_status_name(value: Any) -> Optional[TransactionStatus]:
-    if isinstance(value, TransactionStatus):
-        return value
-    if isinstance(value, str):
-        if value in TransactionStatus._value2member_map_:
-            return TransactionStatus(value)
-        return TRANSACTION_STATUS_NUMBER_TO_NAME.get(value)
-    if value is None:
-        return None
-    return TRANSACTION_STATUS_NUMBER_TO_NAME.get(str(value))
+TRANSACTION_ARRAY_PAGE_SIZE = 64
 
 
 def _normalize_execution_result_name(value: Any) -> Optional[ExecutionResult]:
@@ -141,9 +94,14 @@ def _normalize_execution_result_name(value: Any) -> Optional[ExecutionResult]:
 
 
 def is_successful(transaction: GenLayerTransaction) -> bool:
-    status_name = _normalize_status_name(
-        transaction.get("status_name", transaction.get("status"))
-    )
+    lifecycle = transaction.get("lifecycle")
+    if not isinstance(lifecycle, dict):
+        return False
+    lifecycle_state = lifecycle.get("state")
+    successful_lifecycle = (
+        lifecycle_state == "finalized"
+        and lifecycle.get("outcome") in (None, "accepted")
+    ) or (lifecycle_state == "decided" and lifecycle.get("outcome") == "accepted")
     execution_result_name = _normalize_execution_result_name(
         transaction.get(
             "tx_execution_result_name",
@@ -164,50 +122,560 @@ def is_successful(transaction: GenLayerTransaction) -> bool:
                 execution_result_name = ExecutionResult.FINISHED_WITH_RETURN
 
     return (
-        status_name in (TransactionStatus.ACCEPTED, TransactionStatus.FINALIZED)
+        successful_lifecycle
         and execution_result_name == ExecutionResult.FINISHED_WITH_RETURN
+    )
+
+
+def _wait_for_transaction(
+    self: GenLayerClient,
+    transaction_hash: _Hash32,
+    wait_until: Literal["decided", "finalized"],
+    interval: int = transaction_config.wait_interval,
+    retries: int = transaction_config.retries,
+    full_transaction: bool = False,
+) -> GenLayerTransaction:
+    attempts = 0
+    transaction = None
+    last_state = None
+    while attempts < retries:
+        transaction = self.get_transaction(transaction_hash=transaction_hash)
+        if transaction is None:
+            raise GenLayerError(f"Transaction {transaction_hash} not found")
+        lifecycle = transaction.get("lifecycle")
+        if not isinstance(lifecycle, dict) or not isinstance(
+            lifecycle.get("state"), str
+        ):
+            raise GenLayerError(
+                f"Transaction {transaction_hash} has no valid lifecycle"
+            )
+        last_state = lifecycle["state"]
+        reached_target = (
+            last_state in ("decided", "finalized", "canceled")
+            if wait_until == "decided"
+            else last_state == "finalized"
+        )
+
+        if wait_until == "finalized" and last_state == "canceled":
+            raise GenLayerError(
+                f"Transaction {transaction_hash} was canceled before finalization"
+            )
+
+        if reached_target:
+            if not full_transaction:
+                return _simplify_transaction_receipt(transaction)
+            return transaction
+        time.sleep(interval / 1000)
+        attempts += 1
+    raise GenLayerError(
+        f"Transaction {transaction_hash} did not reach '{wait_until}' after {retries} attempts "
+        f"(polling every {interval}ms for a total of {retries * interval / 1000:.1f}s). "
+        f"Last observed lifecycle state: '{last_state or '<unknown>'}'. "
+        f"This may indicate the transaction is still processing, or the network is experiencing delays. "
+        f"Consider increasing 'retries' or 'interval' parameters.\n"
+        f"Transaction object simplified: {json.dumps(_simplify_transaction_receipt(transaction), indent=2, default=str)}"
+    )
+
+
+def wait_for_decision(
+    self: GenLayerClient,
+    transaction_hash: _Hash32,
+    interval: int = transaction_config.wait_interval,
+    retries: int = transaction_config.retries,
+    full_transaction: bool = False,
+) -> GenLayerTransaction:
+    """Poll until the stored transaction state is decided or terminal."""
+
+    return _wait_for_transaction(
+        self,
+        transaction_hash,
+        "decided",
+        interval,
+        retries,
+        full_transaction,
+    )
+
+
+def wait_for_finalization(
+    self: GenLayerClient,
+    transaction_hash: _Hash32,
+    interval: int = transaction_config.wait_interval,
+    retries: int = transaction_config.retries,
+    full_transaction: bool = False,
+) -> GenLayerTransaction:
+    """Poll until the stored transaction state is finalized."""
+
+    return _wait_for_transaction(
+        self,
+        transaction_hash,
+        "finalized",
+        interval,
+        retries,
+        full_transaction,
     )
 
 
 def wait_for_transaction_receipt(
     self: GenLayerClient,
     transaction_hash: _Hash32,
-    status: Optional[TransactionStatus] = None,
-    wait_until: Optional[Literal["decided", "finalized"]] = None,
+    wait_until: Literal["decided", "finalized"] = "decided",
     interval: int = transaction_config.wait_interval,
     retries: int = transaction_config.retries,
     full_transaction: bool = False,
 ) -> GenLayerTransaction:
+    """Poll for a stored decision (default) or stored finalization."""
 
-    attempts = 0
-    target = _resolve_wait_target(status, wait_until)
-    transaction = None
-    last_status = None
-    while attempts < retries:
-        transaction = self.get_transaction(transaction_hash=transaction_hash)
-        if transaction is None:
-            raise GenLayerError(f"Transaction {transaction_hash} not found")
-        transaction_status = str(transaction["status"])
-        last_status = TRANSACTION_STATUS_NUMBER_TO_NAME.get(transaction_status)
+    if wait_until == "decided":
+        return wait_for_decision(
+            self, transaction_hash, interval, retries, full_transaction
+        )
+    if wait_until == "finalized":
+        return wait_for_finalization(
+            self, transaction_hash, interval, retries, full_transaction
+        )
+    raise ValueError("wait_until must be 'decided' or 'finalized'.")
 
-        if _has_reached_wait_target(transaction_status, target):
-            if not full_transaction:
-                return _simplify_transaction_receipt(transaction)
-            return transaction
-        time.sleep(interval / 1000)
-        attempts += 1
-    last_status_label = (
-        last_status.value
-        if isinstance(last_status, TransactionStatus)
-        else str(transaction["status"]) if transaction else "<unknown>"
+
+def _call_at_block(contract_function, block_number: int):
+    return contract_function.call(block_identifier=block_number)
+
+
+def _address_manager(
+    self: GenLayerClient,
+    consensus_data_contract,
+    block_number: int,
+):
+    address_manager_address = _call_at_block(
+        consensus_data_contract.functions.addressManager(), block_number
     )
-    raise GenLayerError(
-        f"Transaction {transaction_hash} did not reach desired status '{target['label']}' after {retries} attempts "
-        f"(polling every {interval}ms for a total of {retries * interval / 1000:.1f}s). "
-        f"Last observed status: '{last_status_label}'. "
-        f"This may indicate the transaction is still processing, or the network is experiencing delays. "
-        f"Consider increasing 'retries' or 'interval' parameters.\n"
-        f"Transaction object simplified: {json.dumps(_simplify_transaction_receipt(transaction), indent=2, default=str)}"
+    return self.w3.eth.contract(
+        address=address_manager_address, abi=ADDRESS_MANAGER_ABI
+    )
+
+
+def _resolve_contract(
+    self: GenLayerClient,
+    address_manager,
+    name: str,
+    abi: List[dict],
+    block_number: int,
+):
+    contract_address = _call_at_block(
+        address_manager.functions.getAddressNonZero(name), block_number
+    )
+    return self.w3.eth.contract(address=contract_address, abi=abi)
+
+
+def _read_round_validators(
+    big_rounds_contract,
+    transaction_hash: _Hash32,
+    round_number: int,
+    validators_count: int,
+    block_number: int,
+) -> List[Address]:
+    validators: List[Address] = []
+    for offset in range(0, validators_count, TRANSACTION_ARRAY_PAGE_SIZE):
+        page, total = _call_at_block(
+            big_rounds_contract.functions.getRoundValidatorsPaged(
+                transaction_hash,
+                round_number,
+                offset,
+                TRANSACTION_ARRAY_PAGE_SIZE,
+            ),
+            block_number,
+        )
+        if total != validators_count:
+            raise GenLayerError(
+                "Inconsistent transaction committee size at fixed block "
+                f"{block_number}: expected {validators_count}, got {total}"
+            )
+        validators.extend(page)
+
+    if len(validators) != validators_count:
+        raise GenLayerError(
+            "Incomplete transaction committee at fixed block "
+            f"{block_number}: expected {validators_count}, got {len(validators)}"
+        )
+    return validators
+
+
+def _read_consumed_validators(
+    big_rounds_contract,
+    transaction_hash: _Hash32,
+    validators_count: int,
+    block_number: int,
+) -> List[Address]:
+    validators: List[Address] = []
+    for offset in range(0, validators_count, TRANSACTION_ARRAY_PAGE_SIZE):
+        page, total = _call_at_block(
+            big_rounds_contract.functions.getConsumedValidatorsPaged(
+                transaction_hash,
+                offset,
+                TRANSACTION_ARRAY_PAGE_SIZE,
+            ),
+            block_number,
+        )
+        if total != validators_count:
+            raise GenLayerError(
+                "Inconsistent consumed-validator count at fixed block "
+                f"{block_number}: expected {validators_count}, got {total}"
+            )
+        validators.extend(page)
+
+    if len(validators) != validators_count:
+        raise GenLayerError(
+            "Incomplete consumed-validator set at fixed block "
+            f"{block_number}: expected {validators_count}, got {len(validators)}"
+        )
+    return validators
+
+
+def _read_train_transaction_data(
+    self: GenLayerClient,
+    consensus_data_contract,
+    transaction_hash: _Hash32,
+    block_number: int,
+):
+    """Compose one bounded transaction snapshot from train read surfaces."""
+    address_manager = _address_manager(self, consensus_data_contract, block_number)
+    big_rounds = _resolve_contract(
+        self,
+        address_manager,
+        "ConsensusDataBigRounds",
+        CONSENSUS_DATA_BIG_ROUNDS_ABI,
+        block_number,
+    )
+    transaction_manager = _resolve_contract(
+        self,
+        address_manager,
+        "TransactionManager",
+        TRANSACTION_MANAGER_READ_ABI,
+        block_number,
+    )
+    rounds_storage = _resolve_contract(
+        self,
+        address_manager,
+        "RoundsStorage",
+        ROUNDS_STORAGE_READ_ABI,
+        block_number,
+    )
+
+    tx_data = _call_at_block(
+        big_rounds.functions.getStoredTransactionDataLight(transaction_hash),
+        block_number,
+    )
+    last_round = tx_data[21]
+    round_number = last_round[0]
+    validators_count = last_round[7]
+    validators = _read_round_validators(
+        big_rounds,
+        transaction_hash,
+        round_number,
+        validators_count,
+        block_number,
+    )
+    consumed_validators = _read_consumed_validators(
+        big_rounds,
+        transaction_hash,
+        tx_data[22],
+        block_number,
+    )
+    validator_votes = _call_at_block(
+        rounds_storage.functions.getValidatorVotes(transaction_hash, round_number),
+        block_number,
+    )
+    validator_votes_hash = _call_at_block(
+        rounds_storage.functions.getValidatorVotesHash(transaction_hash, round_number),
+        block_number,
+    )
+    validator_result_hash = _call_at_block(
+        rounds_storage.functions.getValidatorResultHash(transaction_hash, round_number),
+        block_number,
+    )
+    tx_execution_result = _call_at_block(
+        transaction_manager.functions.getTxExecutionResult(transaction_hash),
+        block_number,
+    )
+    num_of_initial_validators = _call_at_block(
+        transaction_manager.functions.getNumOfInitialValidators(transaction_hash),
+        block_number,
+    )
+
+    for label, values in (
+        ("validator votes", validator_votes),
+        ("validator vote hashes", validator_votes_hash),
+        ("validator result hashes", validator_result_hash),
+    ):
+        if len(values) != validators_count:
+            raise GenLayerError(
+                f"Incomplete {label} at fixed block {block_number}: "
+                f"expected {validators_count}, got {len(values)}"
+            )
+
+    return (
+        tx_data,
+        validators,
+        validator_votes,
+        validator_votes_hash,
+        validator_result_hash,
+        consumed_validators,
+        tx_execution_result,
+        num_of_initial_validators,
+    )
+
+
+def _read_transaction_lifecycle(
+    consensus_data_contract,
+    transaction_hash: _Hash32,
+    block_number: int,
+    timestamp: int = 0,
+) -> ProtocolTransactionLifecycle:
+    lifecycle = _call_at_block(
+        consensus_data_contract.functions.getTransactionLifecycle(
+            transaction_hash, timestamp
+        ),
+        block_number,
+    )
+    stored_status, resolution, latest_decision, decision_active = lifecycle
+    projected_status = resolution[2]
+    resolution_action = resolution[3]
+    resolution_source = resolution[6]
+    return {
+        "stored_status": int(stored_status),
+        "stored_status_name": PROTOCOL_TRANSACTION_STATUS_NUMBER_TO_NAME[
+            str(stored_status)
+        ],
+        "projected_status": int(projected_status),
+        "projected_status_name": PROTOCOL_TRANSACTION_STATUS_NUMBER_TO_NAME[
+            str(projected_status)
+        ],
+        "resolution_action": int(resolution_action),
+        "resolution_action_name": RESOLUTION_ACTION_NUMBER_TO_NAME[
+            str(resolution_action)
+        ],
+        "resolution_source": int(resolution_source),
+        "resolution_source_name": RESOLUTION_SOURCE_NUMBER_TO_NAME[
+            str(resolution_source)
+        ],
+        "decision_id": str(latest_decision[1]) if decision_active else None,
+        "decision_active": bool(decision_active),
+        "evaluated_at": int(resolution[17]),
+    }
+
+
+def _decode_rpc_transaction_lifecycle(result: Any) -> ProtocolTransactionLifecycle:
+    if not isinstance(result, dict):
+        raise GenLayerError("gen_getTransactionLifecycle returned no lifecycle object")
+
+    def code(key: str) -> int:
+        value = result.get(key)
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise GenLayerError(
+                f"gen_getTransactionLifecycle returned invalid {key}: {value!r}"
+            )
+        return value
+
+    stored_status = code("storedStatusCode")
+    projected_status = code("projectedStatusCode")
+    resolution_action = code("resolutionActionCode")
+    resolution_source = code("resolutionSourceCode")
+    try:
+        stored_status_name = PROTOCOL_TRANSACTION_STATUS_NUMBER_TO_NAME[
+            str(stored_status)
+        ]
+        projected_status_name = PROTOCOL_TRANSACTION_STATUS_NUMBER_TO_NAME[
+            str(projected_status)
+        ]
+        resolution_action_name = RESOLUTION_ACTION_NUMBER_TO_NAME[
+            str(resolution_action)
+        ]
+        resolution_source_name = RESOLUTION_SOURCE_NUMBER_TO_NAME[
+            str(resolution_source)
+        ]
+    except KeyError as exc:
+        raise GenLayerError(
+            f"gen_getTransactionLifecycle returned unknown protocol ordinal: {exc.args[0]}"
+        ) from exc
+
+    wire_names = {
+        "storedStatus": stored_status_name.value,
+        "projectedStatus": projected_status_name.value,
+        "resolutionAction": resolution_action_name.value,
+        "resolutionSource": resolution_source_name.value,
+    }
+    for key, enum_value in wire_names.items():
+        expected = enum_value
+        if result.get(key) != expected:
+            raise GenLayerError(
+                f"gen_getTransactionLifecycle returned inconsistent {key}: "
+                f"expected {expected!r}, got {result.get(key)!r}"
+            )
+
+    decision_active = result.get("decisionActive")
+    if not isinstance(decision_active, bool):
+        raise GenLayerError(
+            "gen_getTransactionLifecycle returned invalid decisionActive"
+        )
+    decision_id = result.get("decisionId")
+    if decision_id is not None and (
+        not isinstance(decision_id, str) or not decision_id.isdigit()
+    ):
+        raise GenLayerError("gen_getTransactionLifecycle returned invalid decisionId")
+    if decision_active != (decision_id is not None):
+        raise GenLayerError(
+            "gen_getTransactionLifecycle returned inconsistent decision identity"
+        )
+    evaluated_at = result.get("evaluatedAt")
+    if isinstance(evaluated_at, bool) or not isinstance(evaluated_at, int):
+        raise GenLayerError("gen_getTransactionLifecycle returned invalid evaluatedAt")
+
+    return {
+        "stored_status": stored_status,
+        "stored_status_name": stored_status_name,
+        "projected_status": projected_status,
+        "projected_status_name": projected_status_name,
+        "resolution_action": resolution_action,
+        "resolution_action_name": resolution_action_name,
+        "resolution_source": resolution_source,
+        "resolution_source_name": resolution_source_name,
+        "decision_id": decision_id,
+        "decision_active": decision_active,
+        "evaluated_at": evaluated_at,
+    }
+
+
+_METHOD_NOT_FOUND_CODE = -32601
+_METHOD_NOT_FOUND_MESSAGES = (
+    "method not found",
+    "does not exist",
+    "method not supported",
+)
+
+
+def _is_method_not_found_error(error: Any) -> bool:
+    """Recognize only an explicit JSON-RPC missing-method response."""
+    seen = set()
+    current = error
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, dict):
+            code = current.get("code")
+            message = current.get("message")
+            current = current.get("error") or current.get("cause")
+        else:
+            code = getattr(current, "code", None)
+            message = getattr(current, "message", None) or str(current)
+            current = getattr(current, "__cause__", None)
+        if code == _METHOD_NOT_FOUND_CODE:
+            return True
+        if isinstance(message, str) and any(
+            marker in message.lower() for marker in _METHOD_NOT_FOUND_MESSAGES
+        ):
+            return True
+    return False
+
+
+def _studio_protocol_status(value: Any) -> ProtocolTransactionStatus:
+    """Normalize the stored status exposed by the current Studio transaction."""
+    if value == "ACTIVATED":
+        return ProtocolTransactionStatus.PENDING
+    if isinstance(value, ProtocolTransactionStatus):
+        return value
+    if isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
+        return PROTOCOL_TRANSACTION_STATUS_NUMBER_TO_NAME[str(value)]
+    if isinstance(value, str) and value in ProtocolTransactionStatus.__members__:
+        return ProtocolTransactionStatus[value]
+    return ProtocolTransactionStatus(value)
+
+
+def _studio_transaction_lifecycle_fallback(
+    self: GenLayerClient,
+    transaction_hash: _Hash32,
+    timestamp: Optional[int],
+    cause: Any,
+) -> ProtocolTransactionLifecycle:
+    """Expose only the lifecycle facts current Studio can prove."""
+    try:
+        response = self.provider.make_request(
+            method="eth_getTransactionByHash", params=[transaction_hash]
+        )
+        transaction = response.get("result") if isinstance(response, dict) else None
+        if not isinstance(transaction, dict):
+            raise ValueError("missing transaction")
+        status_name = _studio_protocol_status(transaction.get("status"))
+        status_code = int(PROTOCOL_TRANSACTION_STATUS_NAME_TO_NUMBER[status_name])
+    except Exception as exc:
+        if isinstance(cause, BaseException):
+            raise cause
+        raise GenLayerError(
+            "gen_getTransactionLifecycle is unavailable and Studio did not return "
+            "a readable stored transaction status"
+        ) from exc
+
+    return {
+        "stored_status": status_code,
+        "stored_status_name": status_name,
+        "projected_status": status_code,
+        "projected_status_name": status_name,
+        "resolution_action": 0,
+        "resolution_action_name": RESOLUTION_ACTION_NUMBER_TO_NAME["0"],
+        "resolution_source": 0,
+        "resolution_source_name": RESOLUTION_SOURCE_NUMBER_TO_NAME["0"],
+        "decision_id": None,
+        "decision_active": False,
+        "evaluated_at": timestamp if timestamp is not None else int(time.time()),
+    }
+
+
+def get_transaction_lifecycle(
+    self: GenLayerClient,
+    transaction_hash: _Hash32,
+    timestamp: Optional[int] = None,
+) -> ProtocolTransactionLifecycle:
+    """Return the raw stored/projected resolution-kernel view.
+
+    This is an advanced protocol API. Ordinary consumers should use the
+    discriminated ``lifecycle`` returned by :func:`get_transaction`.
+    """
+
+    if self.chain.id == localnet.id:
+        tx_id = (
+            Web3.to_hex(transaction_hash)
+            if isinstance(transaction_hash, bytes)
+            else transaction_hash
+        )
+        params: Dict[str, Any] = {"txId": tx_id}
+        if timestamp is not None:
+            params["timestamp"] = timestamp
+        try:
+            response = self.provider.make_request(
+                method="gen_getTransactionLifecycle", params=[params]
+            )
+        except Exception as exc:
+            if _is_method_not_found_error(exc):
+                return _studio_transaction_lifecycle_fallback(
+                    self, tx_id, timestamp, exc
+                )
+            raise
+        error = response.get("error") if isinstance(response, dict) else None
+        if error is not None:
+            if _is_method_not_found_error(error):
+                return _studio_transaction_lifecycle_fallback(
+                    self, tx_id, timestamp, error
+                )
+            raise GenLayerError(f"gen_getTransactionLifecycle failed: {error}")
+        return _decode_rpc_transaction_lifecycle(response.get("result"))
+
+    consensus_data_contract = self.w3.eth.contract(
+        address=self.chain.consensus_data_contract["address"],
+        abi=self.chain.consensus_data_contract["abi"],
+    )
+    block_number = self.w3.eth.block_number
+    return _read_transaction_lifecycle(
+        consensus_data_contract,
+        transaction_hash,
+        block_number,
+        timestamp if timestamp is not None else 0,
     )
 
 
@@ -219,27 +687,54 @@ def get_transaction(
         transaction = self.provider.make_request(
             method="eth_getTransactionByHash", params=[transaction_hash]
         )["result"]
-        localnet_status = (
-            TransactionStatus.PENDING
+        protocol_status = (
+            ProtocolTransactionStatus.PENDING
             if transaction["status"] == "ACTIVATED"
             else transaction["status"]
         )
-        transaction["status"] = int(TRANSACTION_STATUS_NAME_TO_NUMBER[localnet_status])
-        transaction["status_name"] = localnet_status
+        lifecycle = transaction_lifecycle_from_protocol_status(protocol_status)
+        if lifecycle["state"] == "finalized":
+            outcome = transaction_outcome_from_protocol_result(
+                transaction.get("result_name", transaction.get("result", 0))
+            )
+            if outcome is not None:
+                lifecycle["outcome"] = outcome
+        transaction["lifecycle"] = lifecycle
+        transaction.pop("status", None)
+        transaction.pop("status_name", None)
         return _decode_localnet_transaction(transaction)
-    # Decode for testnet — call both to get messages + txExecutionResult
+    # Decode one fixed-block train snapshot. The light record and split array
+    # reads avoid the oversized aggregate getTransactionAllData response.
     consensus_data_contract = self.w3.eth.contract(
         address=self.chain.consensus_data_contract["address"],
         abi=self.chain.consensus_data_contract["abi"],
     )
-    tx_data = consensus_data_contract.functions.getTransactionData(
-        transaction_hash, int(time.time())
-    ).call()
-    tx_all_data, rounds_data = consensus_data_contract.functions.getTransactionAllData(
-        transaction_hash
-    ).call()
-    raw_transaction = GenLayerRawTransaction.from_transaction_data(tx_data)
-    raw_transaction.tx_execution_result = tx_all_data[1]
+    block_number = self.w3.eth.block_number
+    (
+        tx_data,
+        validators,
+        validator_votes,
+        validator_votes_hash,
+        validator_result_hash,
+        consumed_validators,
+        tx_execution_result,
+        num_of_initial_validators,
+    ) = _read_train_transaction_data(
+        self,
+        consensus_data_contract,
+        transaction_hash,
+        block_number,
+    )
+    raw_transaction = GenLayerRawTransaction.from_transaction_data_light(
+        tx_data,
+        validators,
+        validator_votes,
+        validator_votes_hash,
+        validator_result_hash,
+        consumed_validators,
+        tx_execution_result,
+        num_of_initial_validators,
+    )
     decoded_transaction = raw_transaction.decode()
     decoded_transaction["triggered_transactions"] = _decode_triggered_txs(
         self, decoded_transaction
@@ -250,20 +745,20 @@ def get_transaction(
 def _decode_triggered_txs(
     self: GenLayerClient, tx: GenLayerTransaction
 ) -> List[HexStr]:
-    status = TRANSACTION_STATUS_NUMBER_TO_NAME[tx["status"]]
-    if status not in [TransactionStatus.FINALIZED, TransactionStatus.ACCEPTED]:
+    lifecycle = tx["lifecycle"]
+    state = lifecycle["state"]
+    accepted = state == "decided" and lifecycle.get("outcome") == "accepted"
+    if not accepted and state != "finalized":
         return []
 
     event_hashes_by_status = {
-        TransactionStatus.FINALIZED: self.w3.keccak(
-            text="TransactionFinalized(bytes32)"
-        ).hex(),
-        TransactionStatus.ACCEPTED: self.w3.keccak(
-            text="TransactionAccepted(bytes32)"
-        ).hex(),
+        "finalized": self.w3.keccak(text="TransactionFinalized(bytes32)").hex(),
+        "accepted": self.w3.keccak(text="TransactionAccepted(bytes32)").hex(),
     }
 
-    def process_events_for_status(event_status: TransactionStatus) -> List[HexStr]:
+    def process_events_for_status(
+        event_status: Literal["accepted", "finalized"],
+    ) -> List[HexStr]:
         """Helper function to process events for a given status."""
         event_signature_hash = event_hashes_by_status[event_status]
         from_block = int(tx["read_state_block_range"]["proposal_block"])
@@ -295,11 +790,11 @@ def _decode_triggered_txs(
     triggered_txs = []
 
     # Triggered transactions can happen on ACCEPTED or FINALIZED statuses
-    if status in [TransactionStatus.ACCEPTED, TransactionStatus.FINALIZED]:
-        triggered_txs.extend(process_events_for_status(TransactionStatus.ACCEPTED))
+    if accepted or state == "finalized":
+        triggered_txs.extend(process_events_for_status("accepted"))
 
-    if status == TransactionStatus.FINALIZED:
-        triggered_txs.extend(process_events_for_status(TransactionStatus.FINALIZED))
+    if state == "finalized":
+        triggered_txs.extend(process_events_for_status("finalized"))
 
     return triggered_txs
 
@@ -323,7 +818,16 @@ def debug_trace_transaction(
 ) -> Dict[str, Any]:
     response = self.provider.make_request(
         method="gen_dbg_traceTransaction",
-        params=[{"txID": Web3.to_hex(transaction_hash) if isinstance(transaction_hash, bytes) else transaction_hash, "round": round}],
+        params=[
+            {
+                "txID": (
+                    Web3.to_hex(transaction_hash)
+                    if isinstance(transaction_hash, bytes)
+                    else transaction_hash
+                ),
+                "round": round,
+            }
+        ],
     )
     return response.get("result", {})
 
@@ -333,7 +837,7 @@ def _simplify_transaction_receipt(tx: GenLayerTransaction) -> GenLayerTransactio
     Simplify transaction receipt by removing non-essential fields while preserving functionality.
 
     Removes: Binary data, internal timestamps, appeal fields, processing details, historical data
-    Preserves: Transaction IDs, status, execution results, node configs, readable data
+    Preserves: Transaction IDs, lifecycle, execution results, node configs, readable data
     """
     simplified_tx = tx.copy()
 

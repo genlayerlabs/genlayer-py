@@ -64,19 +64,19 @@ client.initialize_consensus_smart_contract(force_reset: bool = False)
 Executes a read-only contract call without modifying state.
 
 ```python
-client.read_contract(address: Union, function_name: str, args: Union = None, kwargs: Union = None, account: Union = None, raw_return: bool = False, transaction_hash_variant: TransactionHashVariant = <TransactionHashVariant.LATEST_NONFINAL: 'latest-nonfinal'>, sim_config: Union = None)
+client.read_contract(address: Union, function_name: str, args: Optional = None, kwargs: Optional = None, account: Optional = None, raw_return: bool = False, transaction_hash_variant: TransactionHashVariant = <TransactionHashVariant.LATEST_NONFINAL: 'latest-nonfinal'>, sim_config: Optional = None)
 ```
 
 | Parameter | Type | Required | Default |
 |-----------|------|----------|---------|
 | address | `Union` | yes |  |
 | function_name | `str` | yes |  |
-| args | `Union` | no | None |
-| kwargs | `Union` | no | None |
-| account | `Union` | no | None |
+| args | `Optional` | no | None |
+| kwargs | `Optional` | no | None |
+| account | `Optional` | no | None |
 | raw_return | `bool` | no | False |
 | transaction_hash_variant | `TransactionHashVariant` | no | <TransactionHashVariant.LATEST_NONFINAL: 'latest-nonfinal'> |
-| sim_config | `Union` | no | None |
+| sim_config | `Optional` | no | None |
 
 ---
 
@@ -85,20 +85,22 @@ client.read_contract(address: Union, function_name: str, args: Union = None, kwa
 Executes a state-modifying function on a contract through consensus. Returns the transaction hash.
 
 ```python
-client.write_contract(address: Union, function_name: str, account: Union = None, consensus_max_rotations: Union = None, value: int = 0, leader_only: bool = False, args: Union = None, kwargs: Union = None, sim_config: Union = None)
+client.write_contract(address: Union, function_name: str, account: Optional = None, consensus_max_rotations: Optional = None, value: int = 0, leader_only: bool = False, args: Optional = None, kwargs: Optional = None, sim_config: Optional = None, valid_until: Optional = None, fees: Optional = None)
 ```
 
 | Parameter | Type | Required | Default |
 |-----------|------|----------|---------|
 | address | `Union` | yes |  |
 | function_name | `str` | yes |  |
-| account | `Union` | no | None |
-| consensus_max_rotations | `Union` | no | None |
+| account | `Optional` | no | None |
+| consensus_max_rotations | `Optional` | no | None |
 | value | `int` | no | 0 |
 | leader_only | `bool` | no | False |
-| args | `Union` | no | None |
-| kwargs | `Union` | no | None |
-| sim_config | `Union` | no | None |
+| args | `Optional` | no | None |
+| kwargs | `Optional` | no | None |
+| sim_config | `Optional` | no | None |
+| valid_until | `Optional` | no | None |
+| fees | `Optional` | no | None |
 
 ---
 
@@ -107,17 +109,20 @@ client.write_contract(address: Union, function_name: str, account: Union = None,
 Simulates a state-modifying contract call without executing on-chain. Localnet only.
 
 ```python
-client.simulate_write_contract(address: Union, function_name: str, account: Union = None, args: Union = None, kwargs: Union = None, sim_config: Union = None, transaction_hash_variant: TransactionHashVariant = <TransactionHashVariant.LATEST_NONFINAL: 'latest-nonfinal'>)
+client.simulate_write_contract(address: Union, function_name: str, account: Optional = None, args: Optional = None, kwargs: Optional = None, value: int = 0, leader_only: bool = False, fees: Optional = None, sim_config: Optional = None, transaction_hash_variant: TransactionHashVariant = <TransactionHashVariant.LATEST_NONFINAL: 'latest-nonfinal'>)
 ```
 
 | Parameter | Type | Required | Default |
 |-----------|------|----------|---------|
 | address | `Union` | yes |  |
 | function_name | `str` | yes |  |
-| account | `Union` | no | None |
-| args | `Union` | no | None |
-| kwargs | `Union` | no | None |
-| sim_config | `Union` | no | None |
+| account | `Optional` | no | None |
+| args | `Optional` | no | None |
+| kwargs | `Optional` | no | None |
+| value | `int` | no | 0 |
+| leader_only | `bool` | no | False |
+| fees | `Optional` | no | None |
+| sim_config | `Optional` | no | None |
 | transaction_hash_variant | `TransactionHashVariant` | no | <TransactionHashVariant.LATEST_NONFINAL: 'latest-nonfinal'> |
 
 ---
@@ -127,18 +132,20 @@ client.simulate_write_contract(address: Union, function_name: str, account: Unio
 Deploys a new intelligent contract to GenLayer. Returns the transaction hash.
 
 ```python
-client.deploy_contract(code: Union, account: Union = None, args: Union = None, kwargs: Union = None, consensus_max_rotations: Union = None, leader_only: bool = False, sim_config: Union = None)
+client.deploy_contract(code: Union, account: Optional = None, args: Optional = None, kwargs: Optional = None, consensus_max_rotations: Optional = None, leader_only: bool = False, sim_config: Optional = None, valid_until: Optional = None, fees: Optional = None)
 ```
 
 | Parameter | Type | Required | Default |
 |-----------|------|----------|---------|
 | code | `Union` | yes |  |
-| account | `Union` | no | None |
-| args | `Union` | no | None |
-| kwargs | `Union` | no | None |
-| consensus_max_rotations | `Union` | no | None |
+| account | `Optional` | no | None |
+| args | `Optional` | no | None |
+| kwargs | `Optional` | no | None |
+| consensus_max_rotations | `Optional` | no | None |
 | leader_only | `bool` | no | False |
-| sim_config | `Union` | no | None |
+| sim_config | `Optional` | no | None |
+| valid_until | `Optional` | no | None |
+| fees | `Optional` | no | None |
 
 ---
 
@@ -177,31 +184,188 @@ client.get_contract_schema_for_code(contract_code: AnyStr)
 ### appeal_transaction
 
 Appeals a consensus transaction to trigger a new round of validation.
+Returns the original transaction_id (appeals operate on the same tx).
+Deployed Consensus fills missing decision/value inputs from its
+authoritative quote. Current Studio requires an explicit value and does
+not accept ``expected_decision_id``.
 
 ```python
-client.appeal_transaction(transaction_id: HexStr, account: Union = None, value: int = 0)
+client.appeal_transaction(transaction_id: HexStr, account: Optional = None, value: Optional = None, expected_decision_id: Optional = None)
 ```
 
 | Parameter | Type | Required | Default |
 |-----------|------|----------|---------|
 | transaction_id | `HexStr` | yes |  |
-| account | `Union` | no | None |
-| value | `int` | no | 0 |
+| account | `Optional` | no | None |
+| value | `Optional` | no | None |
+| expected_decision_id | `Optional` | no | None |
 
 ---
 
-### wait_for_transaction_receipt
+### top_up_fees
 
-Polls until a transaction reaches the specified status. Returns the transaction receipt.
+Deposits additional fee budget for an existing consensus transaction.
 
 ```python
-client.wait_for_transaction_receipt(transaction_hash: Union, status: TransactionStatus = <TransactionStatus.ACCEPTED: 'ACCEPTED'>, interval: int = 3000, retries: int = 10, full_transaction: bool = False)
+client.top_up_fees(transaction_id: HexStr, distribution: FeesDistributionInput, value: int, account: Optional = None)
+```
+
+| Parameter | Type | Required | Default |
+|-----------|------|----------|---------|
+| transaction_id | `HexStr` | yes |  |
+| distribution | `FeesDistributionInput` | yes |  |
+| value | `int` | yes |  |
+| account | `Optional` | no | None |
+
+**Returns:** `HexStr`
+
+---
+
+### top_up_and_submit_appeal
+
+Deposits appeal funding and submits an appeal.
+
+On deployed Consensus, omitted decision/value inputs are resolved from
+the authoritative appeal quote. Current Studio requires an explicit
+value and does not accept ``expected_decision_id``.
+
+```python
+client.top_up_and_submit_appeal(transaction_id: HexStr, distribution: FeesDistributionInput, account: Optional = None, value: Optional = None, expected_decision_id: Optional = None)
+```
+
+| Parameter | Type | Required | Default |
+|-----------|------|----------|---------|
+| transaction_id | `HexStr` | yes |  |
+| distribution | `FeesDistributionInput` | yes |  |
+| account | `Optional` | no | None |
+| value | `Optional` | no | None |
+| expected_decision_id | `Optional` | no | None |
+
+**Returns:** `HexStr`
+
+---
+
+### can_appeal
+
+Checks whether the exact active decision can be appealed on a network.
+
+This decision-bound read is not available on current Studio.
+
+```python
+client.can_appeal(transaction_id: HexStr, expected_decision_id: Optional = None)
+```
+
+| Parameter | Type | Required | Default |
+|-----------|------|----------|---------|
+| transaction_id | `HexStr` | yes |  |
+| expected_decision_id | `Optional` | no | None |
+
+**Returns:** `bool`
+
+---
+
+### get_appeal_quote
+
+Returns a network's latest decision id, appeal charges, and deadline.
+
+Current Studio has no decision-bound quote surface.
+
+```python
+client.get_appeal_quote(transaction_id: HexStr)
+```
+
+| Parameter | Type | Required | Default |
+|-----------|------|----------|---------|
+| transaction_id | `HexStr` | yes |  |
+
+**Returns:** `Dict`
+
+---
+
+### get_appeal_charge
+
+Returns the full appeal payment (bond plus induced-work funding).
+
+Current Studio has no decision-bound quote surface.
+
+```python
+client.get_appeal_charge(transaction_id: HexStr)
+```
+
+| Parameter | Type | Required | Default |
+|-----------|------|----------|---------|
+| transaction_id | `HexStr` | yes |  |
+
+**Returns:** `int`
+
+---
+
+### get_min_appeal_bond
+
+Deprecated alias for :meth:`get_appeal_charge`.
+
+```python
+client.get_min_appeal_bond(transaction_id: HexStr)
+```
+
+| Parameter | Type | Required | Default |
+|-----------|------|----------|---------|
+| transaction_id | `HexStr` | yes |  |
+
+**Returns:** `int`
+
+---
+
+### wait_for_decision
+
+Poll until the stored transaction state is decided or terminal.
+
+```python
+client.wait_for_decision(transaction_hash: Union, interval: int = 3000, retries: int = 10, full_transaction: bool = False)
 ```
 
 | Parameter | Type | Required | Default |
 |-----------|------|----------|---------|
 | transaction_hash | `Union` | yes |  |
-| status | `TransactionStatus` | no | <TransactionStatus.ACCEPTED: 'ACCEPTED'> |
+| interval | `int` | no | 3000 |
+| retries | `int` | no | 10 |
+| full_transaction | `bool` | no | False |
+
+**Returns:** `GenLayerTransaction`
+
+---
+
+### wait_for_finalization
+
+Poll until the stored transaction state is finalized.
+
+```python
+client.wait_for_finalization(transaction_hash: Union, interval: int = 3000, retries: int = 10, full_transaction: bool = False)
+```
+
+| Parameter | Type | Required | Default |
+|-----------|------|----------|---------|
+| transaction_hash | `Union` | yes |  |
+| interval | `int` | no | 3000 |
+| retries | `int` | no | 10 |
+| full_transaction | `bool` | no | False |
+
+**Returns:** `GenLayerTransaction`
+
+---
+
+### wait_for_transaction_receipt
+
+Poll for a stored decision (default) or stored finalization.
+
+```python
+client.wait_for_transaction_receipt(transaction_hash: Union, wait_until: Literal = 'decided', interval: int = 3000, retries: int = 10, full_transaction: bool = False)
+```
+
+| Parameter | Type | Required | Default |
+|-----------|------|----------|---------|
+| transaction_hash | `Union` | yes |  |
+| wait_until | `Literal` | no | 'decided' |
 | interval | `int` | no | 3000 |
 | retries | `int` | no | 10 |
 | full_transaction | `bool` | no | False |
@@ -212,7 +376,12 @@ client.wait_for_transaction_receipt(transaction_hash: Union, status: Transaction
 
 ### get_transaction
 
-Fetches transaction data including status, execution result, and consensus details.
+Fetch transaction data with a stable stored-state ``lifecycle``.
+
+The lifecycle's ``state`` is one of processing, decided, finalized, or
+canceled. Processing carries ``phase`` and decided carries ``outcome``.
+The train exposes ``tx_execution_hash``; legacy receipt bytes are
+unavailable, so ``tx_receipt`` is ``None``.
 
 ```python
 client.get_transaction(transaction_hash: Union)
@@ -223,6 +392,27 @@ client.get_transaction(transaction_hash: Union)
 | transaction_hash | `Union` | yes |  |
 
 **Returns:** `GenLayerTransaction`
+
+---
+
+### get_transaction_lifecycle
+
+Return advanced stored/projected/action protocol lifecycle data.
+
+If current Studio does not expose the advanced RPC, only its provable
+stored status is returned: projection repeats it, resolution is
+NoOp/Unspecified, and decision identity is inactive.
+
+```python
+client.get_transaction_lifecycle(transaction_hash: Union, timestamp: Optional = None)
+```
+
+| Parameter | Type | Required | Default |
+|-----------|------|----------|---------|
+| transaction_hash | `Union` | yes |  |
+| timestamp | `Optional` | no | None |
+
+**Returns:** `ProtocolTransactionLifecycle`
 
 ---
 
@@ -261,29 +451,6 @@ client.debug_trace_transaction(transaction_hash: Union, round: int = 0)
 
 ## Types and Enums
 
-### TransactionStatus
-
-Status of a GenLayer transaction in the consensus lifecycle.
-
-```python
-TransactionStatus.UNINITIALIZED = "UNINITIALIZED"
-TransactionStatus.PENDING = "PENDING"
-TransactionStatus.PROPOSING = "PROPOSING"
-TransactionStatus.COMMITTING = "COMMITTING"
-TransactionStatus.REVEALING = "REVEALING"
-TransactionStatus.ACCEPTED = "ACCEPTED"
-TransactionStatus.UNDETERMINED = "UNDETERMINED"
-TransactionStatus.FINALIZED = "FINALIZED"
-TransactionStatus.CANCELED = "CANCELED"
-TransactionStatus.APPEAL_REVEALING = "APPEAL_REVEALING"
-TransactionStatus.APPEAL_COMMITTING = "APPEAL_COMMITTING"
-TransactionStatus.READY_TO_FINALIZE = "READY_TO_FINALIZE"
-TransactionStatus.VALIDATORS_TIMEOUT = "VALIDATORS_TIMEOUT"
-TransactionStatus.LEADER_TIMEOUT = "LEADER_TIMEOUT"
-```
-
----
-
 ### TransactionResult
 
 Consensus voting result across validators.
@@ -297,6 +464,7 @@ TransactionResult.DETERMINISTIC_VIOLATION = "DETERMINISTIC_VIOLATION"
 TransactionResult.NO_MAJORITY = "NO_MAJORITY"
 TransactionResult.MAJORITY_AGREE = "MAJORITY_AGREE"
 TransactionResult.MAJORITY_DISAGREE = "MAJORITY_DISAGREE"
+TransactionResult.MAJORITY_TIMEOUT = "MAJORITY_TIMEOUT"
 ```
 
 ---
@@ -309,28 +477,23 @@ Result of contract execution by the GenVM.
 ExecutionResult.NOT_VOTED = "NOT_VOTED"
 ExecutionResult.FINISHED_WITH_RETURN = "FINISHED_WITH_RETURN"
 ExecutionResult.FINISHED_WITH_ERROR = "FINISHED_WITH_ERROR"
+ExecutionResult.TIMEOUT = "TIMEOUT"
+ExecutionResult.NONDET_DISAGREE = "NONDET_DISAGREE"
+ExecutionResult.DETERMINISTIC_VIOLATION = "DETERMINISTIC_VIOLATION"
 ```
 
 ---
 
 ### VoteType
 
-str(object='') -> str
-str(bytes_or_buffer[, encoding[, errors]]) -> str
-
-Create a new string object from the given object. If encoding or
-errors is specified, then the object must expose a data buffer
-that will be decoded using the given encoding and error handler.
-Otherwise, returns the result of object.__str__() (if defined)
-or repr(object).
-encoding defaults to 'utf-8'.
-errors defaults to 'strict'.
+Validator execution vote recorded for a consensus round.
 
 ```python
 VoteType.NOT_VOTED = "NOT_VOTED"
-VoteType.AGREE = "AGREE"
-VoteType.DISAGREE = "DISAGREE"
+VoteType.FINISHED_WITH_RETURN = "FINISHED_WITH_RETURN"
+VoteType.FINISHED_WITH_ERROR = "FINISHED_WITH_ERROR"
 VoteType.TIMEOUT = "TIMEOUT"
+VoteType.NONDET_DISAGREE = "NONDET_DISAGREE"
 VoteType.DETERMINISTIC_VIOLATION = "DETERMINISTIC_VIOLATION"
 ```
 

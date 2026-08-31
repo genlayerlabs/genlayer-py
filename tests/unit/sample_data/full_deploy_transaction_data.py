@@ -485,7 +485,7 @@ FULL_DEPLOY_TRANSACTION_DATA = {
     "rotation_count": 0,
     "s": None,
     "sender": "0xd650f318A0C1F940a3b6dFeA695747fA9804D685",
-    "status": 7,
+    "lifecycle": {"state": "finalized", "outcome": "accepted"},
     "timestamp_appeal": None,
     "timestamp_awaiting_finalization": 1753284244,
     "to_address": "0xf72aa51B6350C18966923073d3609e1356a3fbBA",
@@ -498,5 +498,4 @@ FULL_DEPLOY_TRANSACTION_DATA = {
     "type": 1,
     "v": None,
     "value": 0,
-    "status_name": "FINALIZED",
 }

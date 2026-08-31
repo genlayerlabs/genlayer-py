@@ -94,8 +94,7 @@ def sample_transaction_data():
         "gaslimit": 2,
         "nonce": 1,
         "type": 2,
-        "status": 7,  # FINALIZED
-        "status_name": "FINALIZED",
+        "lifecycle": {"state": "finalized", "outcome": "accepted"},
         "result": "6",
         "result_name": "MAJORITY_AGREE",
         "created_at": "2025-07-22T19:58:39.866436+00:00",
@@ -115,8 +114,7 @@ def pending_transaction_data():
     """Transaction in pending state"""
     return {
         "hash": "0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
-        "status": 1,  # PENDING
-        "status_name": "PENDING",
+        "lifecycle": {"state": "processing", "phase": "pending"},
         "from_address": "0xd650f318A0C1F940a3b6dFeA695747fA9804D685",
         "to_address": "0xf72aa51B6350C18966923073d3609e1356a3fbBA",
         "value": 0,
@@ -128,8 +126,7 @@ def pending_transaction_data():
 def accepted_transaction_data(sample_transaction_data):
     """Transaction in accepted state"""
     data = sample_transaction_data.copy()
-    data["status"] = 5  # ACCEPTED
-    data["status_name"] = "ACCEPTED"
+    data["lifecycle"] = {"state": "decided", "outcome": "accepted"}
     return data
 
 

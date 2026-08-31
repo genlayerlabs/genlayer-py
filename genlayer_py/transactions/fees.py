@@ -1081,6 +1081,7 @@ def build_estimated_fees_options_from_simulation(
 def build_estimated_fees_distribution(
     options: Optional[FeeEstimateOptions],
     policy: FeePolicyQuote,
+    default_consensus_max_rotations: BigNumberish,
 ) -> FeesDistribution:
     headroom_bps = to_uint(
         _get(options, "priceCapHeadroomBps", "price_cap_headroom_bps"),
@@ -1119,6 +1120,17 @@ def build_estimated_fees_distribution(
         if emits_messages
         else base_execution_budget_default
     )
+    appeal_rounds = to_uint(
+        _get(options, "appealRounds", "appeal_rounds"),
+        "appealRounds",
+    )
+    rotations = _get(options, "rotations")
+    if rotations is None:
+        default_rotations = to_uint(
+            default_consensus_max_rotations,
+            "defaultConsensusMaxRotations",
+        )
+        rotations = [default_rotations] * (appeal_rounds + 1)
 
     return create_fees_distribution(
         {
@@ -1138,7 +1150,7 @@ def build_estimated_fees_distribution(
                 if policy["enabled"]
                 else 0,
             ),
-            "appealRounds": _get(options, "appealRounds", "appeal_rounds"),
+            "appealRounds": appeal_rounds,
             "executionBudgetPerRound": _get(
                 options,
                 "executionBudgetPerRound",
@@ -1151,7 +1163,7 @@ def build_estimated_fees_distribution(
                 "execution_consumed",
             ),
             "totalMessageFees": total_message_fees,
-            "rotations": _get(options, "rotations"),
+            "rotations": rotations,
             "maxPriceGenPerTimeUnit": _get(
                 options,
                 "maxPriceGenPerTimeUnit",

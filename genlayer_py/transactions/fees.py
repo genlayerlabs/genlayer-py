@@ -62,6 +62,12 @@ class InternalMessageFeeParamsInput(TypedDict, total=False):
     executionBudgetPerRound: BigNumberish
     execution_budget_per_round: BigNumberish
     rotations: list[BigNumberish]
+    maxPriceGenPerTimeUnit: BigNumberish
+    max_price_gen_per_time_unit: BigNumberish
+    storageFeeMaxGasPrice: BigNumberish
+    storage_fee_max_gas_price: BigNumberish
+    receiptFeeMaxGasPrice: BigNumberish
+    receipt_fee_max_gas_price: BigNumberish
 
 
 class ExternalMessageFeeParamsInput(TypedDict, total=False):
@@ -438,7 +444,7 @@ def encode_internal_message_fee_params(
         "internalMessageFeeParams.appealRounds",
     )
     encoded = abi_encode(
-        ("(uint256,uint256,uint256,uint256,uint256[])",),
+        ("(uint256,uint256,uint256,uint256,uint256[],uint256,uint256,uint256)",),
         (
             (
                 to_uint(
@@ -470,6 +476,30 @@ def encode_internal_message_fee_params(
                     _get(params, "rotations"),
                     appeal_rounds,
                     "internalMessageFeeParams.rotations",
+                ),
+                to_uint(
+                    _get(
+                        params,
+                        "maxPriceGenPerTimeUnit",
+                        "max_price_gen_per_time_unit",
+                    ),
+                    "internalMessageFeeParams.maxPriceGenPerTimeUnit",
+                ),
+                to_uint(
+                    _get(
+                        params,
+                        "storageFeeMaxGasPrice",
+                        "storage_fee_max_gas_price",
+                    ),
+                    "internalMessageFeeParams.storageFeeMaxGasPrice",
+                ),
+                to_uint(
+                    _get(
+                        params,
+                        "receiptFeeMaxGasPrice",
+                        "receipt_fee_max_gas_price",
+                    ),
+                    "internalMessageFeeParams.receiptFeeMaxGasPrice",
                 ),
             ),
         ),

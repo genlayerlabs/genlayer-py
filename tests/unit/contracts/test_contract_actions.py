@@ -151,14 +151,33 @@ def test_encode_internal_message_fee_params_uses_consensus_tuple_shape():
             "appealRounds": 1,
             "executionBudgetPerRound": 20,
             "rotations": [2, 3],
+            "maxPriceGenPerTimeUnit": 30,
+            "storageFeeMaxGasPrice": 40,
+            "receiptFeeMaxGasPrice": 50,
         }
     )
 
     decoded = abi_decode(
-        ("(uint256,uint256,uint256,uint256,uint256[])",),
+        ("(uint256,uint256,uint256,uint256,uint256[],uint256,uint256,uint256)",),
         Web3.to_bytes(hexstr=encoded),
     )[0]
-    assert decoded == (5, 10, 1, 20, (2, 3))
+    assert decoded == (5, 10, 1, 20, (2, 3), 30, 40, 50)
+
+
+def test_encode_internal_message_fee_params_accepts_snake_case_price_caps():
+    encoded = encode_internal_message_fee_params(
+        {
+            "max_price_gen_per_time_unit": 30,
+            "storage_fee_max_gas_price": 40,
+            "receipt_fee_max_gas_price": 50,
+        }
+    )
+
+    decoded = abi_decode(
+        ("(uint256,uint256,uint256,uint256,uint256[],uint256,uint256,uint256)",),
+        Web3.to_bytes(hexstr=encoded),
+    )[0]
+    assert decoded == (0, 0, 0, 0, (0,), 30, 40, 50)
 
 
 def test_derive_internal_message_call_key_for_short_method_name():

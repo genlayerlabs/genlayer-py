@@ -418,6 +418,96 @@ def test_revert_selector_formatter_names_fee_errors():
     )
 
 
+def _make_prepare_transaction_client(provider_response):
+    return SimpleNamespace(
+        chain=SimpleNamespace(id=localnet.id),
+        get_current_nonce=Mock(return_value=7),
+        provider=SimpleNamespace(
+            make_request=Mock(return_value=provider_response),
+        ),
+    )
+
+
+def test_prepare_transaction_applies_estimate_headroom():
+    client = _make_prepare_transaction_client({"result": "0x5208"})
+
+    transaction = contract_actions._prepare_transaction(
+        self=client,
+        sender=SENDER,
+        recipient=RECIPIENT,
+        data="0x1234",
+    )
+
+    assert transaction["gas"] == 42_000
+    client.provider.make_request.assert_called_once()
+    assert client.provider.make_request.call_args.args[0] == "eth_estimateGas"
+
+
+def test_prepare_transaction_uses_explicit_gas_without_estimating():
+    client = _make_prepare_transaction_client({"result": "0x5208"})
+
+    transaction = contract_actions._prepare_transaction(
+        self=client,
+        sender=SENDER,
+        recipient=RECIPIENT,
+        data="0x1234",
+        gas=32_000_000,
+    )
+
+    assert transaction["gas"] == 32_000_000
+    client.provider.make_request.assert_not_called()
+
+
+@pytest.mark.parametrize("gas", [0, -1, True, 1.5])
+def test_prepare_transaction_rejects_invalid_explicit_gas(gas):
+    client = _make_prepare_transaction_client({"result": "0x5208"})
+
+    with pytest.raises(GenLayerError, match="gas must be a positive integer"):
+        contract_actions._prepare_transaction(
+            self=client,
+            sender=SENDER,
+            recipient=RECIPIENT,
+            data="0x1234",
+            gas=gas,
+        )
+
+    client.provider.make_request.assert_not_called()
+
+
+def test_send_transaction_stops_before_broadcast_when_estimation_fails():
+    provider = SimpleNamespace(
+        make_request=Mock(
+            return_value={
+                "error": {"message": "execution reverted", "data": "0x305e533c"}
+            }
+        )
+    )
+    client = SimpleNamespace(
+        chain=SimpleNamespace(
+            id=localnet.id,
+            name="localnet",
+            consensus_main_contract={"address": RECIPIENT},
+        ),
+        get_current_nonce=Mock(return_value=7),
+        provider=provider,
+    )
+    account = SimpleNamespace(address=SENDER, sign_transaction=Mock())
+
+    with pytest.raises(
+        GenLayerError,
+        match="no transaction was sent.*BudgetTooLow",
+    ):
+        contract_actions._send_transaction(
+            self=client,
+            encoded_data="0x1234",
+            sender_account=account,
+        )
+
+    account.sign_transaction.assert_not_called()
+    assert provider.make_request.call_count == 1
+    assert provider.make_request.call_args.args[0] == "eth_estimateGas"
+
+
 def _make_client(add_transaction_abi):
     chain = SimpleNamespace(
         id=61999,
@@ -696,10 +786,12 @@ def test_write_contract_separates_user_value_from_fee_deposit(monkeypatch):
                 }
             ],
         },
+        gas=32_000_000,
     )
 
     assert result == "0xdeadbeef"
     assert captured["value"] == 128
+    assert captured["gas"] == 32_000_000
 
     params = abi_decode(
         ADD_TRANSACTION_WITH_FEES_ARGUMENT_TYPES,
@@ -713,6 +805,28 @@ def test_write_contract_separates_user_value_from_fee_deposit(monkeypatch):
     assert params[9][0][4] == CALL_KEY_WILDCARD
     assert params[9][0][5] == 123
     assert params[9][0][6] == b"\x12\x34"
+
+
+def test_deploy_contract_forwards_outer_evm_gas(monkeypatch):
+    client = _make_client(ADD_TRANSACTION_ABI_V5)
+    client.initialize_consensus_smart_contract = Mock()
+    captured = {}
+
+    def fake_send_transaction(**kwargs):
+        captured.update(kwargs)
+        return "0xdeadbeef"
+
+    monkeypatch.setattr(contract_actions, "_send_transaction", fake_send_transaction)
+
+    result = contract_actions.deploy_contract(
+        self=client,
+        code="print('hello')",
+        account=client.local_account,
+        gas=31_000_000,
+    )
+
+    assert result == "0xdeadbeef"
+    assert captured["gas"] == 31_000_000
 
 
 def test_write_contract_defaults_external_message_allocations_to_finalization(monkeypatch):

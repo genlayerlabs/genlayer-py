@@ -106,6 +106,23 @@ receipt = client.wait_for_transaction_receipt(
 )
 ```
 
+`write_contract` and `deploy_contract` accept the same top-level `gas` override
+used for an EVM transaction. It controls only the outer EVM call to
+`ConsensusMain.addTransaction`; GenLayer consensus and execution budgets remain
+under `fees`.
+
+```python
+tx_hash = client.deploy_contract(
+    account=account,
+    code=contract_code,
+    gas=1_000_000,
+)
+```
+
+When `gas` is omitted, the SDK estimates the outer EVM gas and applies safety
+headroom. If estimation fails, the SDK does not broadcast with a guessed limit;
+inspect the revert or retry with an explicit `gas` value.
+
 ### Fee presets for transactions
 
 Apps can build a trusted fee preset once they know the transaction shape, then

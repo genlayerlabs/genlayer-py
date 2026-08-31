@@ -135,6 +135,7 @@ def write_contract(
     sim_config: Optional[SimConfig] = None,
     valid_until: Optional[int] = None,
     fees: Optional[TransactionFeeOptions] = None,
+    gas: Optional[int] = None,
 ):
     if consensus_max_rotations is None:
         consensus_max_rotations = self.chain.default_consensus_max_rotations
@@ -168,6 +169,7 @@ def write_contract(
         sender_account=sender_account,
         value=value + (transaction_fees["fee_value"] or 0),
         sim_config=sim_config,
+        gas=gas,
     )
 
 
@@ -182,6 +184,7 @@ def deploy_contract(
     sim_config: Optional[SimConfig] = None,
     valid_until: Optional[int] = None,
     fees: Optional[TransactionFeeOptions] = None,
+    gas: Optional[int] = None,
 ):
     if consensus_max_rotations is None:
         consensus_max_rotations = self.chain.default_consensus_max_rotations
@@ -215,6 +218,7 @@ def deploy_contract(
         sender_account=sender_account,
         value=transaction_fees["fee_value"] or 0,
         sim_config=sim_config,
+        gas=gas,
     )
 
 
@@ -928,7 +932,13 @@ def _prepare_transaction(
     recipient: Union[Address, ChecksumAddress],
     data: HexStr,
     value: int = 0,
+    gas: Optional[int] = None,
 ) -> Dict[str, Any]:
+
+    if gas is not None and (
+        isinstance(gas, bool) or not isinstance(gas, int) or gas <= 0
+    ):
+        raise GenLayerError("gas must be a positive integer")
 
     nonce = self.get_current_nonce(address=sender)
 
@@ -955,9 +965,29 @@ def _prepare_transaction(
         **fee_data,
         "chainId": self.chain.id,
     }
-    transaction["gas"] = self.provider.make_request(
-        "eth_estimateGas", params=[transaction]
-    )["result"]
+    if gas is not None:
+        transaction["gas"] = gas
+        return transaction
+
+    try:
+        response = self.provider.make_request(
+            "eth_estimateGas", params=[transaction]
+        )
+        if "error" in response:
+            raise GenLayerError(str(response["error"]))
+        estimate = response.get("result")
+        if estimate is None:
+            raise GenLayerError("eth_estimateGas returned no result")
+        estimated_gas = (
+            int(estimate, 0) if isinstance(estimate, str) else int(estimate)
+        )
+        transaction["gas"] = estimated_gas * 2
+    except Exception as exc:
+        raise GenLayerError(
+            "Gas estimation failed for the outer EVM transaction; no transaction was sent. "
+            "Inspect the revert and, if estimation is unreliable, retry with an explicit "
+            f"gas value. Original error: {_format_rpc_error(exc)}"
+        ) from exc
     return transaction
 
 
@@ -1047,6 +1077,7 @@ def _send_transaction(
     sender_account: Optional[LocalAccount] = None,
     value: int = 0,
     sim_config: Optional[SimConfig] = None,
+    gas: Optional[int] = None,
 ):
     if sender_account is None:
         raise GenLayerError(
@@ -1065,6 +1096,7 @@ def _send_transaction(
             recipient=self.chain.consensus_main_contract["address"],
             data=encoded_data,
             value=value,
+            gas=gas,
         )
         signed_transaction = sender_account.sign_transaction(transaction)
         serialized_transaction = self.w3.to_hex(signed_transaction.raw_transaction)

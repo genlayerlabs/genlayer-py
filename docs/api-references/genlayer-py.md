@@ -82,10 +82,11 @@ client.read_contract(address: Union, function_name: str, args: Union = None, kwa
 
 ### write_contract
 
-Executes a state-modifying function on a contract through consensus. Returns the transaction hash.
+Executes a state-modifying function on a contract through consensus. `gas`
+limits the outer EVM transaction and is separate from GenLayer `fees` budgets.
 
 ```python
-client.write_contract(address: Union, function_name: str, account: Union = None, consensus_max_rotations: Union = None, value: int = 0, leader_only: bool = False, args: Union = None, kwargs: Union = None, sim_config: Union = None)
+client.write_contract(address: Union, function_name: str, account: Union = None, consensus_max_rotations: Union = None, value: int = 0, leader_only: bool = False, args: Union = None, kwargs: Union = None, sim_config: Union = None, valid_until: Union = None, fees: Union = None, gas: Union = None)
 ```
 
 **Parameters:**
@@ -99,6 +100,9 @@ client.write_contract(address: Union, function_name: str, account: Union = None,
 - **args** (`Union`) — optional = None
 - **kwargs** (`Union`) — optional = None
 - **sim_config** (`Union`) — optional = None
+- **valid_until** (`Union`) — optional = None
+- **fees** (`Union`) — optional = None
+- **gas** (`Union`) — optional = None
 
 ---
 
@@ -124,10 +128,11 @@ client.simulate_write_contract(address: Union, function_name: str, account: Unio
 
 ### deploy_contract
 
-Deploys a new intelligent contract to GenLayer. Returns the transaction hash.
+Deploys a new intelligent contract to GenLayer. `gas` limits the outer EVM
+transaction and is separate from GenLayer `fees` budgets.
 
 ```python
-client.deploy_contract(code: Union, account: Union = None, args: Union = None, kwargs: Union = None, consensus_max_rotations: Union = None, leader_only: bool = False, sim_config: Union = None)
+client.deploy_contract(code: Union, account: Union = None, args: Union = None, kwargs: Union = None, consensus_max_rotations: Union = None, leader_only: bool = False, sim_config: Union = None, valid_until: Union = None, fees: Union = None, gas: Union = None)
 ```
 
 **Parameters:**
@@ -139,6 +144,9 @@ client.deploy_contract(code: Union, account: Union = None, args: Union = None, k
 - **consensus_max_rotations** (`Union`) — optional = None
 - **leader_only** (`bool`) — optional = False
 - **sim_config** (`Union`) — optional = None
+- **valid_until** (`Union`) — optional = None
+- **fees** (`Union`) — optional = None
+- **gas** (`Union`) — optional = None
 
 ---
 

@@ -159,8 +159,14 @@ class GenLayerClient(Eth):
         sim_config: Optional[SimConfig] = None,
         valid_until: Optional[int] = None,
         fees: Optional[TransactionFeeOptions] = None,
+        gas: Optional[int] = None,
     ):
-        """Executes a state-modifying function on a contract through consensus. Returns the transaction hash."""
+        """Executes a state-modifying function on a contract through consensus.
+
+        ``gas`` is the optional limit for the outer EVM transaction and is
+        separate from GenLayer protocol budgets supplied through ``fees``.
+        Returns the transaction hash.
+        """
         return write_contract(
             self=self,
             address=address,
@@ -174,6 +180,7 @@ class GenLayerClient(Eth):
             sim_config=sim_config,
             valid_until=valid_until,
             fees=fees,
+            gas=gas,
         )
 
     def simulate_write_contract(
@@ -215,8 +222,14 @@ class GenLayerClient(Eth):
         sim_config: Optional[SimConfig] = None,
         valid_until: Optional[int] = None,
         fees: Optional[TransactionFeeOptions] = None,
+        gas: Optional[int] = None,
     ):
-        """Deploys a new intelligent contract to GenLayer. Returns the transaction hash."""
+        """Deploys a new intelligent contract to GenLayer.
+
+        ``gas`` is the optional limit for the outer EVM transaction and is
+        separate from GenLayer protocol budgets supplied through ``fees``.
+        Returns the transaction hash.
+        """
         return deploy_contract(
             self=self,
             code=code,
@@ -228,6 +241,7 @@ class GenLayerClient(Eth):
             sim_config=sim_config,
             valid_until=valid_until,
             fees=fees,
+            gas=gas,
         )
 
     def get_contract_schema(

@@ -275,8 +275,7 @@ def top_up_fees(
 ) -> HexStr:
     """Deposits additional fee budget for an existing consensus transaction.
 
-    Returns the backend RPC hash: an EVM transaction hash on network backends,
-    or the target GenLayer tx id on Studio/localnet.
+    Returns the signed EVM envelope hash on every backend.
     """
     sender_account = account if account is not None else self.local_account
     encoded_data = _encode_fee_management_data(
@@ -1205,6 +1204,23 @@ def _format_rpc_error(error: Exception) -> str:
     return text
 
 
+def _receipt_revert_reason(self: GenLayerClient, tx_hash: HexStr) -> Optional[str]:
+    """Read Studio's additive receipt reason without weakening EVM semantics."""
+    try:
+        response = self.provider.make_request(
+            method="eth_getTransactionReceipt", params=[tx_hash]
+        )
+    except Exception:
+        return None
+    if not isinstance(response, dict):
+        return None
+    receipt = response.get("result")
+    if not isinstance(receipt, dict):
+        return None
+    reason = receipt.get("revertReason") or receipt.get("error")
+    return reason if isinstance(reason, str) and reason.strip() else None
+
+
 def _send_consensus_call(
     self: GenLayerClient,
     encoded_data: HexStr,
@@ -1236,13 +1252,12 @@ def _send_consensus_call(
         raise GenLayerError(
             f"{operation_name} failed: {_format_rpc_error(exc)}"
         ) from exc
-    if self.chain.id == localnet.id:
-        return tx_hash
-
     tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
 
     if tx_receipt.status != 1:
-        raise GenLayerError(f"{operation_name} reverted: EVM tx {tx_hash}")
+        reason = _receipt_revert_reason(self, tx_hash)
+        suffix = f". {reason}" if reason else ""
+        raise GenLayerError(f"{operation_name} reverted: EVM tx {tx_hash}{suffix}")
 
     return tx_hash
 
@@ -1285,9 +1300,11 @@ def _send_transaction(
     tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
 
     if tx_receipt.status != 1:
+        reason = _receipt_revert_reason(self, tx_hash)
+        suffix = f" {reason}" if reason else ""
         raise GenLayerError(
             f"Transaction reverted: EVM tx {tx_hash} to consensus contract "
-            f"{self.chain.consensus_main_contract['address']} was reverted."
+            f"{self.chain.consensus_main_contract['address']} was reverted.{suffix}"
         )
 
     consensus_main_contract = self.w3.eth.contract(

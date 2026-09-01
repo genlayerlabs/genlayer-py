@@ -735,8 +735,8 @@ def test_encode_submit_appeal_still_requires_a_decision_id_on_the_train_shape():
         contract_actions._encode_submit_appeal_data(self=client, transaction_id=TX_ID)
 
 
-def test_send_consensus_call_returns_localnet_rpc_hash_without_waiting(monkeypatch):
-    wait_for_transaction_receipt = Mock()
+def test_send_consensus_call_returns_localnet_envelope_hash_after_receipt(monkeypatch):
+    wait_for_transaction_receipt = Mock(return_value=SimpleNamespace(status=1))
     sign_transaction = Mock(return_value=SimpleNamespace(raw_transaction=b"\x12\x34"))
     client = SimpleNamespace(
         chain=SimpleNamespace(
@@ -770,7 +770,106 @@ def test_send_consensus_call_returns_localnet_rpc_hash_without_waiting(monkeypat
     )
 
     assert result == TX_ID
-    wait_for_transaction_receipt.assert_not_called()
+    wait_for_transaction_receipt.assert_called_once_with(TX_ID)
+
+
+def test_send_consensus_call_surfaces_studio_receipt_revert_reason(monkeypatch):
+    wait_for_transaction_receipt = Mock(return_value=SimpleNamespace(status=0))
+    sign_transaction = Mock(return_value=SimpleNamespace(raw_transaction=b"\x12\x34"))
+
+    def make_request(*, method, params):
+        if method == "eth_sendRawTransaction":
+            return {"result": TX_ID}
+        if method == "eth_getTransactionReceipt":
+            return {
+                "result": {
+                    "status": "0x0",
+                    "revertReason": "TopUpCannotExtendSchedule",
+                }
+            }
+        raise AssertionError(f"unexpected method {method}")
+
+    client = SimpleNamespace(
+        chain=SimpleNamespace(
+            id=localnet.id,
+            consensus_main_contract={
+                "address": "0x3333333333333333333333333333333333333333",
+            },
+        ),
+        provider=SimpleNamespace(make_request=Mock(side_effect=make_request)),
+        w3=SimpleNamespace(
+            to_hex=Mock(return_value="0xsigned"),
+            eth=SimpleNamespace(
+                wait_for_transaction_receipt=wait_for_transaction_receipt
+            ),
+        ),
+    )
+    account = SimpleNamespace(address=SENDER, sign_transaction=sign_transaction)
+
+    monkeypatch.setattr(
+        contract_actions,
+        "_prepare_transaction",
+        Mock(return_value={"from": SENDER}),
+    )
+
+    with pytest.raises(GenLayerError, match="TopUpCannotExtendSchedule"):
+        contract_actions._send_consensus_call(
+            self=client,
+            encoded_data="0x1234",
+            sender_account=account,
+            value=1,
+            operation_name="Top up fees",
+        )
+
+
+def test_send_transaction_surfaces_studio_receipt_revert_reason(monkeypatch):
+    wait_for_transaction_receipt = Mock(return_value=SimpleNamespace(status=0))
+    sign_transaction = Mock(return_value=SimpleNamespace(raw_transaction=b"\x12\x34"))
+
+    def make_request(*, method, params):
+        if method == "eth_sendRawTransaction":
+            return {"result": TX_ID}
+        if method == "eth_getTransactionReceipt":
+            return {
+                "result": {
+                    "status": "0x0",
+                    "revertReason": "InsufficientFees",
+                }
+            }
+        raise AssertionError(f"unexpected method {method}")
+
+    client = SimpleNamespace(
+        chain=SimpleNamespace(
+            id=localnet.id,
+            name="localnet",
+            consensus_main_contract={
+                "address": "0x3333333333333333333333333333333333333333",
+                "abi": [],
+            },
+        ),
+        provider=SimpleNamespace(make_request=Mock(side_effect=make_request)),
+        w3=SimpleNamespace(
+            to_hex=Mock(return_value="0xsigned"),
+            eth=SimpleNamespace(
+                wait_for_transaction_receipt=wait_for_transaction_receipt
+            ),
+        ),
+    )
+    account = SimpleNamespace(address=SENDER, sign_transaction=sign_transaction)
+
+    monkeypatch.setattr(
+        contract_actions,
+        "_prepare_transaction",
+        Mock(return_value={"from": SENDER}),
+    )
+
+    with pytest.raises(GenLayerError, match="InsufficientFees"):
+        contract_actions._send_transaction(
+            self=client,
+            encoded_data="0x1234",
+            sender_account=account,
+            value=1,
+        )
 
 
 def test_revert_selector_formatter_names_fee_errors():

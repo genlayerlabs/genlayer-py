@@ -24,6 +24,7 @@ from genlayer_py.transactions.fees import (
     build_estimated_fees_distribution,
     calculate_local_round_fees,
     create_fees_distribution,
+    create_top_up_fees_distribution,
     derive_external_message_call_key,
     derive_internal_message_call_key,
     deploy_call_key,
@@ -240,12 +241,8 @@ def test_encode_top_up_fees_uses_consensus_tuple_shape():
         function_name="topUpFees",
         transaction_id=TX_ID,
         distribution={
-            "leaderTimeunitsAllocation": 100,
-            "validatorTimeunitsAllocation": 200,
-            "appealRounds": 1,
             "executionBudgetPerRound": 500_000,
             "totalMessageFees": 30,
-            "rotations": [0, 2],
             "maxPriceGenPerTimeUnit": 12,
             "storageFeeMaxGasPrice": 24,
             "receiptFeeMaxGasPrice": 36,
@@ -261,7 +258,18 @@ def test_encode_top_up_fees_uses_consensus_tuple_shape():
         Web3.to_bytes(hexstr=encoded[10:]),
     )
     assert decoded_tx_id == Web3.to_bytes(hexstr=TX_ID)
-    assert distribution == (100, 200, 1, 500_000, 0, 30, (0, 2), 12, 24, 36)
+    assert distribution == (0, 0, 0, 500_000, 0, 30, (), 12, 24, 36)
+
+
+def test_top_up_distribution_preserves_explicit_initial_schedule():
+    assert create_top_up_fees_distribution({"appealRounds": 1, "rotations": [0, 2]})[
+        "rotations"
+    ] == [0, 2]
+
+
+def test_top_up_distribution_requires_schedule_for_nonzero_appeal_rounds():
+    with pytest.raises(ValueError, match=r"rotations must contain appealRounds \+ 1"):
+        create_top_up_fees_distribution({"appealRounds": 1})
 
 
 def test_top_up_fees_sends_consensus_call(monkeypatch):

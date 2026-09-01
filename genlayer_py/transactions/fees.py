@@ -363,13 +363,11 @@ def _normalize_rotations(
     return normalized
 
 
-def create_fees_distribution(
-    fee_distribution: Optional[FeesDistributionInput] = None,
+def _create_fees_distribution(
+    fee_distribution: Optional[FeesDistributionInput],
+    appeal_rounds: int,
+    rotations: list[int],
 ) -> FeesDistribution:
-    appeal_rounds = to_uint(
-        _get(fee_distribution, "appealRounds", "appeal_rounds"),
-        "fees.distribution.appealRounds",
-    )
     return {
         "leaderTimeunitsAllocation": to_uint(
             _get(
@@ -404,11 +402,7 @@ def create_fees_distribution(
             _get(fee_distribution, "totalMessageFees", "total_message_fees"),
             "fees.distribution.totalMessageFees",
         ),
-        "rotations": _normalize_rotations(
-            _get(fee_distribution, "rotations"),
-            appeal_rounds,
-            "fees.distribution.rotations",
-        ),
+        "rotations": rotations,
         "maxPriceGenPerTimeUnit": to_uint(
             _get(
                 fee_distribution,
@@ -434,6 +428,50 @@ def create_fees_distribution(
             "fees.distribution.receiptFeeMaxGasPrice",
         ),
     }
+
+
+def create_fees_distribution(
+    fee_distribution: Optional[FeesDistributionInput] = None,
+) -> FeesDistribution:
+    appeal_rounds = to_uint(
+        _get(fee_distribution, "appealRounds", "appeal_rounds"),
+        "fees.distribution.appealRounds",
+    )
+    rotations = _normalize_rotations(
+        _get(fee_distribution, "rotations"),
+        appeal_rounds,
+        "fees.distribution.rotations",
+    )
+    return _create_fees_distribution(fee_distribution, appeal_rounds, rotations)
+
+
+def create_top_up_fees_distribution(
+    fee_distribution: Optional[FeesDistributionInput] = None,
+) -> FeesDistribution:
+    """Normalize a Consensus top-up delta without resubmitting its schedule.
+
+    Existing fee-aware transactions use appealRounds=0/rotations=[]. An
+    explicit non-empty schedule remains valid for first-time fee initialization.
+    """
+    appeal_rounds = to_uint(
+        _get(fee_distribution, "appealRounds", "appeal_rounds"),
+        "fees.distribution.appealRounds",
+    )
+    raw_rotations = _get(fee_distribution, "rotations")
+    if raw_rotations is None or len(raw_rotations) == 0:
+        if appeal_rounds != 0:
+            raise ValueError(
+                "fees.distribution.rotations must contain appealRounds + 1 "
+                "entries when appealRounds is non-zero."
+            )
+        rotations = []
+    else:
+        rotations = _normalize_rotations(
+            raw_rotations,
+            appeal_rounds,
+            "fees.distribution.rotations",
+        )
+    return _create_fees_distribution(fee_distribution, appeal_rounds, rotations)
 
 
 def encode_internal_message_fee_params(

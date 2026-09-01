@@ -39,6 +39,7 @@ from genlayer_py.transactions.fees import (
     build_estimated_fees_options_from_simulation,
     calculate_local_round_fees,
     create_fees_distribution,
+    create_top_up_fees_distribution,
     encode_fee_aware_add_transaction_data,
     extract_studio_fee_policy,
     fees_distribution_to_abi_tuple,
@@ -569,6 +570,7 @@ def _is_studio_chain(self: GenLayerClient) -> bool:
     """
     return self.chain.id == localnet.id
 
+
 def _to_bytes32(self: GenLayerClient, hex_str: HexStr) -> bytes:
     """Convert a hex string to bytes32."""
     if hex_str.startswith("0x"):
@@ -692,7 +694,11 @@ def _encode_fee_management_data(
         raise ValueError(f"Unsupported fee management function: {function_name}")
 
     tx_bytes = _to_bytes32(self, transaction_id)
-    fees_distribution = create_fees_distribution(distribution)
+    fees_distribution = (
+        create_top_up_fees_distribution(distribution)
+        if function_name == "topUpFees"
+        else create_fees_distribution(distribution)
+    )
     fees_tuple = fees_distribution_to_abi_tuple(fees_distribution)
     if function_name == "topUpAndSubmitAppeal":
         if expected_decision_id is None:

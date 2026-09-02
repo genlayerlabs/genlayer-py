@@ -371,12 +371,6 @@ def test_appeal_transaction_auto_resolves_latest_quote(monkeypatch):
             }
         ),
     )
-    monkeypatch.setattr(
-        contract_actions,
-        "_encode_submit_appeal_data",
-        Mock(return_value="0x1234"),
-    )
-
     def fake_send_consensus_call(**kwargs):
         captured.update(kwargs)
         return "0xevmtx"
@@ -394,11 +388,18 @@ def test_appeal_transaction_auto_resolves_latest_quote(monkeypatch):
 
     assert result == TX_ID
     contract_actions.get_appeal_quote.assert_called_once_with(client, TX_ID)
-    contract_actions._encode_submit_appeal_data.assert_called_once_with(
-        self=client,
-        transaction_id=TX_ID,
-        expected_decision_id=42,
+    selector = eth_utils.keccak(
+        text=f"topUpAndSubmitAppeal(bytes32,uint256,{FEES_DISTRIBUTION_ABI_TYPE})"
+    )[:4].hex()
+    assert captured["encoded_data"].startswith(f"0x{selector}")
+    tx_id, decision_id, distribution = abi_decode(
+        ("bytes32", "uint256", FEES_DISTRIBUTION_ABI_TYPE),
+        Web3.to_bytes(hexstr=captured["encoded_data"][10:]),
     )
+    assert tx_id == Web3.to_bytes(hexstr=TX_ID)
+    assert decision_id == 42
+    assert distribution[2] == 0
+    assert distribution[6] == (0,)
     assert captured["value"] == 4_321
     assert captured["operation_name"] == "Appeal"
 
@@ -597,15 +598,21 @@ def test_appeal_transaction_on_studio_binds_the_active_decision(monkeypatch):
         value=1234,
     )
 
-    selector = eth_utils.keccak(text="submitAppeal(bytes32,uint256)")[:4].hex()
+    selector = eth_utils.keccak(
+        text=f"topUpAndSubmitAppeal(bytes32,uint256,{FEES_DISTRIBUTION_ABI_TYPE})"
+    )[:4].hex()
     assert result == TX_ID
     assert captured["value"] == 1234
     assert captured["operation_name"] == "Appeal"
     assert captured["encoded_data"].startswith(f"0x{selector}")
-    assert abi_decode(
-        ("bytes32", "uint256"),
+    tx_id, decision_id, distribution = abi_decode(
+        ("bytes32", "uint256", FEES_DISTRIBUTION_ABI_TYPE),
         Web3.to_bytes(hexstr=captured["encoded_data"][10:]),
-    ) == (Web3.to_bytes(hexstr=TX_ID), 42)
+    )
+    assert tx_id == Web3.to_bytes(hexstr=TX_ID)
+    assert decision_id == 42
+    assert distribution[2] == 0
+    assert distribution[6] == (0,)
     train_read.assert_not_called()
 
 

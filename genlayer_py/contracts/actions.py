@@ -236,7 +236,10 @@ def appeal_transaction(
     so we send the EVM tx directly instead of going through _send_transaction.
     Both Studio and deployed Consensus bind the appeal to the exact active
     decision and can resolve omitted decision/value inputs from the
-    authoritative appeal quote.
+    authoritative appeal quote. The schedule-extending entry point is used for
+    every appeal because it accepts both pre-funded and unfunded next rounds;
+    ``submitAppeal`` rejects an unfunded next round before collecting its quoted
+    funding.
     """
     sender_account = account if account is not None else self.local_account
     if sender_account is None:
@@ -250,9 +253,13 @@ def appeal_transaction(
         value=value,
     )
 
-    encoded_data = _encode_submit_appeal_data(
+    encoded_data = _encode_fee_management_data(
         self=self,
+        function_name="topUpAndSubmitAppeal",
         transaction_id=transaction_id,
+        # Consensus derives the appeal shape from live state. This normalized
+        # zero schedule exists only for ABI compatibility.
+        distribution={},
         expected_decision_id=expected_decision_id,
     )
 

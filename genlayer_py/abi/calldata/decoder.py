@@ -45,7 +45,7 @@ def decode(mem0: Buffer) -> CalldataEncodable:
         elif typ == consts.TYPE_BYTES:
             ret_bytes = mem[:code]
             mem = mem[code:]
-            return ret_bytes
+            return bytes(ret_bytes)
         elif typ == consts.TYPE_STR:
             ret_str = mem[:code]
             mem = mem[code:]

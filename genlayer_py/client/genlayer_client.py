@@ -341,9 +341,8 @@ class GenLayerClient(Eth):
     ) -> HexStr:
         """Deposits appeal funding and submits an appeal.
 
-        On deployed Consensus, omitted decision/value inputs are resolved from
-        the authoritative appeal quote. Current Studio requires an explicit
-        value and does not accept ``expected_decision_id``.
+        Omitted decision/value inputs are resolved from the authoritative
+        appeal quote on both Studio and deployed Consensus.
         """
         return top_up_and_submit_appeal(
             self=self,
@@ -463,9 +462,8 @@ class GenLayerClient(Eth):
     ):
         """Appeals a consensus transaction to trigger a new round of validation.
         Returns the original transaction_id (appeals operate on the same tx).
-        Deployed Consensus fills missing decision/value inputs from its
-        authoritative quote. Current Studio requires an explicit value and does
-        not accept ``expected_decision_id``.
+        Missing decision/value inputs are filled from the authoritative quote
+        on both Studio and deployed Consensus.
         """
         return appeal_transaction(
             self=self,
@@ -492,10 +490,7 @@ class GenLayerClient(Eth):
         transaction_id: HexStr,
         expected_decision_id: Optional[int] = None,
     ) -> bool:
-        """Checks whether the exact active decision can be appealed on a network.
-
-        This decision-bound read is not available on current Studio.
-        """
+        """Checks whether the exact active decision can be appealed."""
         return can_appeal(
             self=self,
             transaction_id=transaction_id,
@@ -503,17 +498,11 @@ class GenLayerClient(Eth):
         )
 
     def get_appeal_quote(self, transaction_id: HexStr) -> Dict[str, int]:
-        """Returns a network's latest decision id, appeal charges, and deadline.
-
-        Current Studio has no decision-bound quote surface.
-        """
+        """Returns the latest decision id, appeal charges, and deadline."""
         return get_appeal_quote(self=self, transaction_id=transaction_id)
 
     def get_appeal_charge(self, transaction_id: HexStr) -> int:
-        """Returns the full appeal payment (bond plus induced-work funding).
-
-        Current Studio has no decision-bound quote surface.
-        """
+        """Returns the full appeal payment (bond plus induced-work funding)."""
         return get_appeal_charge(self=self, transaction_id=transaction_id)
 
     def get_min_appeal_bond(self, transaction_id: HexStr) -> int:

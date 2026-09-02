@@ -14,7 +14,7 @@ from genlayer_py.types import (
 from genlayer_py.exceptions import GenLayerError
 from genlayer_py.abi import calldata
 from genlayer_py.abi.transactions import serialize
-from genlayer_py.chains import localnet
+from genlayer_py.chains.utils import is_studio_chain
 from web3.constants import ADDRESS_ZERO
 from web3.logs import DISCARD
 from genlayer_py.contracts.utils import make_calldata_object
@@ -57,7 +57,7 @@ def get_contract_schema(
     self: GenLayerClient,
     address: Union[Address, ChecksumAddress],
 ) -> ContractSchema:
-    if self.chain.id != localnet.id:
+    if not is_studio_chain(self.chain):
         raise GenLayerError("Contract schema is not supported on this network")
 
     response = self.provider.make_request(
@@ -70,7 +70,7 @@ def get_contract_schema_for_code(
     self: GenLayerClient,
     contract_code: AnyStr,
 ) -> ContractSchema:
-    if self.chain.id != localnet.id:
+    if not is_studio_chain(self.chain):
         raise GenLayerError("Contract schema is not supported on this network")
 
     code_bytes = (
@@ -572,10 +572,9 @@ def _resolve_appeal_parameters(
 def _is_studio_chain(self: GenLayerClient) -> bool:
     """Reports whether the client targets the studio-embedded consensus.
 
-    localnet and studionet share chain id 61999, the same check
-    ``transactions.actions.get_transaction`` uses to take its studio path.
+    This includes local Studio, the stable hosted Studio, and preview Studio.
     """
-    return self.chain.id == localnet.id
+    return is_studio_chain(self.chain)
 
 
 def _to_bytes32(self: GenLayerClient, hex_str: HexStr) -> bytes:
@@ -598,8 +597,8 @@ def simulate_write_contract(
     sim_config: Optional[SimConfig] = None,
     transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_NONFINAL,
 ) -> dict:
-    if self.chain.id != localnet.id:
-        raise GenLayerError("Client is not connected to the localnet")
+    if not is_studio_chain(self.chain):
+        raise GenLayerError("Simulation is only supported on Studio networks")
     if account is None and self.local_account is None:
         raise GenLayerError("No account provided and no account is connected")
     sender_address = self.local_account.address if account is None else account.address
@@ -972,8 +971,10 @@ def estimate_transaction_fees_for_write(
     sim_config: Optional[SimConfig] = None,
     transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_NONFINAL,
 ) -> TransactionFeeEstimate:
-    if self.chain.id != localnet.id:
-        raise GenLayerError("Target write fee estimation is only supported on localnet")
+    if not is_studio_chain(self.chain):
+        raise GenLayerError(
+            "Target write fee estimation is only supported on Studio networks"
+        )
     if account is None and self.local_account is None:
         raise GenLayerError("No account provided and no account is connected")
 
@@ -1148,7 +1149,7 @@ def _prepare_transaction(
 
     nonce = self.get_current_nonce(address=sender)
 
-    if self.chain.id != localnet.id:
+    if not is_studio_chain(self.chain):
         latest_block = self.w3.eth.get_block("latest")
         base_fee = latest_block["baseFeePerGas"]
         priority_fee = self.w3.to_wei(2, "gwei")

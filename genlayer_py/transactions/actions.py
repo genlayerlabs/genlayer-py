@@ -33,7 +33,7 @@ from genlayer_py.exceptions import GenLayerError
 from typing import TYPE_CHECKING
 from genlayer_py.types import GenLayerTransaction, GenLayerRawTransaction
 import time
-from genlayer_py.chains import localnet
+from genlayer_py.chains.utils import is_studio_chain
 from genlayer_py.utils.jsonifier import (
     calldata_to_user_friendly_json,
     result_to_user_friendly_json,
@@ -638,7 +638,7 @@ def get_transaction_lifecycle(
     discriminated ``lifecycle`` returned by :func:`get_transaction`.
     """
 
-    if self.chain.id == localnet.id:
+    if is_studio_chain(self.chain):
         tx_id = (
             Web3.to_hex(transaction_hash)
             if isinstance(transaction_hash, bytes)
@@ -683,7 +683,7 @@ def get_transaction(
     self: GenLayerClient,
     transaction_hash: _Hash32,
 ) -> GenLayerTransaction:
-    if self.chain.id == localnet.id:
+    if is_studio_chain(self.chain):
         transaction = self.provider.make_request(
             method="eth_getTransactionByHash", params=[transaction_hash]
         )["result"]
@@ -803,7 +803,7 @@ def get_triggered_transaction_ids(
     self: GenLayerClient,
     transaction_hash: _Hash32,
 ) -> List[HexStr]:
-    if self.chain.id == localnet.id:
+    if is_studio_chain(self.chain):
         tx = get_transaction(self, transaction_hash)
         return tx.get("triggered_transactions", [])
 

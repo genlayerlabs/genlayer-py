@@ -25,7 +25,7 @@ from genlayer_py.types.transactions import (
     ResolutionAction,
     ResolutionSource,
 )
-from genlayer_py.chains import localnet
+from genlayer_py.chains import localnet, studio_devnet
 
 TX_HASH = "0x" + "ab" * 32
 CONSENSUS_DATA_ADDRESS = "0x" + "11" * 20
@@ -299,7 +299,8 @@ def test_advanced_transaction_lifecycle_keeps_projection_explicit():
     assert not any(call[0] == "canFinalize" for call in lifecycle_calls)
 
 
-def test_local_transaction_lifecycle_decodes_the_exact_node_rpc_schema():
+@pytest.mark.parametrize("chain_id", [localnet.id, studio_devnet.id])
+def test_studio_transaction_lifecycle_decodes_the_exact_node_rpc_schema(chain_id):
     provider = Mock()
     provider.make_request.return_value = {
         "result": {
@@ -317,7 +318,7 @@ def test_local_transaction_lifecycle_decodes_the_exact_node_rpc_schema():
         }
     }
     client = SimpleNamespace(
-        chain=SimpleNamespace(id=localnet.id),
+        chain=SimpleNamespace(id=chain_id),
         provider=provider,
     )
 

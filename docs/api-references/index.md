@@ -24,6 +24,18 @@ SDK releases follow their corresponding GenLayer protocol release. This
 release targets the current resolution-kernel train; use the matching older SDK
 release when connecting to an older deployment.
 
+Use the dedicated preview preset for the release-candidate Studio deployment:
+
+```python
+from genlayer_py import create_client
+from genlayer_py.chains import studio_devnet
+
+client = create_client(chain=studio_devnet)
+```
+
+`studio_devnet` targets `https://studio-dev.genlayer.com/api` (chain ID 61997).
+The existing `studionet` preset remains pinned to the stable hosted Studio.
+
 Here’s how to initialize the client and connect to the GenLayer Simulator:
 
 ### Reading a Transaction

@@ -38,7 +38,7 @@ the default/static GitHub branch.
 
 ## Releases
 
-Releases are deliberate, not automatic. `scripts/release.sh` bumps the version, updates `CHANGELOG.md`, commits, tags, and pushes; CI takes over from the tag push and publishes to PyPI. See `.claude/skills/release/SKILL.md` for the full flow.
+Releases are deliberate, not automatic. `scripts/release.sh` bumps the version, updates `CHANGELOG.md`, commits, tags, and pushes; CI takes over from the tag push and publishes to PyPI. Release candidates are cut from the active `*-dev` branch (for example, `v0.19.0-rc.1` from `v0.19-dev`), while final versions are cut from the matching stable branch. See `.claude/skills/release/SKILL.md` for the full flow.
 
 **Semver-zero rule**: this package is on a 0.x line, so the MINOR component is the breaking-change boundary. `0.18 → 0.19` is a major bump and needs a new branch — the script refuses `minor`/`major` keywords without `--allow-major`.
 
@@ -162,7 +162,7 @@ The project uses automated semantic versioning based on commit messages:
 | `feat!:`, `fix!:`, or `BREAKING CHANGE:` | **Major** version bump | 1.0.0 → 2.0.0 |
 | `docs:`, `style:`, `refactor:`, `test:`, `chore:`, `build:`, `ci:` | **No** version bump | Version stays the same |
 
-**Important**: Never manually edit version numbers in `pyproject.toml` or other files. Releases are cut from the stable branch using the release automation described above.
+**Important**: Never manually edit version numbers in `pyproject.toml` or other files. Final releases are cut from the stable branch and release candidates from its matching `*-dev` branch using the release automation described above.
 
 ## Logging Configuration
 

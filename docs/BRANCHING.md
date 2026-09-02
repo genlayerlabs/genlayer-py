@@ -41,8 +41,11 @@ When an integration train is ready, open a promotion PR from the integration
 branch to the matching stable branch, for example `v0.19-dev` to `v0.19`.
 
 That promotion PR is the release-readiness gate and must pass required
-cross-repo `E2E Tests`. The actual package release is cut from the stable branch
-using a version tag after the stable branch is ready.
+cross-repo `E2E Tests`. The final package release is cut from the stable branch
+using a version tag after the stable branch is ready. A release candidate may
+be cut earlier from the matching integration branch; RC tags use
+`vX.Y.Z-rc.N`, publish as PyPI prereleases, and never substitute for the
+promotion PR's final release gate.
 
 ## `main`
 

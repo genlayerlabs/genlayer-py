@@ -26,6 +26,9 @@ jobs:
       - name: Setup | Install Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
+      - name: Check | Verify locked package metadata
+        run: uv lock --check
+
       - name: Setup | Install Dependencies
         run: uv sync --group dev --python ${{ matrix.python-version }}
 

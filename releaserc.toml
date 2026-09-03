@@ -1,6 +1,7 @@
 [semantic_release]
 version_toml = ["pyproject.toml:project.version"]
-assets = []
+assets = ["uv.lock"]
+build_command = "uv lock"
 build_command_env = []
 commit_message = "chore(release): {version}"
 commit_parser = "conventional"

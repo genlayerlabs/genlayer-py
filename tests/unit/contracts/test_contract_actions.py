@@ -751,9 +751,17 @@ def test_encode_submit_appeal_still_requires_a_decision_id_on_the_train_shape():
         contract_actions._encode_submit_appeal_data(self=client, transaction_id=TX_ID)
 
 
-def test_send_consensus_call_returns_localnet_envelope_hash_after_receipt(monkeypatch):
+def test_send_consensus_call_signs_for_canonical_local_studio_chain():
     wait_for_transaction_receipt = Mock(return_value=SimpleNamespace(status=1))
     sign_transaction = Mock(return_value=SimpleNamespace(raw_transaction=b"\x12\x34"))
+
+    def make_request(method, params):
+        if method == "eth_estimateGas":
+            return {"result": "0x5208"}
+        if method == "eth_sendRawTransaction":
+            return {"result": TX_ID}
+        raise AssertionError(f"unexpected method {method}")
+
     client = SimpleNamespace(
         chain=SimpleNamespace(
             id=localnet.id,
@@ -761,7 +769,8 @@ def test_send_consensus_call_returns_localnet_envelope_hash_after_receipt(monkey
                 "address": "0x3333333333333333333333333333333333333333",
             },
         ),
-        provider=SimpleNamespace(make_request=Mock(return_value={"result": TX_ID})),
+        get_current_nonce=Mock(return_value=7),
+        provider=SimpleNamespace(make_request=Mock(side_effect=make_request)),
         w3=SimpleNamespace(
             to_hex=Mock(return_value="0xsigned"),
             eth=SimpleNamespace(
@@ -770,12 +779,6 @@ def test_send_consensus_call_returns_localnet_envelope_hash_after_receipt(monkey
         ),
     )
     account = SimpleNamespace(address=SENDER, sign_transaction=sign_transaction)
-
-    monkeypatch.setattr(
-        contract_actions,
-        "_prepare_transaction",
-        Mock(return_value={"from": SENDER}),
-    )
 
     result = contract_actions._send_consensus_call(
         self=client,
@@ -786,6 +789,17 @@ def test_send_consensus_call_returns_localnet_envelope_hash_after_receipt(monkey
     )
 
     assert result == TX_ID
+    transaction = sign_transaction.call_args.args[0]
+    assert transaction == {
+        "from": SENDER,
+        "nonce": "0x7",
+        "data": "0x1234",
+        "to": "0x3333333333333333333333333333333333333333",
+        "value": "0x1",
+        "gasPrice": 0,
+        "chainId": 61127,
+        "gas": "0x5208",
+    }
     wait_for_transaction_receipt.assert_called_once_with(TX_ID)
 
 

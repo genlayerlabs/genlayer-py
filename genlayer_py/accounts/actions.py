@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from genlayer_py.chains import localnet
+from genlayer_py.chains.utils import is_studio_chain
 from hexbytes import HexBytes
 from web3.types import Nonce, BlockIdentifier, ENS
 from genlayer_py.exceptions import GenLayerError
@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 def fund_account(
     self: GenLayerClient, address: Union[Address, ChecksumAddress, ENS], amount: int
 ) -> HexBytes:
-    if self.chain.id != localnet.id:
-        raise GenLayerError("Client is not connected to the localhost")
+    if not is_studio_chain(self.chain):
+        raise GenLayerError("Account funding is only supported on Studio networks")
     try:
         response = self.provider.make_request(
             method="sim_fundAccount",

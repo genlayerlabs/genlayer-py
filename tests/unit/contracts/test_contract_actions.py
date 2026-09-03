@@ -8,6 +8,7 @@ from web3 import Web3
 
 import genlayer_py.contracts.actions as contract_actions
 from genlayer_py.chains import localnet
+from genlayer_py.chains.studio_devnet import studio_devnet
 from genlayer_py.chains.testnet_asimov import testnet_asimov
 from genlayer_py.consensus.abi import CONSENSUS_MAIN_ABI
 from genlayer_py.exceptions import GenLayerError
@@ -1031,7 +1032,7 @@ def test_simulate_write_contract_passes_fee_policy_and_value_to_sim_call():
         }
     )
     client = SimpleNamespace(
-        chain=SimpleNamespace(id=localnet.id),
+        chain=SimpleNamespace(id=studio_devnet.id),
         local_account=SimpleNamespace(address=SENDER),
         provider=SimpleNamespace(make_request=make_request),
     )

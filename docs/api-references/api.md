@@ -185,9 +185,8 @@ client.get_contract_schema_for_code(contract_code: AnyStr)
 
 Appeals a consensus transaction to trigger a new round of validation.
 Returns the original transaction_id (appeals operate on the same tx).
-Deployed Consensus fills missing decision/value inputs from its
-authoritative quote. Current Studio requires an explicit value and does
-not accept ``expected_decision_id``.
+Missing decision/value inputs are filled from the authoritative quote
+on both Studio and deployed Consensus.
 
 ```python
 client.appeal_transaction(transaction_id: HexStr, account: Optional = None, value: Optional = None, expected_decision_id: Optional = None)
@@ -225,9 +224,8 @@ client.top_up_fees(transaction_id: HexStr, distribution: FeesDistributionInput, 
 
 Deposits appeal funding and submits an appeal.
 
-On deployed Consensus, omitted decision/value inputs are resolved from
-the authoritative appeal quote. Current Studio requires an explicit
-value and does not accept ``expected_decision_id``.
+Omitted decision/value inputs are resolved from the authoritative
+appeal quote on both Studio and deployed Consensus.
 
 ```python
 client.top_up_and_submit_appeal(transaction_id: HexStr, distribution: FeesDistributionInput, account: Optional = None, value: Optional = None, expected_decision_id: Optional = None)
@@ -247,9 +245,7 @@ client.top_up_and_submit_appeal(transaction_id: HexStr, distribution: FeesDistri
 
 ### can_appeal
 
-Checks whether the exact active decision can be appealed on a network.
-
-This decision-bound read is not available on current Studio.
+Checks whether the exact active decision can be appealed.
 
 ```python
 client.can_appeal(transaction_id: HexStr, expected_decision_id: Optional = None)
@@ -266,9 +262,7 @@ client.can_appeal(transaction_id: HexStr, expected_decision_id: Optional = None)
 
 ### get_appeal_quote
 
-Returns a network's latest decision id, appeal charges, and deadline.
-
-Current Studio has no decision-bound quote surface.
+Returns the latest decision id, appeal charges, and deadline.
 
 ```python
 client.get_appeal_quote(transaction_id: HexStr)
@@ -285,8 +279,6 @@ client.get_appeal_quote(transaction_id: HexStr)
 ### get_appeal_charge
 
 Returns the full appeal payment (bond plus induced-work funding).
-
-Current Studio has no decision-bound quote surface.
 
 ```python
 client.get_appeal_charge(transaction_id: HexStr)

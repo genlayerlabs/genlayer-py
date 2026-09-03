@@ -72,6 +72,23 @@ ADD_TRANSACTION_ABI_V6 = [
     }
 ]
 
+ADD_TRANSACTION_ABI_V7 = [
+    {
+        "type": "function",
+        "name": "addTransaction",
+        "stateMutability": "nonpayable",
+        "inputs": [
+            {"name": "_sender", "type": "address"},
+            {"name": "_recipient", "type": "address"},
+            {"name": "_numOfInitialValidators", "type": "uint256"},
+            {"name": "_maxRotations", "type": "uint256"},
+            {"name": "_calldata", "type": "bytes"},
+            {"name": "_validUntil", "type": "uint256"},
+            {"name": "_futureField", "type": "uint256"},
+        ],
+        "outputs": [],
+    }
+]
 ADD_TRANSACTION_ABI_WITH_FEES = [
     {
         "type": "function",
@@ -1115,6 +1132,33 @@ def test_encode_add_transaction_uses_v6_signature_when_abi_has_6_inputs():
         text="addTransaction(address,address,uint256,uint256,bytes,uint256)"
     )[:4].hex()
     assert encoded.startswith(f"0x{selector}")
+
+
+def test_encode_add_transaction_rejects_unknown_argument_count():
+    client = _make_client(ADD_TRANSACTION_ABI_V7)
+
+    with pytest.raises(ValueError, match="expected 5 or 6 arguments, got 7"):
+        contract_actions._encode_add_transaction_data(
+            self=client,
+            sender_account=client.local_account,
+            recipient=RECIPIENT,
+            consensus_max_rotations=3,
+            data="0x",
+        )
+
+
+def test_encode_add_transaction_rejects_v7_abi_when_fee_aware_transaction_is_requested():
+    client = _make_client(ADD_TRANSACTION_ABI_V7)
+
+    with pytest.raises(ValueError, match="expected 5 or 6 arguments, got 7"):
+        contract_actions._encode_add_transaction_data(
+            self=client,
+            sender_account=client.local_account,
+            recipient=RECIPIENT,
+            consensus_max_rotations=3,
+            data="0x",
+            transaction_fees={"requires_fee_aware_transaction": True},
+        )
 
 
 def test_encode_add_transaction_uses_fee_signature_when_abi_has_tuple_input():

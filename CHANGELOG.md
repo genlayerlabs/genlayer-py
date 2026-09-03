@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.19.0-rc.2 (2026-09-03)
+
+### Bug Fixes
+
+- Align localnet chain id with Studio ([#115](https://github.com/genlayerlabs/genlayer-py/pull/115),
+  [`4556920`](https://github.com/genlayerlabs/genlayer-py/commit/4556920d58108642131089f5ecc0a678d592a400))
+
+### Build System
+
+- Keep release lock metadata in sync ([#115](https://github.com/genlayerlabs/genlayer-py/pull/115),
+  [`4556920`](https://github.com/genlayerlabs/genlayer-py/commit/4556920d58108642131089f5ecc0a678d592a400))
+
+
 ## v0.19.0-rc.1 (2026-09-03)
 
 ### Bug Fixes

@@ -364,7 +364,7 @@ class GenLayerRawTransaction:
     last_vote_timestamp: int
     random_seed: HexStr
     result: int
-    tx_execution_result: int
+    tx_execution_result: Optional[int]
     tx_data: HexStr
     tx_receipt: HexStr
     messages: List[Any]
@@ -399,7 +399,9 @@ class GenLayerRawTransaction:
             last_vote_timestamp=tx_data[6],
             random_seed=Web3.to_hex(tx_data[7]),
             result=tx_data[8],
-            tx_execution_result=0,
+            # Not present in the light getTransaction ABI; only getTransactionAllData
+            # (see from_all_transaction_data) carries a real execution result.
+            tx_execution_result=None,
             tx_data=Web3.to_hex(tx_data[9]),
             tx_receipt=Web3.to_hex(tx_data[10]),
             messages=tx_data[11],
@@ -434,7 +436,10 @@ class GenLayerRawTransaction:
             last_vote_timestamp=tx_data[6],
             random_seed=Web3.to_hex(tx_data[7]),
             result=tx_data[8],
-            tx_execution_result=0,
+            # [9] txExecutionHash is a bytes32 hash, not a result code, and the
+            # light getTransaction ABI carries no execution-result field at all;
+            # only getTransactionAllData (see from_all_transaction_data) does.
+            tx_execution_result=None,
             tx_data=Web3.to_hex(tx_data[10]),  # txCalldata
             tx_receipt="0x",  # not present in V06; txExecutionHash is at [9]
             messages=tx_data[12],

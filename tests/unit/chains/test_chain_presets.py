@@ -1,6 +1,7 @@
 import genlayer_py
 
 from genlayer_py.chains import __all__ as chain_exports
+from genlayer_py.chains.localnet import localnet
 from genlayer_py.chains.studio_devnet import (
     STUDIO_DEVNET_EXPLORER_URL,
     STUDIO_DEVNET_JSON_RPC_URL,
@@ -9,6 +10,13 @@ from genlayer_py.chains.studio_devnet import (
 from genlayer_py.chains.studionet import studionet
 from genlayer_py.chains.testnet_asimov import testnet_asimov
 from genlayer_py.chains.utils import is_studio_chain
+
+
+def test_localnet_uses_the_canonical_local_studio_chain_id():
+    assert localnet.id == 61127
+    assert localnet.rpc_urls == {
+        "default": {"http": ["http://127.0.0.1:4000/api"]}
+    }
 
 
 def test_studio_devnet_is_exported_with_canonical_preview_coordinates():
@@ -41,6 +49,11 @@ def test_stable_studionet_coordinates_do_not_drift_with_preview_preset():
 
 
 def test_studio_chain_classification_includes_preview_but_not_public_testnet():
+    assert is_studio_chain(localnet)
     assert is_studio_chain(studionet)
     assert is_studio_chain(studio_devnet)
     assert not is_studio_chain(testnet_asimov)
+
+
+def test_studio_presets_have_distinct_chain_ids():
+    assert len({localnet.id, studio_devnet.id, studionet.id}) == 3

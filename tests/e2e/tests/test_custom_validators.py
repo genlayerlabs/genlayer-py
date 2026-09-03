@@ -2,7 +2,6 @@ import pytest
 
 from genlayer_py import create_client, create_account
 from genlayer_py.chains import localnet
-from genlayer_py.types import TransactionStatus
 from genlayer_py.assertions import tx_execution_succeeded
 
 

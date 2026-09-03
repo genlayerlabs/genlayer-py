@@ -1,19 +1,27 @@
-from genlayer_py.types import GenLayerChain, NativeCurrency, ContractInfo, SimpleContractInfo
-from genlayer_py.consensus.abi import CONSENSUS_MAIN_ABI_V06, CONSENSUS_DATA_ABI_V06
-
+from genlayer_py.types import (
+    GenLayerChain,
+    NativeCurrency,
+    ContractInfo,
+    SimpleContractInfo,
+)
+from genlayer_py.consensus.abi import (
+    APPEALS_ABI,
+    CONSENSUS_MAIN_ABI,
+    CONSENSUS_DATA_ABI,
+)
 
 TESTNET_JSON_RPC_URL = "https://rpc-bradbury.genlayer.com"
 EXPLORER_URL = "https://explorer-bradbury.genlayer.com/"
 
 CONSENSUS_MAIN_CONTRACT: ContractInfo = {
     "address": "0x0112Bf6e83497965A5fdD6Dad1E447a6E004271D",
-    "abi": CONSENSUS_MAIN_ABI_V06,
+    "abi": CONSENSUS_MAIN_ABI,
     "bytecode": "",
 }
 
 CONSENSUS_DATA_CONTRACT: ContractInfo = {
     "address": "0x85D7bf947A512Fc640C75327A780c90847267697",
-    "abi": CONSENSUS_DATA_ABI_V06,
+    "abi": CONSENSUS_DATA_ABI,
     "bytecode": "",
 }
 
@@ -103,15 +111,7 @@ ROUNDS_STORAGE_CONTRACT: SimpleContractInfo = {
 
 APPEALS_CONTRACT: SimpleContractInfo = {
     "address": "0xbb8C35AA878D09b9830aFF9e5aAC6492BFbd5471",
-    "abi": [
-        {
-            "type": "function",
-            "name": "canAppeal",
-            "stateMutability": "view",
-            "inputs": [{"name": "_txId", "type": "bytes32"}],
-            "outputs": [{"name": "", "type": "bool"}],
-        },
-    ],
+    "abi": APPEALS_ABI,
 }
 
 

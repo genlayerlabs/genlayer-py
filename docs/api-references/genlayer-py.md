@@ -192,16 +192,16 @@ client.appeal_transaction(transaction_id: HexStr, account: Union = None, value: 
 
 ### wait_for_transaction_receipt
 
-Polls until a transaction reaches the specified status. Returns the transaction receipt.
+Polls for a stored decision by default, or for stored finalization.
 
 ```python
-client.wait_for_transaction_receipt(transaction_hash: Union, status: TransactionStatus = <TransactionStatus.ACCEPTED: 'ACCEPTED'>, interval: int = 3000, retries: int = 10, full_transaction: bool = False)
+client.wait_for_transaction_receipt(transaction_hash: Union, wait_until: Literal = "decided", interval: int = 3000, retries: int = 10, full_transaction: bool = False)
 ```
 
 **Parameters:**
 
 - **transaction_hash** (`Union`) — required
-- **status** (`TransactionStatus`) — optional = <TransactionStatus.ACCEPTED: 'ACCEPTED'>
+- **wait_until** (`Literal["decided", "finalized"]`) — optional = "decided"
 - **interval** (`int`) — optional = 3000
 - **retries** (`int`) — optional = 10
 - **full_transaction** (`bool`) — optional = False
@@ -210,9 +210,30 @@ client.wait_for_transaction_receipt(transaction_hash: Union, status: Transaction
 
 ---
 
+### wait_for_decision
+
+Polls until the stored transaction state is decided, finalized, or canceled.
+
+```python
+client.wait_for_decision(transaction_hash: Union, interval: int = 3000, retries: int = 10, full_transaction: bool = False)
+```
+
+---
+
+### wait_for_finalization
+
+Polls until the stored transaction state is finalized.
+
+```python
+client.wait_for_finalization(transaction_hash: Union, interval: int = 3000, retries: int = 10, full_transaction: bool = False)
+```
+
+---
+
 ### get_transaction
 
-Fetches transaction data including status, execution result, and consensus details.
+Fetches transaction data with a stable lifecycle derived from stored chain
+state, plus execution result and consensus details.
 
 ```python
 client.get_transaction(transaction_hash: Union)
@@ -223,6 +244,25 @@ client.get_transaction(transaction_hash: Union)
 - **transaction_hash** (`Union`) — required
 
 **Returns:** `GenLayerTransaction`
+
+`lifecycle` is discriminated by its `state` field: processing carries `phase`,
+decided carries `outcome`, finalized may carry an outcome when it is actually
+known, and canceled has no extra branch data.
+
+The train exposes the authoritative `tx_execution_hash`. It does not retain the
+old receipt bytes, so the legacy `tx_receipt` field is `None`.
+
+---
+
+### get_transaction_lifecycle
+
+Returns the advanced raw protocol view: stored status, projected status,
+resolution action/source, decision identity, and evaluation time. A `FINALIZE`
+action is the authoritative finalization-readiness verdict.
+
+```python
+client.get_transaction_lifecycle(transaction_hash: Union)
+```
 
 ---
 
@@ -261,29 +301,6 @@ client.debug_trace_transaction(transaction_hash: Union, round: int = 0)
 
 ## Types and Enums
 
-### TransactionStatus
-
-Status of a GenLayer transaction in the consensus lifecycle.
-
-```python
-TransactionStatus.UNINITIALIZED = "UNINITIALIZED"
-TransactionStatus.PENDING = "PENDING"
-TransactionStatus.PROPOSING = "PROPOSING"
-TransactionStatus.COMMITTING = "COMMITTING"
-TransactionStatus.REVEALING = "REVEALING"
-TransactionStatus.ACCEPTED = "ACCEPTED"
-TransactionStatus.UNDETERMINED = "UNDETERMINED"
-TransactionStatus.FINALIZED = "FINALIZED"
-TransactionStatus.CANCELED = "CANCELED"
-TransactionStatus.APPEAL_REVEALING = "APPEAL_REVEALING"
-TransactionStatus.APPEAL_COMMITTING = "APPEAL_COMMITTING"
-TransactionStatus.READY_TO_FINALIZE = "READY_TO_FINALIZE"
-TransactionStatus.VALIDATORS_TIMEOUT = "VALIDATORS_TIMEOUT"
-TransactionStatus.LEADER_TIMEOUT = "LEADER_TIMEOUT"
-```
-
----
-
 ### TransactionResult
 
 Consensus voting result across validators.
@@ -309,28 +326,23 @@ Result of contract execution by the GenVM.
 ExecutionResult.NOT_VOTED = "NOT_VOTED"
 ExecutionResult.FINISHED_WITH_RETURN = "FINISHED_WITH_RETURN"
 ExecutionResult.FINISHED_WITH_ERROR = "FINISHED_WITH_ERROR"
+ExecutionResult.TIMEOUT = "TIMEOUT"
+ExecutionResult.NONDET_DISAGREE = "NONDET_DISAGREE"
+ExecutionResult.DETERMINISTIC_VIOLATION = "DETERMINISTIC_VIOLATION"
 ```
 
 ---
 
 ### VoteType
 
-str(object='') -> str
-str(bytes_or_buffer[, encoding[, errors]]) -> str
-
-Create a new string object from the given object. If encoding or
-errors is specified, then the object must expose a data buffer
-that will be decoded using the given encoding and error handler.
-Otherwise, returns the result of object.__str__() (if defined)
-or repr(object).
-encoding defaults to 'utf-8'.
-errors defaults to 'strict'.
+Validator execution vote recorded for a consensus round.
 
 ```python
 VoteType.NOT_VOTED = "NOT_VOTED"
-VoteType.AGREE = "AGREE"
-VoteType.DISAGREE = "DISAGREE"
+VoteType.FINISHED_WITH_RETURN = "FINISHED_WITH_RETURN"
+VoteType.FINISHED_WITH_ERROR = "FINISHED_WITH_ERROR"
 VoteType.TIMEOUT = "TIMEOUT"
+VoteType.NONDET_DISAGREE = "NONDET_DISAGREE"
 VoteType.DETERMINISTIC_VIOLATION = "DETERMINISTIC_VIOLATION"
 ```
 

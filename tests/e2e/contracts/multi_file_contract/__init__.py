@@ -1,13 +1,14 @@
-from genlayer import *
+import genlayer as gl
+from genlayer.types import *
 
 
-class MultiFileContract(gl.Contract):
+class MultiFileContract(gl.contract.Contract):
     other_addr: Address
 
     def __init__(self):
         with open("/contract/other.py", "rt") as f:
             text = f.read()
-        self.other_addr = gl.deploy_contract(
+        self.other_addr = gl.contract.deploy(
             code=text.encode("utf-8"), args=["123"], salt_nonce=1
         )
 
@@ -17,4 +18,4 @@ class MultiFileContract(gl.Contract):
 
     @gl.public.view
     def test(self) -> str:
-        return gl.ContractAt(self.other_addr).view().test()
+        return gl.contract.get_at(self.other_addr).view().test()

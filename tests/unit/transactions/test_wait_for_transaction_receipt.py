@@ -1,230 +1,162 @@
 import pytest
 from unittest.mock import patch
 from genlayer_py.transactions.actions import (
+    wait_for_decision,
+    wait_for_finalization,
     wait_for_transaction_receipt,
     _simplify_transaction_receipt,
+    is_successful,
 )
-from genlayer_py.types import TransactionStatus, DECIDED_STATES, is_decided_state
+from genlayer_py.types import ExecutionResult
 from genlayer_py.exceptions import GenLayerError
 
+TX_HASH = "0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6"
 
-class TestWaitForTransactionReceipt:
-    """Test suite for wait_for_transaction_receipt function"""
 
-    def test_wait_for_finalized_transaction_success(
-        self, mock_client, full_write_transaction_data
+def _transaction(lifecycle, **extra):
+    return {"hash": TX_HASH, "lifecycle": lifecycle, **extra}
+
+
+class TestTransactionWaits:
+    @pytest.mark.parametrize(
+        "lifecycle",
+        [
+            {"state": "decided", "outcome": "accepted"},
+            {"state": "decided", "outcome": "undetermined"},
+            {"state": "decided", "outcome": "validators_timeout"},
+            {"state": "decided", "outcome": "leader_timeout"},
+            {"state": "finalized"},
+            {"state": "canceled"},
+        ],
+    )
+    def test_wait_for_decision_uses_materialized_lifecycle(
+        self, mock_client, lifecycle
     ):
-        """Test successful wait for finalized transaction"""
-        mock_client.get_transaction.return_value = full_write_transaction_data
+        transaction = _transaction(lifecycle)
+        mock_client.get_transaction.return_value = transaction
 
-        result = wait_for_transaction_receipt(
-            self=mock_client,
-            transaction_hash="0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
-            status=TransactionStatus.FINALIZED,
-            full_transaction=True,
+        assert (
+            wait_for_decision(mock_client, TX_HASH, full_transaction=True)
+            == transaction
         )
 
-        assert result == full_write_transaction_data
-        mock_client.get_transaction.assert_called_once()
+    def test_wait_for_finalization_ignores_nonfinal_stored_state(self, mock_client):
+        processing = _transaction({"state": "processing", "phase": "pending"})
+        decided = _transaction({"state": "decided", "outcome": "accepted"})
+        finalized = _transaction({"state": "finalized"})
+        mock_client.get_transaction.side_effect = [processing, decided, finalized]
 
-    def test_wait_for_accepted_transaction_with_finalized_status(
-        self, mock_client, full_write_transaction_data
-    ):
-        """Test that ACCEPTED status accepts FINALIZED transactions"""
-        mock_client.get_transaction.return_value = full_write_transaction_data
+        with patch("time.sleep") as sleep:
+            result = wait_for_finalization(
+                mock_client, TX_HASH, interval=100, full_transaction=True
+            )
 
-        result = wait_for_transaction_receipt(
-            self=mock_client,
-            transaction_hash="0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
-            status=TransactionStatus.ACCEPTED,  # Requesting ACCEPTED
-            full_transaction=True,
-        )
+        assert result == finalized
+        assert mock_client.get_transaction.call_count == 3
+        assert sleep.call_count == 2
+        sleep.assert_called_with(0.1)
 
-        # Should accept FINALIZED (status 7) when requesting ACCEPTED
-        assert result == full_write_transaction_data
-
-    def test_wait_for_transaction_with_simplified_receipt(
-        self, mock_client, full_write_transaction_data
-    ):
-        """Test wait for transaction with simplified receipt (full_transaction=False)"""
-        mock_client.get_transaction.return_value = full_write_transaction_data
+    def test_receipt_default_waits_for_decision_and_simplifies(self, mock_client):
+        transaction = _transaction({"state": "decided", "outcome": "accepted"})
+        mock_client.get_transaction.return_value = transaction
+        simplified = {"hash": TX_HASH, "lifecycle": transaction["lifecycle"]}
 
         with patch(
-            "genlayer_py.transactions.actions._simplify_transaction_receipt"
-        ) as mock_simplify:
-            simplified_data = {"hash": "0x123", "status": 7, "simplified": True}
-            mock_simplify.return_value = simplified_data
+            "genlayer_py.transactions.actions._simplify_transaction_receipt",
+            return_value=simplified,
+        ) as simplify:
+            result = wait_for_transaction_receipt(mock_client, TX_HASH)
 
-            result = wait_for_transaction_receipt(
-                self=mock_client,
-                transaction_hash="0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
-                full_transaction=False,
-            )
+        assert result == simplified
+        simplify.assert_called_once_with(transaction)
 
-            mock_simplify.assert_called_once_with(full_write_transaction_data)
-            assert result == simplified_data
+    def test_receipt_can_wait_for_finalization(self, mock_client):
+        transaction = _transaction({"state": "finalized"})
+        mock_client.get_transaction.return_value = transaction
 
-    def test_wait_for_transaction_timeout(self, mock_client, pending_transaction_data):
-        """Test timeout when transaction doesn't reach desired status"""
-        mock_client.get_transaction.return_value = pending_transaction_data
-
-        with pytest.raises(GenLayerError, match="did not reach desired status"):
+        assert (
             wait_for_transaction_receipt(
-                self=mock_client,
-                transaction_hash="0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
-                retries=2,
-                interval=1,  # 1ms for fast test
+                mock_client,
+                TX_HASH,
+                wait_until="finalized",
+                full_transaction=True,
             )
+            == transaction
+        )
 
-        # Should have tried 2 times
-        assert mock_client.get_transaction.call_count == 2
+    def test_processing_timeout_reports_public_phase(self, mock_client):
+        mock_client.get_transaction.return_value = _transaction(
+            {"state": "processing", "phase": "leader_revealing"}
+        )
 
-    def test_wait_for_nonexistent_transaction(self, mock_client):
-        """Test error when transaction doesn't exist"""
+        with pytest.raises(
+            GenLayerError, match="Last observed lifecycle state: 'processing'"
+        ):
+            wait_for_decision(mock_client, TX_HASH, retries=1, interval=1)
+
+    def test_wait_for_finalization_fails_fast_when_canceled(self, mock_client):
+        mock_client.get_transaction.return_value = _transaction({"state": "canceled"})
+
+        with pytest.raises(GenLayerError, match="canceled before finalization"):
+            wait_for_finalization(mock_client, TX_HASH)
+
+        mock_client.get_transaction.assert_called_once()
+
+    def test_nonexistent_transaction(self, mock_client):
         mock_client.get_transaction.return_value = None
 
         with pytest.raises(GenLayerError, match="Transaction .* not found"):
-            wait_for_transaction_receipt(
-                self=mock_client,
-                transaction_hash="0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
-            )
+            wait_for_decision(mock_client, TX_HASH)
 
-    @patch("time.sleep")
-    def test_wait_for_transaction_with_retry_logic(
-        self,
-        mock_sleep,
-        mock_client,
-        pending_transaction_data,
-        full_write_transaction_data,
-    ):
-        """Test retry logic with eventual success"""
-        # First two calls return pending, third returns finalized
-        mock_client.get_transaction.side_effect = [
-            pending_transaction_data,
-            pending_transaction_data,
-            full_write_transaction_data,
-        ]
+    def test_invalid_lifecycle_is_rejected(self, mock_client):
+        mock_client.get_transaction.return_value = {"hash": TX_HASH}
 
-        result = wait_for_transaction_receipt(
-            self=mock_client,
-            transaction_hash="0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
-            interval=100,  # 100ms
-            full_transaction=True,
-        )
+        with pytest.raises(GenLayerError, match="has no valid lifecycle"):
+            wait_for_decision(mock_client, TX_HASH)
 
-        assert result == full_write_transaction_data
-        assert mock_client.get_transaction.call_count == 3
-        assert mock_sleep.call_count == 2
-        mock_sleep.assert_called_with(0.1)  # 100ms / 1000
+    def test_invalid_receipt_wait_target_is_rejected(self, mock_client):
+        with pytest.raises(ValueError, match="wait_until"):
+            wait_for_transaction_receipt(mock_client, TX_HASH, wait_until="projected")
 
-    def test_wait_for_transaction_with_custom_parameters(
-        self, mock_client, full_write_transaction_data
-    ):
-        """Test with custom interval and retries"""
-        mock_client.get_transaction.return_value = full_write_transaction_data
 
-        result = wait_for_transaction_receipt(
-            self=mock_client,
-            transaction_hash="0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
-            status=TransactionStatus.FINALIZED,
-            interval=500,
-            retries=10,
-            full_transaction=True,
-        )
-
-        assert result == full_write_transaction_data
-
-    def test_wait_for_accepted_with_all_decided_states(self, mock_client):
-        """Test that ACCEPTED status accepts all decided states"""
-        decided_statuses = ["5", "6", "8", "7", "12", "13"]  # ACCEPTED, UNDETERMINED, CANCELED, FINALIZED, VALIDATORS_TIMEOUT, LEADER_TIMEOUT
-        
-        for status_num in decided_statuses:
-            mock_transaction = {
-                "hash": "0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
-                "status": status_num,
-                "status_name": "test_status",
-                "from_address": "0x123",
-                "to_address": "0x456",
-                "value": "0",
-                "gaslimit": "1000000",
-                "nonce": "1",
-                "created_at": "2023-01-01T00:00:00Z",
+class TestIsSuccessful:
+    def test_truth_table(self):
+        assert is_successful(
+            {
+                "lifecycle": {"state": "decided", "outcome": "accepted"},
+                "tx_execution_result": "1",
             }
-            
-            mock_client.get_transaction.return_value = mock_transaction
-            
-            result = wait_for_transaction_receipt(
-                self=mock_client,
-                transaction_hash="0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
-                status=TransactionStatus.ACCEPTED,
-                full_transaction=True,
-            )
-            
-            assert result == mock_transaction
-
-    def test_wait_for_specific_status_not_affected(self, mock_client):
-        """Test that waiting for specific non-ACCEPTED statuses is not affected by decided states logic"""
-        mock_transaction = {
-            "hash": "0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
-            "status": "7",  # FINALIZED
-            "status_name": "FINALIZED",
-            "from_address": "0x123",
-            "to_address": "0x456",
-            "value": "0",
-            "gaslimit": "1000000",
-            "nonce": "1",
-            "created_at": "2023-01-01T00:00:00Z",
-        }
-        
-        mock_client.get_transaction.return_value = mock_transaction
-        
-        result = wait_for_transaction_receipt(
-            self=mock_client,
-            transaction_hash="0x4b8037744adab7ea8335b4f839979d20031d83a8ccdf706e0ae61312930335f6",
-            status=TransactionStatus.FINALIZED,
-            full_transaction=True,
         )
-        
-        assert result == mock_transaction
-
-
-class TestDecidedStatesUtility:
-    """Test suite for DECIDED_STATES constant and is_decided_state function"""
-
-    def test_decided_states_constant(self):
-        """Test that DECIDED_STATES contains all expected states"""
-        expected_states = [
-            TransactionStatus.ACCEPTED,
-            TransactionStatus.UNDETERMINED,
-            TransactionStatus.LEADER_TIMEOUT,
-            TransactionStatus.VALIDATORS_TIMEOUT,
-            TransactionStatus.CANCELED,
-            TransactionStatus.FINALIZED
-        ]
-        
-        assert DECIDED_STATES == expected_states
-
-    def test_is_decided_state_with_decided_statuses(self):
-        """Test is_decided_state returns True for all decided statuses"""
-        decided_status_numbers = ["5", "6", "8", "7", "12", "13"]  # ACCEPTED, UNDETERMINED, CANCELED, FINALIZED, VALIDATORS_TIMEOUT, LEADER_TIMEOUT
-        
-        for status_num in decided_status_numbers:
-            assert is_decided_state(status_num) == True, f"Status {status_num} should be decided"
-
-    def test_is_decided_state_with_non_decided_statuses(self):
-        """Test is_decided_state returns False for non-decided statuses"""
-        non_decided_status_numbers = ["0", "1", "2", "3", "4", "9", "10", "11"]  # UNINITIALIZED, PENDING, PROPOSING, COMMITTING, REVEALING, APPEAL_REVEALING, APPEAL_COMMITTING, READY_TO_FINALIZE
-        
-        for status_num in non_decided_status_numbers:
-            assert is_decided_state(status_num) == False, f"Status {status_num} should not be decided"
-
-    def test_is_decided_state_with_invalid_status(self):
-        """Test is_decided_state returns False for invalid statuses"""
-        invalid_statuses = ["999", "invalid", "", None]
-        
-        for status in invalid_statuses:
-            if status is not None:
-                assert is_decided_state(status) == False, f"Invalid status {status} should not be decided"
+        assert not is_successful(
+            {
+                "lifecycle": {"state": "decided", "outcome": "undetermined"},
+                "tx_execution_result": "1",
+            }
+        )
+        assert not is_successful(
+            {
+                "lifecycle": {"state": "decided", "outcome": "accepted"},
+                "tx_execution_result": "2",
+            }
+        )
+        assert is_successful(
+            {
+                "lifecycle": {"state": "finalized"},
+                "tx_execution_result_name": ExecutionResult.FINISHED_WITH_RETURN,
+            }
+        )
+        assert is_successful(
+            {
+                "lifecycle": {"state": "finalized", "outcome": "accepted"},
+                "tx_execution_result_name": ExecutionResult.FINISHED_WITH_RETURN,
+            }
+        )
+        assert not is_successful(
+            {
+                "lifecycle": {"state": "finalized", "outcome": "undetermined"},
+                "tx_execution_result_name": ExecutionResult.FINISHED_WITH_RETURN,
+            }
+        )
 
 
 class TestSimplifyTransactionReceipt:
@@ -265,8 +197,7 @@ class TestSimplifyTransactionReceipt:
         # These fields should be preserved
         essential_fields = [
             "hash",
-            "status",
-            "status_name",
+            "lifecycle",
             "from_address",
             "to_address",
             "value",

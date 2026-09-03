@@ -23,6 +23,22 @@ To install the GenLayerPY SDK, use the following command:
 $ pip install genlayer-py
 ```
 
+SDK releases follow their corresponding GenLayer protocol release. This
+release targets the current resolution-kernel train; use the matching older SDK
+release when connecting to an older deployment.
+
+Use the dedicated preview preset for the release-candidate Studio deployment:
+
+```python
+from genlayer_py import create_client
+from genlayer_py.chains import studio_devnet
+
+client = create_client(chain=studio_devnet)
+```
+
+`studio_devnet` targets `https://studio-dev.genlayer.com/api` (chain ID 61997).
+The existing `studionet` preset remains pinned to the stable hosted Studio.
+
 Here’s how to initialize the client and connect to the GenLayer Simulator:
 
 ### Reading a Transaction
@@ -44,21 +60,20 @@ transaction = client.get_transaction(hash=transaction_hash)
 ```python
 from genlayer_py import create_client
 from genlayer_py.chains import localnet
-from genlayer_py.types import TransactionStatus
 
 client = create_client(chain=localnet)
 
 # Get simplified receipt (default - removes binary data, keeps execution results)
 receipt = client.wait_for_transaction_receipt(
     transaction_hash="0x...",
-    status=TransactionStatus.FINALIZED,
+    wait_until="finalized",
     full_transaction=False  # Default - simplified for readability
 )
 
 # Get complete receipt with all fields
 full_receipt = client.wait_for_transaction_receipt(
     transaction_hash="0x...",
-    status=TransactionStatus.FINALIZED,
+    wait_until="finalized",
     full_transaction=True  # Complete receipt with all internal data
 )
 ```
@@ -101,7 +116,7 @@ transaction_hash = client.write_contract(
 )
 receipt = client.wait_for_transaction_receipt(
     hash=transaction_hash,
-    status=TransactionStatus.FINALIZED, // or ACCEPTED
+    wait_until="finalized",
     full_transaction=False  // False by default - returns simplified receipt for better readability
 )
 ```
@@ -117,7 +132,6 @@ estimate = client.estimate_transaction_fees(
     {
         "leaderTimeunitsAllocation": 100,
         "validatorTimeunitsAllocation": 200,
-        "rotations": [0],
     }
 )
 
@@ -132,6 +146,11 @@ tx_hash = client.write_contract(
     },
 )
 ```
+
+When `rotations` is omitted, estimates fund
+`chain.default_consensus_max_rotations` for the initial round and every enabled
+appeal round. Pass an explicit list, including `[0]`, when the application wants
+to fund a different number of rotations.
 
 If `fees["distribution"]` is provided without `feeValue`, the SDK derives the
 fee deposit from FeeManager on network backends, or from `sim_getFeeConfig` on
@@ -254,18 +273,26 @@ client.top_up_fees(
     },
 )
 
-client.top_up_and_submit_appeal(
-    transaction_id=tx_hash,
-    value=1_400,
-    distribution={
-        "appealRounds": 1,
-        "rotations": [0, 0],
-    },
-)
+quote = client.get_appeal_quote(tx_hash)
+if client.can_appeal(tx_hash, expected_decision_id=quote["decision_id"]):
+    client.top_up_and_submit_appeal(
+        transaction_id=tx_hash,
+        expected_decision_id=quote["decision_id"],
+        value=quote["total"],
+        distribution={
+            "appealRounds": 1,
+            "rotations": [0, 0],
+        },
+    )
 ```
 
 `top_up_fees` returns the backend RPC hash. On network backends this is the EVM
 transaction hash; on Studio/localnet it is the target GenLayer transaction id.
+Appeal commands are guarded by the quoted decision id so a stale request cannot
+bind to a newer decision. If the id and value are omitted, the SDK refreshes
+this lightweight quote automatically. This applies to deployed Consensus.
+Current Studio uses its native decision-free appeal methods: pass ``value``
+explicitly and omit ``expected_decision_id``.
 
 ### Checking execution results
 
@@ -274,13 +301,13 @@ A transaction can be finalized by consensus but still have a failed execution. A
 ```python
 from genlayer_py import create_client, create_account
 from genlayer_py.chains import testnet_bradbury
-from genlayer_py.types import TransactionStatus, ExecutionResult
+from genlayer_py.types import ExecutionResult
 
 client = create_client(chain=testnet_bradbury, account=create_account())
 
 receipt = client.wait_for_transaction_receipt(
     transaction_hash=tx_hash,
-    status=TransactionStatus.FINALIZED,
+    wait_until="finalized",
 )
 
 if receipt.get("tx_execution_result_name") == ExecutionResult.FINISHED_WITH_RETURN.value:
@@ -305,6 +332,27 @@ Transactions can emit messages to other contracts. These messages create new chi
 ```python
 tx = client.get_transaction(transaction_hash=tx_hash)
 
+# The default lifecycle is derived only from stored chain state.
+print(tx["lifecycle"])
+# {"state": "processing", "phase": "revealing"}
+# {"state": "decided", "outcome": "accepted"}
+
+# Protocol projection/action details are available only through the explicit
+# advanced API.
+raw_lifecycle = client.get_transaction_lifecycle(transaction_hash=tx_hash)
+print(raw_lifecycle["stored_status_name"])
+print(raw_lifecycle["projected_status_name"])
+print(raw_lifecycle["resolution_action_name"])
+print(raw_lifecycle["resolution_source_name"])
+# `resolution_action_name == "Finalize"` is the authoritative readiness verdict.
+# On current Studio without the advanced lifecycle RPC, only stored status is
+# provable; projection repeats it and resolution/decision fields stay inactive.
+
+# The train stores the execution hash, not the old receipt bytes.
+print(tx["tx_execution_hash"])
+# `tx_receipt` remains present but is `None` when the
+# protocol cannot supply the old bytes.
+
 # Messages emitted by the contract during execution
 print(tx["messages"])
 # [{"messageType": 1, "recipient": "0x...", "value": 0, "data": "0x...", "onAcceptance": True, "saltNonce": 0}, ...]
@@ -313,6 +361,20 @@ print(tx["messages"])
 child_tx_ids = client.get_triggered_transaction_ids(transaction_hash=tx_hash)
 print(child_tx_ids)
 # ["0xabc...", "0xdef..."]
+```
+
+### Active and joined validators
+
+The active set contains only validators currently eligible for protocol
+duties. The joined registry is broader and can include validators that are not
+yet selectable, are under-staked, or are otherwise unavailable.
+
+```python
+active = client.active_validators()
+active_count = client.active_validators_count()
+
+joined = client.joined_validators()
+joined_count = client.joined_validators_count()
 ```
 
 ### Debugging transaction execution

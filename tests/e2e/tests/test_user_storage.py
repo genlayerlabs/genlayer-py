@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 
 from genlayer_py import create_client, create_account
 from genlayer_py.chains import localnet, studionet, testnet_asimov
-from genlayer_py.types import TransactionStatus
 from genlayer_py.assertions import tx_execution_succeeded
 
 # Load environment variables from .env file
@@ -79,7 +78,7 @@ def test_user_storage(chain_config):
     # Wait for transaction with retries if specified
     wait_kwargs = {
         "transaction_hash": deploy_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         wait_kwargs["retries"] = chain_config["retries"]
@@ -111,7 +110,7 @@ def test_user_storage(chain_config):
     # Wait for update_storage transaction
     update_storage_a_wait_kwargs = {
         "transaction_hash": update_storage_a_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         update_storage_a_wait_kwargs["retries"] = chain_config["retries"]
@@ -146,7 +145,7 @@ def test_user_storage(chain_config):
     # Wait for update_storage transaction
     update_storage_b_wait_kwargs = {
         "transaction_hash": update_storage_b_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         update_storage_b_wait_kwargs["retries"] = chain_config["retries"]
@@ -174,7 +173,7 @@ def test_user_storage(chain_config):
     # Wait for update_storage transaction
     update_storage_a2_wait_kwargs = {
         "transaction_hash": update_storage_a2_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         update_storage_a2_wait_kwargs["retries"] = chain_config["retries"]

@@ -2,30 +2,41 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import eth_utils
+import pytest
 from eth_abi import decode as abi_decode
 from web3 import Web3
 
 import genlayer_py.contracts.actions as contract_actions
 from genlayer_py.chains import localnet
+from genlayer_py.chains.studio_devnet import studio_devnet
+from genlayer_py.chains.testnet_asimov import testnet_asimov
+from genlayer_py.consensus.abi import CONSENSUS_MAIN_ABI
+from genlayer_py.exceptions import GenLayerError
 from genlayer_py.transactions.fees import (
     ADD_TRANSACTION_WITH_FEES_ARGUMENT_TYPES,
     ADD_TRANSACTION_WITH_FEES_SELECTOR,
     CALL_KEY_DEPLOY,
     CALL_KEY_UNNAMED,
     CALL_KEY_WILDCARD,
+    DEPLOY_CALL_KEY,
     FEES_DISTRIBUTION_ABI_TYPE,
     MESSAGE_ALLOCATION_ROOT_PARENT_INDEX,
     MessageType,
     build_estimated_fees_distribution,
     calculate_local_round_fees,
     create_fees_distribution,
+    create_top_up_fees_distribution,
     derive_external_message_call_key,
     derive_internal_message_call_key,
+    deploy_call_key,
     encode_external_message_fee_params,
     encode_internal_message_fee_params,
     extract_studio_fee_policy,
     requires_fee_deposit_calculation,
 )
+
+DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM = 10_000
+LOCAL_EXECUTION_BUDGET_FLOOR_GAS = 306_192
 
 
 ADD_TRANSACTION_ABI_V5 = [
@@ -115,6 +126,20 @@ ADD_TRANSACTION_ABI_WITH_FEES = [
     }
 ]
 
+# Studio refetches its decision-bound ConsensusMain ABI from the simulator RPC.
+STUDIO_CONSENSUS_MAIN_ABI = [
+    {
+        "type": "function",
+        "name": "submitAppeal",
+        "stateMutability": "payable",
+        "inputs": [
+            {"name": "_txId", "type": "bytes32"},
+            {"name": "_expectedDecisionId", "type": "uint256"},
+        ],
+        "outputs": [],
+    },
+]
+
 SENDER = "0x1111111111111111111111111111111111111111"
 RECIPIENT = "0x2222222222222222222222222222222222222222"
 TX_ID = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -128,14 +153,33 @@ def test_encode_internal_message_fee_params_uses_consensus_tuple_shape():
             "appealRounds": 1,
             "executionBudgetPerRound": 20,
             "rotations": [2, 3],
+            "maxPriceGenPerTimeUnit": 30,
+            "storageFeeMaxGasPrice": 40,
+            "receiptFeeMaxGasPrice": 50,
         }
     )
 
     decoded = abi_decode(
-        ("(uint256,uint256,uint256,uint256,uint256[])",),
+        ("(uint256,uint256,uint256,uint256,uint256[],uint256,uint256,uint256)",),
         Web3.to_bytes(hexstr=encoded),
     )[0]
-    assert decoded == (5, 10, 1, 20, (2, 3))
+    assert decoded == (5, 10, 1, 20, (2, 3), 30, 40, 50)
+
+
+def test_encode_internal_message_fee_params_accepts_snake_case_price_caps():
+    encoded = encode_internal_message_fee_params(
+        {
+            "max_price_gen_per_time_unit": 30,
+            "storage_fee_max_gas_price": 40,
+            "receipt_fee_max_gas_price": 50,
+        }
+    )
+
+    decoded = abi_decode(
+        ("(uint256,uint256,uint256,uint256,uint256[],uint256,uint256,uint256)",),
+        Web3.to_bytes(hexstr=encoded),
+    )[0]
+    assert decoded == (0, 0, 0, 0, (0,), 30, 40, 50)
 
 
 def test_derive_internal_message_call_key_for_short_method_name():
@@ -152,7 +196,15 @@ def test_derive_internal_message_call_key_hashes_exact_32_byte_method_name():
 
 
 def test_derive_message_call_key_constants_for_deploy_and_unnamed():
-    assert CALL_KEY_DEPLOY == "0x" + "00" * 32
+    # Wildcard is the untagged hash of empty bytes — outside the derived-key space.
+    assert CALL_KEY_WILDCARD == eth_utils.keccak(b"")
+    assert CALL_KEY_WILDCARD == bytes.fromhex(
+        "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+    )
+    # Empty name derives bytes32(0): the natural key for deploy and emit_transfer.
+    assert DEPLOY_CALL_KEY == "0x" + "00" * 32
+    assert CALL_KEY_DEPLOY == DEPLOY_CALL_KEY
+    assert deploy_call_key() == DEPLOY_CALL_KEY
     assert CALL_KEY_UNNAMED == "0x" + "00" * 32
     assert derive_internal_message_call_key("") == CALL_KEY_UNNAMED
 
@@ -190,12 +242,8 @@ def test_encode_top_up_fees_uses_consensus_tuple_shape():
         function_name="topUpFees",
         transaction_id=TX_ID,
         distribution={
-            "leaderTimeunitsAllocation": 100,
-            "validatorTimeunitsAllocation": 200,
-            "appealRounds": 1,
             "executionBudgetPerRound": 500_000,
             "totalMessageFees": 30,
-            "rotations": [0, 2],
             "maxPriceGenPerTimeUnit": 12,
             "storageFeeMaxGasPrice": 24,
             "receiptFeeMaxGasPrice": 36,
@@ -211,7 +259,18 @@ def test_encode_top_up_fees_uses_consensus_tuple_shape():
         Web3.to_bytes(hexstr=encoded[10:]),
     )
     assert decoded_tx_id == Web3.to_bytes(hexstr=TX_ID)
-    assert distribution == (100, 200, 1, 500_000, 0, 30, (0, 2), 12, 24, 36)
+    assert distribution == (0, 0, 0, 500_000, 0, 30, (), 12, 24, 36)
+
+
+def test_top_up_distribution_preserves_explicit_initial_schedule():
+    assert create_top_up_fees_distribution({"appealRounds": 1, "rotations": [0, 2]})[
+        "rotations"
+    ] == [0, 2]
+
+
+def test_top_up_distribution_requires_schedule_for_nonzero_appeal_rounds():
+    with pytest.raises(ValueError, match=r"rotations must contain appealRounds \+ 1"):
+        create_top_up_fees_distribution({"appealRounds": 1})
 
 
 def test_top_up_fees_sends_consensus_call(monkeypatch):
@@ -243,7 +302,324 @@ def test_top_up_fees_sends_consensus_call(monkeypatch):
 
 
 def test_top_up_and_submit_appeal_sends_consensus_call_and_returns_tx_id(monkeypatch):
-    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=testnet_asimov.id)
+    captured = {}
+
+    def fake_send_consensus_call(**kwargs):
+        captured.update(kwargs)
+        return "0xevmtx"
+
+    monkeypatch.setattr(
+        contract_actions,
+        "_send_consensus_call",
+        fake_send_consensus_call,
+    )
+
+    result = contract_actions.top_up_and_submit_appeal(
+        self=client,
+        transaction_id=TX_ID,
+        value=1234,
+        expected_decision_id=42,
+        distribution={"appealRounds": 1, "rotations": [0, 1]},
+    )
+
+    selector = eth_utils.keccak(
+        text=f"topUpAndSubmitAppeal(bytes32,uint256,{FEES_DISTRIBUTION_ABI_TYPE})"
+    )[:4].hex()
+    assert result == TX_ID
+    assert captured["value"] == 1234
+    assert captured["operation_name"] == "Top up and submit appeal"
+    assert captured["encoded_data"].startswith(f"0x{selector}")
+    decoded_tx_id, decision_id, _ = abi_decode(
+        ("bytes32", "uint256", FEES_DISTRIBUTION_ABI_TYPE),
+        Web3.to_bytes(hexstr=captured["encoded_data"][10:]),
+    )
+    assert decoded_tx_id == Web3.to_bytes(hexstr=TX_ID)
+    assert decision_id == 42
+
+
+def test_encode_submit_appeal_uses_exact_decision_guarded_selector():
+    client = _make_client(CONSENSUS_MAIN_ABI)
+
+    encoded = contract_actions._encode_submit_appeal_data(
+        self=client,
+        transaction_id=TX_ID,
+        expected_decision_id=42,
+    )
+
+    selector = eth_utils.keccak(text="submitAppeal(bytes32,uint256)")[:4].hex()
+    assert encoded.startswith(f"0x{selector}")
+    assert abi_decode(("bytes32", "uint256"), Web3.to_bytes(hexstr=encoded[10:])) == (
+        Web3.to_bytes(hexstr=TX_ID),
+        42,
+    )
+
+
+def test_appeal_transaction_auto_resolves_latest_quote(monkeypatch):
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=testnet_asimov.id)
+    captured = {}
+
+    monkeypatch.setattr(
+        contract_actions,
+        "get_appeal_quote",
+        Mock(
+            return_value={
+                "decision_id": 42,
+                "bond": 4_000,
+                "funding": 321,
+                "total": 4_321,
+                "appeal_deadline": 999,
+            }
+        ),
+    )
+    def fake_send_consensus_call(**kwargs):
+        captured.update(kwargs)
+        return "0xevmtx"
+
+    monkeypatch.setattr(
+        contract_actions,
+        "_send_consensus_call",
+        fake_send_consensus_call,
+    )
+
+    result = contract_actions.appeal_transaction(
+        self=client,
+        transaction_id=TX_ID,
+    )
+
+    assert result == TX_ID
+    contract_actions.get_appeal_quote.assert_called_once_with(client, TX_ID)
+    selector = eth_utils.keccak(
+        text=f"topUpAndSubmitAppeal(bytes32,uint256,{FEES_DISTRIBUTION_ABI_TYPE})"
+    )[:4].hex()
+    assert captured["encoded_data"].startswith(f"0x{selector}")
+    tx_id, decision_id, distribution = abi_decode(
+        ("bytes32", "uint256", FEES_DISTRIBUTION_ABI_TYPE),
+        Web3.to_bytes(hexstr=captured["encoded_data"][10:]),
+    )
+    assert tx_id == Web3.to_bytes(hexstr=TX_ID)
+    assert decision_id == 42
+    assert distribution[2] == 0
+    assert distribution[6] == (0,)
+    assert captured["value"] == 4_321
+    assert captured["operation_name"] == "Appeal"
+
+
+def test_top_up_and_submit_appeal_auto_resolves_latest_quote(monkeypatch):
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=testnet_asimov.id)
+    captured = {}
+
+    monkeypatch.setattr(
+        contract_actions,
+        "get_appeal_quote",
+        Mock(
+            return_value={
+                "decision_id": 77,
+                "bond": 9_000,
+                "funding": 999,
+                "total": 9_999,
+                "appeal_deadline": 1_234,
+            }
+        ),
+    )
+
+    def fake_send_consensus_call(**kwargs):
+        captured.update(kwargs)
+        return "0xevmtx"
+
+    monkeypatch.setattr(
+        contract_actions,
+        "_send_consensus_call",
+        fake_send_consensus_call,
+    )
+
+    result = contract_actions.top_up_and_submit_appeal(
+        self=client,
+        transaction_id=TX_ID,
+        distribution={"appealRounds": 1, "rotations": [0, 1]},
+    )
+
+    assert result == TX_ID
+    assert captured["value"] == 9_999
+    _, decision_id, _ = abi_decode(
+        ("bytes32", "uint256", FEES_DISTRIBUTION_ABI_TYPE),
+        Web3.to_bytes(hexstr=captured["encoded_data"][10:]),
+    )
+    assert decision_id == 77
+
+
+def test_appeal_auto_quote_failure_is_actionable(monkeypatch):
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=testnet_asimov.id)
+    monkeypatch.setattr(
+        contract_actions,
+        "get_appeal_quote",
+        Mock(side_effect=RuntimeError("no active decision")),
+    )
+
+    with pytest.raises(GenLayerError, match="Cannot quote an active appeal decision"):
+        contract_actions.appeal_transaction(
+            self=client,
+            transaction_id=TX_ID,
+        )
+
+
+def test_get_appeal_quote_uses_consensus_data_without_full_transaction(monkeypatch):
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=testnet_asimov.id)
+    quote_call = Mock(return_value=(42, 4_000, 321, 999))
+    estimate = Mock(return_value=SimpleNamespace(call=quote_call))
+    contract = SimpleNamespace(
+        functions=SimpleNamespace(estimateLatestAppealCharge=estimate)
+    )
+    monkeypatch.setattr(
+        contract_actions,
+        "_consensus_data_contract",
+        lambda self: contract,
+    )
+
+    assert contract_actions.get_appeal_quote(client, TX_ID) == {
+        "decision_id": 42,
+        "bond": 4_000,
+        "funding": 321,
+        "total": 4_321,
+        "appeal_deadline": 999,
+    }
+    estimate.assert_called_once_with(Web3.to_bytes(hexstr=TX_ID))
+
+
+def test_get_min_appeal_bond_returns_the_full_train_charge(monkeypatch):
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=testnet_asimov.id)
+    monkeypatch.setattr(
+        contract_actions,
+        "get_appeal_quote",
+        Mock(return_value={"total": 4_321}),
+    )
+
+    assert contract_actions.get_min_appeal_bond(client, TX_ID) == 4_321
+
+
+def test_get_appeal_charge_returns_the_full_train_charge(monkeypatch):
+    client = Mock()
+    monkeypatch.setattr(
+        contract_actions,
+        "get_appeal_quote",
+        Mock(return_value={"total": 4_321}),
+    )
+    assert contract_actions.get_appeal_charge(client, TX_ID) == 4_321
+
+
+def test_can_appeal_passes_the_exact_active_decision_id(monkeypatch):
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=testnet_asimov.id)
+    client.chain.appeals_contract = {
+        "address": "0x4444444444444444444444444444444444444444",
+        "abi": [],
+    }
+    can_appeal_call = Mock(return_value=True)
+    can_appeal_function = Mock(return_value=SimpleNamespace(call=can_appeal_call))
+    contract = SimpleNamespace(functions=SimpleNamespace(canAppeal=can_appeal_function))
+    monkeypatch.setattr(
+        contract_actions,
+        "_appeals_contract",
+        lambda self: contract,
+    )
+    monkeypatch.setattr(
+        contract_actions,
+        "_get_active_decision_id",
+        Mock(return_value=42),
+    )
+
+    assert contract_actions.can_appeal(client, TX_ID) is True
+    can_appeal_function.assert_called_once_with(Web3.to_bytes(hexstr=TX_ID), 42)
+
+
+def test_can_appeal_returns_false_without_an_active_decision(monkeypatch):
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=testnet_asimov.id)
+    client.chain.appeals_contract = {
+        "address": "0x4444444444444444444444444444444444444444",
+        "abi": [],
+    }
+    monkeypatch.setattr(
+        contract_actions,
+        "_get_active_decision_id",
+        Mock(return_value=None),
+    )
+    appeals_contract = Mock()
+    monkeypatch.setattr(
+        contract_actions,
+        "_appeals_contract",
+        appeals_contract,
+    )
+
+    assert contract_actions.can_appeal(client, TX_ID) is False
+    appeals_contract.assert_not_called()
+
+
+def _forbid_train_reads(monkeypatch):
+    train_read = Mock(side_effect=AssertionError("train read on a Studio chain"))
+    monkeypatch.setattr(contract_actions, "_consensus_data_contract", train_read)
+    monkeypatch.setattr(contract_actions, "_get_active_decision_id", train_read)
+    return train_read
+
+
+def _make_studio_client():
+    client = _make_client(STUDIO_CONSENSUS_MAIN_ABI)
+    client.provider.make_request = Mock(
+        return_value={
+            "result": {
+                "decisionId": "42",
+                "bond": "4000",
+                "funding": "321",
+                "appealDeadline": "999",
+            }
+        }
+    )
+    client.get_transaction_lifecycle = Mock(
+        return_value={"decision_active": True, "decision_id": 42}
+    )
+    return client
+
+
+def test_appeal_transaction_on_studio_binds_the_active_decision(monkeypatch):
+    client = _make_studio_client()
+    train_read = _forbid_train_reads(monkeypatch)
+    captured = {}
+
+    def fake_send_consensus_call(**kwargs):
+        captured.update(kwargs)
+        return "0xevmtx"
+
+    monkeypatch.setattr(
+        contract_actions,
+        "_send_consensus_call",
+        fake_send_consensus_call,
+    )
+
+    result = contract_actions.appeal_transaction(
+        self=client,
+        transaction_id=TX_ID,
+        value=1234,
+    )
+
+    selector = eth_utils.keccak(
+        text=f"topUpAndSubmitAppeal(bytes32,uint256,{FEES_DISTRIBUTION_ABI_TYPE})"
+    )[:4].hex()
+    assert result == TX_ID
+    assert captured["value"] == 1234
+    assert captured["operation_name"] == "Appeal"
+    assert captured["encoded_data"].startswith(f"0x{selector}")
+    tx_id, decision_id, distribution = abi_decode(
+        ("bytes32", "uint256", FEES_DISTRIBUTION_ABI_TYPE),
+        Web3.to_bytes(hexstr=captured["encoded_data"][10:]),
+    )
+    assert tx_id == Web3.to_bytes(hexstr=TX_ID)
+    assert decision_id == 42
+    assert distribution[2] == 0
+    assert distribution[6] == (0,)
+    train_read.assert_not_called()
+
+
+def test_top_up_and_submit_appeal_on_studio_binds_the_active_decision(monkeypatch):
+    client = _make_studio_client()
+    train_read = _forbid_train_reads(monkeypatch)
     captured = {}
 
     def fake_send_consensus_call(**kwargs):
@@ -264,19 +640,128 @@ def test_top_up_and_submit_appeal_sends_consensus_call_and_returns_tx_id(monkeyp
     )
 
     selector = eth_utils.keccak(
-        text=f"topUpAndSubmitAppeal(bytes32,{FEES_DISTRIBUTION_ABI_TYPE})"
+        text=f"topUpAndSubmitAppeal(bytes32,uint256,{FEES_DISTRIBUTION_ABI_TYPE})"
     )[:4].hex()
     assert result == TX_ID
     assert captured["value"] == 1234
     assert captured["operation_name"] == "Top up and submit appeal"
     assert captured["encoded_data"].startswith(f"0x{selector}")
-
-
-def test_send_consensus_call_returns_localnet_rpc_hash_without_waiting(monkeypatch):
-    wait_for_transaction_receipt = Mock()
-    sign_transaction = Mock(
-        return_value=SimpleNamespace(raw_transaction=b"\x12\x34")
+    decoded_tx_id, decision_id, distribution = abi_decode(
+        ("bytes32", "uint256", FEES_DISTRIBUTION_ABI_TYPE),
+        Web3.to_bytes(hexstr=captured["encoded_data"][10:]),
     )
+    assert decoded_tx_id == Web3.to_bytes(hexstr=TX_ID)
+    assert decision_id == 42
+    assert distribution[2] == 1
+    train_read.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "action",
+    (
+        contract_actions.get_appeal_quote,
+        contract_actions.get_appeal_charge,
+        contract_actions.get_min_appeal_bond,
+    ),
+)
+def test_appeal_quote_reads_use_studio_authoritative_rpc(action, monkeypatch):
+    client = _make_studio_client()
+    train_read = Mock(side_effect=AssertionError("train read on a Studio chain"))
+    monkeypatch.setattr(contract_actions, "_consensus_data_contract", train_read)
+
+    result = action(client, TX_ID)
+    if action is contract_actions.get_appeal_quote:
+        assert result == {
+            "decision_id": 42,
+            "bond": 4_000,
+            "funding": 321,
+            "total": 4_321,
+            "appeal_deadline": 999,
+        }
+    else:
+        assert result == 4_321
+
+    train_read.assert_not_called()
+
+
+def test_studio_appeals_auto_resolve_the_authoritative_value(monkeypatch):
+    client = _make_studio_client()
+    train_read = _forbid_train_reads(monkeypatch)
+    send_consensus_call = Mock(return_value="0xevmtx")
+    monkeypatch.setattr(
+        contract_actions,
+        "_send_consensus_call",
+        send_consensus_call,
+    )
+
+    contract_actions.appeal_transaction(self=client, transaction_id=TX_ID)
+    contract_actions.top_up_and_submit_appeal(
+        self=client,
+        transaction_id=TX_ID,
+        distribution={"appealRounds": 1},
+    )
+
+    assert [call.kwargs["value"] for call in send_consensus_call.call_args_list] == [
+        4_321,
+        4_321,
+    ]
+    train_read.assert_not_called()
+
+
+def test_studio_appeals_accept_an_explicit_decision_guard(monkeypatch):
+    client = _make_studio_client()
+    train_read = _forbid_train_reads(monkeypatch)
+    send_consensus_call = Mock(return_value="0xevmtx")
+    monkeypatch.setattr(
+        contract_actions,
+        "_send_consensus_call",
+        send_consensus_call,
+    )
+
+    contract_actions.appeal_transaction(
+        self=client,
+        transaction_id=TX_ID,
+        value=1234,
+        expected_decision_id=42,
+    )
+    contract_actions.top_up_and_submit_appeal(
+        self=client,
+        transaction_id=TX_ID,
+        distribution={"appealRounds": 1},
+        value=1234,
+        expected_decision_id=42,
+    )
+
+    assert send_consensus_call.call_count == 2
+    client.provider.make_request.assert_not_called()
+    train_read.assert_not_called()
+
+
+def test_can_appeal_on_studio_uses_the_active_decision_quote():
+    client = _make_studio_client()
+
+    assert contract_actions.can_appeal(client, TX_ID) is True
+    client.get_transaction_lifecycle.assert_called_once_with(TX_ID)
+
+
+def test_encode_submit_appeal_still_requires_a_decision_id_on_the_train_shape():
+    client = _make_client(CONSENSUS_MAIN_ABI, chain_id=testnet_asimov.id)
+
+    with pytest.raises(ValueError, match="submitAppeal requires expected_decision_id"):
+        contract_actions._encode_submit_appeal_data(self=client, transaction_id=TX_ID)
+
+
+def test_send_consensus_call_signs_for_canonical_local_studio_chain():
+    wait_for_transaction_receipt = Mock(return_value=SimpleNamespace(status=1))
+    sign_transaction = Mock(return_value=SimpleNamespace(raw_transaction=b"\x12\x34"))
+
+    def make_request(method, params):
+        if method == "eth_estimateGas":
+            return {"result": "0x5208"}
+        if method == "eth_sendRawTransaction":
+            return {"result": TX_ID}
+        raise AssertionError(f"unexpected method {method}")
+
     client = SimpleNamespace(
         chain=SimpleNamespace(
             id=localnet.id,
@@ -284,21 +769,16 @@ def test_send_consensus_call_returns_localnet_rpc_hash_without_waiting(monkeypat
                 "address": "0x3333333333333333333333333333333333333333",
             },
         ),
-        provider=SimpleNamespace(
-            make_request=Mock(return_value={"result": TX_ID})
-        ),
+        get_current_nonce=Mock(return_value=7),
+        provider=SimpleNamespace(make_request=Mock(side_effect=make_request)),
         w3=SimpleNamespace(
             to_hex=Mock(return_value="0xsigned"),
-            eth=SimpleNamespace(wait_for_transaction_receipt=wait_for_transaction_receipt),
+            eth=SimpleNamespace(
+                wait_for_transaction_receipt=wait_for_transaction_receipt
+            ),
         ),
     )
     account = SimpleNamespace(address=SENDER, sign_transaction=sign_transaction)
-
-    monkeypatch.setattr(
-        contract_actions,
-        "_prepare_transaction",
-        Mock(return_value={"from": SENDER}),
-    )
 
     result = contract_actions._send_consensus_call(
         self=client,
@@ -309,12 +789,128 @@ def test_send_consensus_call_returns_localnet_rpc_hash_without_waiting(monkeypat
     )
 
     assert result == TX_ID
-    wait_for_transaction_receipt.assert_not_called()
+    transaction = sign_transaction.call_args.args[0]
+    assert transaction == {
+        "from": SENDER,
+        "nonce": "0x7",
+        "data": "0x1234",
+        "to": "0x3333333333333333333333333333333333333333",
+        "value": "0x1",
+        "gasPrice": 0,
+        "chainId": 61127,
+        "gas": "0x5208",
+    }
+    wait_for_transaction_receipt.assert_called_once_with(TX_ID)
 
 
-def _make_client(add_transaction_abi):
+def test_send_consensus_call_surfaces_studio_receipt_revert_reason(monkeypatch):
+    wait_for_transaction_receipt = Mock(return_value=SimpleNamespace(status=0))
+    sign_transaction = Mock(return_value=SimpleNamespace(raw_transaction=b"\x12\x34"))
+
+    def make_request(*, method, params):
+        if method == "eth_sendRawTransaction":
+            return {"result": TX_ID}
+        if method == "eth_getTransactionReceipt":
+            return {
+                "result": {
+                    "status": "0x0",
+                    "revertReason": "TopUpCannotExtendSchedule",
+                }
+            }
+        raise AssertionError(f"unexpected method {method}")
+
+    client = SimpleNamespace(
+        chain=SimpleNamespace(
+            id=localnet.id,
+            consensus_main_contract={
+                "address": "0x3333333333333333333333333333333333333333",
+            },
+        ),
+        provider=SimpleNamespace(make_request=Mock(side_effect=make_request)),
+        w3=SimpleNamespace(
+            to_hex=Mock(return_value="0xsigned"),
+            eth=SimpleNamespace(
+                wait_for_transaction_receipt=wait_for_transaction_receipt
+            ),
+        ),
+    )
+    account = SimpleNamespace(address=SENDER, sign_transaction=sign_transaction)
+
+    monkeypatch.setattr(
+        contract_actions,
+        "_prepare_transaction",
+        Mock(return_value={"from": SENDER}),
+    )
+
+    with pytest.raises(GenLayerError, match="TopUpCannotExtendSchedule"):
+        contract_actions._send_consensus_call(
+            self=client,
+            encoded_data="0x1234",
+            sender_account=account,
+            value=1,
+            operation_name="Top up fees",
+        )
+
+
+def test_send_transaction_surfaces_studio_receipt_revert_reason(monkeypatch):
+    wait_for_transaction_receipt = Mock(return_value=SimpleNamespace(status=0))
+    sign_transaction = Mock(return_value=SimpleNamespace(raw_transaction=b"\x12\x34"))
+
+    def make_request(*, method, params):
+        if method == "eth_sendRawTransaction":
+            return {"result": TX_ID}
+        if method == "eth_getTransactionReceipt":
+            return {
+                "result": {
+                    "status": "0x0",
+                    "revertReason": "InsufficientFees",
+                }
+            }
+        raise AssertionError(f"unexpected method {method}")
+
+    client = SimpleNamespace(
+        chain=SimpleNamespace(
+            id=localnet.id,
+            name="localnet",
+            consensus_main_contract={
+                "address": "0x3333333333333333333333333333333333333333",
+                "abi": [],
+            },
+        ),
+        provider=SimpleNamespace(make_request=Mock(side_effect=make_request)),
+        w3=SimpleNamespace(
+            to_hex=Mock(return_value="0xsigned"),
+            eth=SimpleNamespace(
+                wait_for_transaction_receipt=wait_for_transaction_receipt
+            ),
+        ),
+    )
+    account = SimpleNamespace(address=SENDER, sign_transaction=sign_transaction)
+
+    monkeypatch.setattr(
+        contract_actions,
+        "_prepare_transaction",
+        Mock(return_value={"from": SENDER}),
+    )
+
+    with pytest.raises(GenLayerError, match="InsufficientFees"):
+        contract_actions._send_transaction(
+            self=client,
+            encoded_data="0x1234",
+            sender_account=account,
+            value=1,
+        )
+
+
+def test_revert_selector_formatter_names_fee_errors():
+    error = Exception({"data": "0x632be5a1"})
+
+    assert contract_actions._format_rpc_error(error).endswith("(FeeValueMustBeNonZero)")
+
+
+def _make_client(add_transaction_abi, chain_id=localnet.id):
     chain = SimpleNamespace(
-        id=61999,
+        id=chain_id,
         consensus_main_contract={
             "address": "0x3333333333333333333333333333333333333333",
             "abi": add_transaction_abi,
@@ -326,7 +922,117 @@ def _make_client(add_transaction_abi):
     return SimpleNamespace(
         chain=chain,
         local_account=local_account,
+        provider=Mock(),
         w3=Web3(),
+    )
+
+
+class _FakeContractFunction:
+    def __init__(self, value):
+        self.value = value
+
+    def call(self):
+        return self.value
+
+
+class _FakeFeeManagerFunctions:
+    def __init__(self, values):
+        self.values = values
+
+    def GENPerTimeUnit(self):
+        return _FakeContractFunction(self.values["gen"])
+
+    def storageUnitPrice(self):
+        return _FakeContractFunction(self.values["storage"])
+
+    def quoteGasPrice(self):
+        return _FakeContractFunction(self.values["quote"])
+
+    def messageFeeParamsBudgetFloor(self):
+        return _FakeContractFunction(self.values["floor"])
+
+
+class _FakeEth:
+    def __init__(self, values, gas_price):
+        self.values = values
+        self._gas_price = gas_price
+        self.gas_price_accesses = 0
+
+    def contract(self, address=None, abi=None):
+        return SimpleNamespace(functions=_FakeFeeManagerFunctions(self.values))
+
+    @property
+    def gas_price(self):
+        self.gas_price_accesses += 1
+        if isinstance(self._gas_price, Exception):
+            raise self._gas_price
+        return self._gas_price
+
+
+def _make_fee_policy_client(values, gas_price=0):
+    eth = _FakeEth(values, gas_price)
+    return SimpleNamespace(
+        chain=SimpleNamespace(
+            fee_manager_contract={
+                "address": "0x4444444444444444444444444444444444444444"
+            },
+        ),
+        w3=SimpleNamespace(
+            eth=eth,
+            to_checksum_address=Mock(side_effect=lambda address: address),
+        ),
+    )
+
+
+def test_get_current_fee_policy_uses_effective_receipt_gas_price_and_local_floor():
+    client = _make_fee_policy_client(
+        {"gen": 0, "storage": 0, "quote": 1, "floor": 0},
+        gas_price=2,
+    )
+
+    policy = contract_actions.get_current_fee_policy(client)
+
+    assert policy["enabled"] is True
+    assert policy["receiptGasPrice"] == 2
+    assert policy["executionBudgetFloor"] == 2 * LOCAL_EXECUTION_BUDGET_FLOOR_GAS
+    assert client.w3.eth.gas_price_accesses == 1
+
+
+def test_get_current_fee_policy_refuses_enabled_zero_receipt_price():
+    client = _make_fee_policy_client(
+        {"gen": 1, "storage": 0, "quote": 0, "floor": 0},
+        gas_price=0,
+    )
+
+    with pytest.raises(
+        GenLayerError,
+        match="receipt gas price quoted as zero; refusing to build a zero price cap",
+    ):
+        contract_actions.get_current_fee_policy(client)
+
+
+def test_get_current_fee_policy_does_not_read_network_gas_price_when_disabled():
+    client = _make_fee_policy_client(
+        {"gen": 0, "storage": 0, "quote": 0, "floor": 0},
+        gas_price=AssertionError("eth_gasPrice should not be called"),
+    )
+
+    policy = contract_actions.get_current_fee_policy(client)
+
+    assert policy["enabled"] is False
+    assert policy["receiptGasPrice"] == 0
+    assert client.w3.eth.gas_price_accesses == 0
+
+
+def test_asimov_chain_has_fee_contracts():
+    assert testnet_asimov.fee_manager_contract["address"] == (
+        "0x21737AA4bea8FF12E202BF1BAB23751A95617533"
+    )
+    assert testnet_asimov.rounds_storage_contract["address"] == (
+        "0x1F595c0D549DE0812F127508ea1039636CFA62Cc"
+    )
+    assert testnet_asimov.appeals_contract["address"] == (
+        "0x0F739Dd8f5322b9547c7d19a9621BC2ac8DF4089"
     )
 
 
@@ -340,7 +1046,7 @@ def test_simulate_write_contract_passes_fee_policy_and_value_to_sim_call():
         }
     )
     client = SimpleNamespace(
-        chain=SimpleNamespace(id=localnet.id),
+        chain=SimpleNamespace(id=studio_devnet.id),
         local_account=SimpleNamespace(address=SENDER),
         provider=SimpleNamespace(make_request=make_request),
     )
@@ -385,6 +1091,10 @@ def test_simulate_write_contract_passes_fee_policy_and_value_to_sim_call():
         MessageType.Internal
     )
     assert request_params["fees"]["messageAllocations"][0]["budget"] == 5
+    assert (
+        request_params["fees"]["messageAllocations"][0]["callKey"]
+        == "0x" + CALL_KEY_WILDCARD.hex()
+    )
 
 
 def test_encode_add_transaction_uses_v5_signature_when_abi_has_5_inputs():
@@ -498,7 +1208,9 @@ def test_write_contract_separates_user_value_from_fee_deposit(monkeypatch):
     assert params[9][0][6] == b"\x12\x34"
 
 
-def test_write_contract_defaults_external_message_allocations_to_finalization(monkeypatch):
+def test_write_contract_defaults_external_message_allocations_to_finalization(
+    monkeypatch,
+):
     client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
     client.initialize_consensus_smart_contract = Mock()
 
@@ -580,15 +1292,82 @@ def test_build_estimated_fees_distribution_adds_caps_and_message_bucket():
             ]
         },
         policy,
+        default_consensus_max_rotations=3,
     )
 
     assert distribution["leaderTimeunitsAllocation"] == 100
     assert distribution["validatorTimeunitsAllocation"] == 200
-    assert distribution["executionBudgetPerRound"] == 500_000
+    assert distribution["executionBudgetPerRound"] == (
+        3_000_000_000 + 30 * DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM
+    )
     assert distribution["totalMessageFees"] == 80
     assert distribution["maxPriceGenPerTimeUnit"] == 12
     assert distribution["storageFeeMaxGasPrice"] == 24
     assert distribution["receiptFeeMaxGasPrice"] == 36
+
+
+def test_build_estimated_fees_distribution_funds_each_round_with_default_rotations():
+    policy = {
+        "enabled": True,
+        "genPerTimeUnit": 10,
+        "storageUnitPrice": 20,
+        "receiptGasPrice": 30,
+        "executionBudgetFloor": 1_234,
+    }
+
+    distribution = build_estimated_fees_distribution(
+        {"appealRounds": 2},
+        policy,
+        default_consensus_max_rotations=3,
+    )
+
+    assert distribution["rotations"] == [3, 3, 3]
+
+
+def test_build_estimated_fees_distribution_preserves_explicit_zero_rotations():
+    policy = {
+        "enabled": True,
+        "genPerTimeUnit": 10,
+        "storageUnitPrice": 20,
+        "receiptGasPrice": 30,
+        "executionBudgetFloor": 1_234,
+    }
+
+    distribution = build_estimated_fees_distribution(
+        {"rotations": [0]},
+        policy,
+        default_consensus_max_rotations=3,
+    )
+
+    assert distribution["rotations"] == [0]
+
+
+def test_build_estimated_fees_distribution_preserves_explicit_execution_budget_with_messages():
+    policy = {
+        "enabled": True,
+        "genPerTimeUnit": 10,
+        "storageUnitPrice": 20,
+        "receiptGasPrice": 30,
+        "executionBudgetFloor": 1_234,
+    }
+
+    distribution = build_estimated_fees_distribution(
+        {
+            "executionBudgetPerRound": 42,
+            "messageAllocations": [
+                {
+                    "messageType": MessageType.Internal,
+                    "recipient": RECIPIENT,
+                    "budget": 50,
+                    "feeParams": "0x1234",
+                },
+            ],
+        },
+        policy,
+        default_consensus_max_rotations=3,
+    )
+
+    assert distribution["executionBudgetPerRound"] == 42
 
 
 def test_calculate_local_round_fees_matches_consensus_initial_round():
@@ -610,11 +1389,39 @@ def test_calculate_local_round_fees_matches_consensus_initial_round():
     assert calculate_local_round_fees(distribution, 5, policy) == 11_000
 
 
+def test_calculate_local_round_fees_matches_cap_overlay_appeal_reserve_and_ladder():
+    distribution = create_fees_distribution(
+        {
+            "leaderTimeunitsAllocation": 100,
+            "validatorTimeunitsAllocation": 200,
+            "appealRounds": 1,
+            "rotations": [0, 0],
+            "executionBudgetPerRound": 0,
+            "maxPriceGenPerTimeUnit": 12,
+        }
+    )
+    policy = {
+        "enabled": True,
+        "genPerTimeUnit": 10,
+        "storageUnitPrice": 0,
+        "receiptGasPrice": 0,
+        "executionBudgetFloor": 0,
+        "timeUnitOverlayBps": 1_500,
+    }
+
+    # Taxable work: (5-validator round 0 + absolute rounds 1 and 2) * cap
+    # = (1100 + 1500 + 2300) * 12 = 58800.
+    # Appeal profit reserve: 1.5 * (2300 * 12) = 41400.
+    # Overlay: floor(58800 * 1500 / 8500) = 10376.
+    assert calculate_local_round_fees(distribution, 5, policy) == 110_576
+
+
 def test_estimate_transaction_fees_uses_studio_fee_config():
     client = SimpleNamespace(
         chain=SimpleNamespace(
             fee_manager_contract=None,
             default_number_of_initial_validators=5,
+            default_consensus_max_rotations=3,
         ),
         provider=SimpleNamespace(
             make_request=Mock(
@@ -647,8 +1454,34 @@ def test_estimate_transaction_fees_uses_studio_fee_config():
             },
         }
     )
-    assert estimate["distribution"]["executionBudgetPerRound"] == 9_185_760
-    assert estimate["feeValue"] == 9_196_760
+    assert estimate["distribution"]["executionBudgetPerRound"] == 3_000_000_000
+    assert estimate["distribution"]["rotations"] == [3]
+    assert estimate["feeValue"] == 12_000_044_000
+
+
+def test_extract_studio_fee_policy_fallback_includes_message_reveal_leg():
+    policy = extract_studio_fee_policy(
+        {
+            "enabled": True,
+            "policy": {
+                "genPerTimeUnit": "10",
+                "storageUnitPrice": "20",
+                "receiptGasPrice": "30",
+            },
+        }
+    )
+
+    assert policy["executionBudgetFloor"] == 30 * (
+        210_000
+        + 21_000
+        + 60_000
+        + 7 * 1_000
+        + 100_000
+        + 21_000
+        + 60_000
+        + 32 * 1_000
+        + 32 * 16
+    )
 
 
 def test_estimate_transaction_fees_derives_message_bucket_from_allocations():
@@ -656,6 +1489,7 @@ def test_estimate_transaction_fees_derives_message_bucket_from_allocations():
         chain=SimpleNamespace(
             fee_manager_contract=None,
             default_number_of_initial_validators=5,
+            default_consensus_max_rotations=3,
         ),
         provider=SimpleNamespace(
             make_request=Mock(
@@ -702,7 +1536,11 @@ def test_estimate_transaction_fees_derives_message_bucket_from_allocations():
     )
 
     assert estimate["distribution"]["totalMessageFees"] == 80
-    assert estimate["feeValue"] == 9_196_840
+    assert estimate["distribution"]["executionBudgetPerRound"] == (
+        3_000_000_000 + 30 * DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM
+    )
+    assert estimate["distribution"]["rotations"] == [3]
+    assert estimate["feeValue"] == 12_001_252_880
     assert estimate["messageAllocations"] == message_allocations
     assert estimate["message_allocations"] == message_allocations
 
@@ -712,6 +1550,7 @@ def test_estimate_transaction_fees_from_simulation_builds_trusted_preset():
         chain=SimpleNamespace(
             fee_manager_contract=None,
             default_number_of_initial_validators=5,
+            default_consensus_max_rotations=3,
         ),
         provider=SimpleNamespace(
             make_request=Mock(
@@ -776,7 +1615,55 @@ def test_estimate_transaction_fees_from_simulation_builds_trusted_preset():
     }
     assert estimate["distribution"]["executionBudgetPerRound"] == 602_117
     assert estimate["distribution"]["totalMessageFees"] == 6
-    assert estimate["feeValue"] == 613_123
+    assert estimate["distribution"]["rotations"] == [3]
+    assert estimate["feeValue"] == 2_452_474
+
+
+def test_simulation_execution_budget_uses_floor_without_default_gas_clobber():
+    client = SimpleNamespace(
+        chain=SimpleNamespace(
+            fee_manager_contract=None,
+            default_number_of_initial_validators=5,
+            default_consensus_max_rotations=3,
+        ),
+        provider=SimpleNamespace(
+            make_request=Mock(
+                return_value={
+                    "result": {
+                        "enabled": True,
+                        "policy": {
+                            "genPerTimeUnit": "10",
+                            "storageUnitPrice": "0",
+                            "receiptGasPrice": "1",
+                            "messageFeeParamsBudgetFloor": str(
+                                LOCAL_EXECUTION_BUDGET_FLOOR_GAS
+                            ),
+                        },
+                    }
+                }
+            )
+        ),
+    )
+
+    estimate = contract_actions.estimate_transaction_fees_from_simulation(
+        self=client,
+        options={
+            "simulation": {
+                "feeAccounting": {
+                    "execution_fee_consumed": "10",
+                    "execution_fee_report": {"totalEstimatedFee": "0"},
+                }
+            },
+            "executionHeadroomBps": 10_000,
+        },
+    )
+
+    assert estimate["observed"]["recommendedExecutionBudgetPerRound"] == (
+        LOCAL_EXECUTION_BUDGET_FLOOR_GAS
+    )
+    assert estimate["distribution"]["executionBudgetPerRound"] == (
+        LOCAL_EXECUTION_BUDGET_FLOOR_GAS
+    )
 
 
 def test_estimate_transaction_fees_for_write_uses_studio_estimate_rpc():
@@ -811,7 +1698,9 @@ def test_estimate_transaction_fees_for_write_uses_studio_estimate_rpc():
                             {
                                 "messageType": MessageType.Internal,
                                 "onAcceptance": True,
-                                "parentIndex": str(MESSAGE_ALLOCATION_ROOT_PARENT_INDEX),
+                                "parentIndex": str(
+                                    MESSAGE_ALLOCATION_ROOT_PARENT_INDEX
+                                ),
                                 "recipient": RECIPIENT,
                                 "callKey": "0x" + "00" * 32,
                                 "budget": "110",
@@ -827,7 +1716,7 @@ def test_estimate_transaction_fees_for_write_uses_studio_estimate_rpc():
                             "leaderTimeunitsAllocation": "100",
                             "validatorTimeunitsAllocation": "200",
                             "appealRounds": "0",
-                            "executionBudgetPerRound": "700000",
+                            "executionBudgetPerRound": "100000000",
                             "executionConsumed": "0",
                             "totalMessageFees": "110",
                             "rotations": ["0"],
@@ -839,14 +1728,16 @@ def test_estimate_transaction_fees_for_write_uses_studio_estimate_rpc():
                             {
                                 "messageType": MessageType.Internal,
                                 "onAcceptance": True,
-                                "parentIndex": str(MESSAGE_ALLOCATION_ROOT_PARENT_INDEX),
+                                "parentIndex": str(
+                                    MESSAGE_ALLOCATION_ROOT_PARENT_INDEX
+                                ),
                                 "recipient": RECIPIENT,
                                 "callKey": "0x" + "00" * 32,
                                 "budget": "110",
                                 "feeParams": fee_params,
                             }
                         ],
-                        "feeValue": "711110",
+                        "feeValue": "100011110",
                     },
                 }
             }
@@ -882,16 +1773,24 @@ def test_estimate_transaction_fees_for_write_uses_studio_estimate_rpc():
     )
     request_params = sim_call.kwargs["params"][0]
     assert request_params["value"] == hex(7)
-    assert request_params["fees"]["feeValue"] == 511_110
+    assert request_params["fees"]["feeValue"] == 400_084_110
+    assert request_params["fees"]["distribution"]["rotations"] == [3]
     assert request_params["fees"]["distribution"]["totalMessageFees"] == 110
     assert request_params["fees"]["messageAllocations"][0]["budget"] == 110
+    assert (
+        request_params["fees"]["messageAllocations"][0]["callKey"]
+        == "0x" + CALL_KEY_WILDCARD.hex()
+    )
     assert estimate["observed"]["recommendedExecutionBudgetPerRound"] == 602_117
     assert estimate["observed"]["messageFeeBudget"] == 110
     assert estimate["observed"]["messageFeeConsumed"] == 50
-    assert estimate["distribution"]["executionBudgetPerRound"] == 700_000
+    assert estimate["simulation"]["feeAccounting"]["message_fee_budget"] == "110"
+    assert estimate["simulation"]["feeReport"]["totalEstimatedFee"] == "501664"
+    assert estimate["distribution"]["executionBudgetPerRound"] == 100_000_000
     assert estimate["distribution"]["totalMessageFees"] == 110
+    assert estimate["distribution"]["rotations"] == [0]
     assert estimate["messageAllocations"][0]["budget"] == 110
-    assert estimate["feeValue"] == 711_110
+    assert estimate["feeValue"] == 100_011_110
 
 
 def test_estimate_transaction_fees_from_simulation_preserves_mode2_allocations():
@@ -905,6 +1804,7 @@ def test_estimate_transaction_fees_from_simulation_preserves_mode2_allocations()
         chain=SimpleNamespace(
             fee_manager_contract=None,
             default_number_of_initial_validators=5,
+            default_consensus_max_rotations=3,
         ),
         provider=SimpleNamespace(
             make_request=Mock(
@@ -948,7 +1848,8 @@ def test_estimate_transaction_fees_from_simulation_preserves_mode2_allocations()
     assert estimate["messageAllocations"][0]["budget"] == 50
     assert estimate["messageAllocations"][0]["feeParams"] == fee_params
     assert estimate["distribution"]["totalMessageFees"] == 50
-    assert estimate["feeValue"] == 11_050
+    assert estimate["distribution"]["rotations"] == [3]
+    assert estimate["feeValue"] == 44_050
 
 
 def test_write_contract_refreshes_consensus_abi_before_add_transaction_encoding(

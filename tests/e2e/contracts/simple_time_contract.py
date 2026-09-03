@@ -1,15 +1,16 @@
 # {
 #   "Seq": [
-#     { "Depends": "py-lib-genlayer-embeddings:09h0i209wrzh4xzq86f79c60x0ifs7xcjwl53ysrnw06i54ddxyi" },
-#     { "Depends": "py-genlayer:1j12s63yfjpva9ik2xgnffgrs6v44y1f52jvj9w7xvdn7qckd379" }
+#     { "Depends": "py-lib-genlayer-embeddings:hqpree1t3470fnac2aeee1y5c2205k22bgk1p98sg8m3s1ndmxbg" },
+#     { "Depends": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng" }
 #   ]
 # }
 
 from datetime import datetime, timezone
-from genlayer import *
+import genlayer as gl
+from genlayer.types import *
 
 
-class SimpleTimeContract(gl.Contract):
+class SimpleTimeContract(gl.contract.Contract):
     """
     A simple contract that demonstrates time-based function availability.
     """

@@ -1,10 +1,11 @@
 # { "Depends": "py-genlayer:test" }
-from genlayer import *
+import genlayer as gl
+from genlayer.types import *
 
 import json
 
 
-class WizardOfCoin(gl.Contract):
+class WizardOfCoin(gl.contract.Contract):
     have_coin: bool
 
     def __init__(self, have_coin: bool):
@@ -39,12 +40,12 @@ This result should be perfectly parseable by a JSON parser without errors.
 """
 
         def get_wizard_answer():
-            result = gl.exec_prompt(prompt)
+            result = gl.nondet.exec_prompt(prompt)
             result = result.replace("```json", "").replace("```", "")
             print(result)
             return result
 
-        result = gl.eq_principle_prompt_comparative(
+        result = gl.eq_principle.prompt_comparative(
             get_wizard_answer, "The value of give_coin has to match"
         )
         parsed_result = json.loads(result)

@@ -1,6 +1,9 @@
 name: Tests
 
 on:
+  push:
+    branches:
+      - 'v*-dev'
   workflow_call:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
@@ -22,6 +25,9 @@ jobs:
 
       - name: Setup | Install Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
+
+      - name: Check | Verify locked package metadata
+        run: uv lock --check
 
       - name: Setup | Install Dependencies
         run: uv sync --group dev --python ${{ matrix.python-version }}

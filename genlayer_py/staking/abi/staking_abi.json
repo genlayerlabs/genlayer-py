@@ -6343,7 +6343,7 @@
 					},
 					{
 						"internalType": "bool",
-						"name": "live",
+						"name": "hasUnclaimedRewards",
 						"type": "bool"
 					}
 				],
@@ -6409,7 +6409,7 @@
 					},
 					{
 						"internalType": "bool",
-						"name": "live",
+						"name": "hasUnclaimedRewards",
 						"type": "bool"
 					}
 				],
@@ -6475,7 +6475,7 @@
 					},
 					{
 						"internalType": "bool",
-						"name": "live",
+						"name": "hasUnclaimedRewards",
 						"type": "bool"
 					}
 				],

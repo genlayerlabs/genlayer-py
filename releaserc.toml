@@ -1,6 +1,7 @@
 [semantic_release]
 version_toml = ["pyproject.toml:project.version"]
-assets = []
+assets = ["uv.lock"]
+build_command = "uv lock"
 build_command_env = []
 commit_message = "chore(release): {version}"
 commit_parser = "conventional"
@@ -10,10 +11,15 @@ allow_zero_version = true
 no_git_verify = false
 tag_format = "v{version}"
 
-[semantic_release.branches.main]
-match = "main"
+[semantic_release.branches.stable]
+match = "^v[0-9]+\\.[0-9]+$"
 prerelease_token = "rc"
 prerelease = false
+
+[semantic_release.branches.dev]
+match = "^v[0-9]+\\.[0-9]+-dev$"
+prerelease_token = "rc"
+prerelease = true
 
 [semantic_release.changelog]
 exclude_commit_patterns = []

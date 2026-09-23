@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Any, Optional, TypedDict, Union
+from typing import Any, NotRequired, Optional, TypedDict, Union
 
 from eth_abi import encode as abi_encode
 from eth_typing import HexStr
@@ -19,9 +19,9 @@ class MessageType(IntEnum):
 
 class FeesDistributionInput(TypedDict, total=False):
     leaderTimeunitsAllocation: BigNumberish
-    leader_timeunits_allocation: BigNumberish
+    leader_time_units_allocation: BigNumberish
     validatorTimeunitsAllocation: BigNumberish
-    validator_timeunits_allocation: BigNumberish
+    validator_time_units_allocation: BigNumberish
     appealRounds: BigNumberish
     appeal_rounds: BigNumberish
     executionBudgetPerRound: BigNumberish
@@ -54,14 +54,20 @@ class FeesDistribution(TypedDict):
 
 class InternalMessageFeeParamsInput(TypedDict, total=False):
     leaderTimeunitsAllocation: BigNumberish
-    leader_timeunits_allocation: BigNumberish
+    leader_time_units_allocation: BigNumberish
     validatorTimeunitsAllocation: BigNumberish
-    validator_timeunits_allocation: BigNumberish
+    validator_time_units_allocation: BigNumberish
     appealRounds: BigNumberish
     appeal_rounds: BigNumberish
     executionBudgetPerRound: BigNumberish
     execution_budget_per_round: BigNumberish
     rotations: list[BigNumberish]
+    maxPriceGenPerTimeUnit: BigNumberish
+    max_price_gen_per_time_unit: BigNumberish
+    storageFeeMaxGasPrice: BigNumberish
+    storage_fee_max_gas_price: BigNumberish
+    receiptFeeMaxGasPrice: BigNumberish
+    receipt_fee_max_gas_price: BigNumberish
 
 
 class ExternalMessageFeeParamsInput(TypedDict, total=False):
@@ -110,6 +116,7 @@ class FeePolicyQuote(TypedDict):
     storageUnitPrice: int
     receiptGasPrice: int
     executionBudgetFloor: int
+    timeUnitOverlayBps: NotRequired[int]
 
 
 class FeeEstimateOptions(FeesDistributionInput, total=False):
@@ -131,6 +138,7 @@ class TransactionFeeEstimate(TypedDict, total=False):
     fee_value: int
     policy: FeePolicyQuote
     observed: dict[str, int]
+    simulation: Any
 
 
 class SimulationFeeEstimateOptions(FeeEstimateOptions, total=False):
@@ -153,9 +161,16 @@ class NormalizedTransactionFees(TypedDict):
 
 
 MESSAGE_ALLOCATION_ROOT_PARENT_INDEX = (1 << 256) - 1
-CALL_KEY_WILDCARD = b"\x00" * 32
+# Wildcard sentinel = keccak256 of empty bytes, untagged. Reserved: it can never be a
+# derived key — short names (<32B) are left-aligned with a zero tail byte, long names
+# get the low bit forced to 1, and this hash has neither.
+CALL_KEY_WILDCARD = bytes.fromhex(
+    "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+)
+# Empty method name derives bytes32(0); GenVM emits it for deploy and emit_transfer.
 CALL_KEY_UNNAMED = HexStr("0x" + ("0" * 64))
-CALL_KEY_DEPLOY = CALL_KEY_UNNAMED
+DEPLOY_CALL_KEY = CALL_KEY_UNNAMED
+CALL_KEY_DEPLOY = DEPLOY_CALL_KEY
 
 FEES_DISTRIBUTION_ABI_TYPE = (
     "(uint256,uint256,uint256,uint256,uint256,uint256,uint256[],uint256,uint256,uint256)"
@@ -193,13 +208,20 @@ DEFAULT_PRICE_CAP_HEADROOM_BPS = 12_000
 DEFAULT_LEADER_TIMEUNITS_ALLOCATION = 100
 DEFAULT_VALIDATOR_TIMEUNITS_ALLOCATION = 200
 DEFAULT_TRANSACTION_EXECUTION_BUDGET_PER_ROUND = 500_000
+# Provisional heuristic sized ~20x observed dev-env consumption (~5M gas-equivalent).
+# TODO(data): replace with telemetry-derived default (p99 x margin) once fee consumption telemetry is collected.
+DEFAULT_TRANSACTION_EXECUTION_GAS = 100_000_000
+DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM = 10_000
 MIN_RECEIPT_BYTES = 512
 DEFAULT_RECEIPT_SLOTS_CHANGED = 7
 DEFAULT_INTRINSIC_GAS = 21_000
 DEFAULT_BOOTLOADER_OVERHEAD = 60_000
 DEFAULT_FIXED_PROPOSE_RECEIPT_GAS = 210_000
+DEFAULT_FIXED_MESSAGE_REVEAL_GAS = 100_000
 DEFAULT_GAS_PER_CHANGED_SLOT = 1_000
 DEFAULT_CALLDATA_GAS_PER_BYTE = 16
+DEFAULT_MESSAGE_REVEAL_LENGTH_SLOTS = 32
+DEFAULT_NONDET_OUTPUT_LENGTH_BYTES = 32
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 VALIDATORS_PER_ROUND = [
@@ -305,6 +327,10 @@ def derive_external_message_call_key(
     return _bytes_to_padded_call_key(calldata[:4])
 
 
+def deploy_call_key() -> HexStr:
+    return DEPLOY_CALL_KEY
+
+
 def _normalize_message_type(value: Union[MessageType, int, str]) -> int:
     if isinstance(value, MessageType):
         return int(value)
@@ -337,19 +363,17 @@ def _normalize_rotations(
     return normalized
 
 
-def create_fees_distribution(
-    fee_distribution: Optional[FeesDistributionInput] = None,
+def _create_fees_distribution(
+    fee_distribution: Optional[FeesDistributionInput],
+    appeal_rounds: int,
+    rotations: list[int],
 ) -> FeesDistribution:
-    appeal_rounds = to_uint(
-        _get(fee_distribution, "appealRounds", "appeal_rounds"),
-        "fees.distribution.appealRounds",
-    )
     return {
         "leaderTimeunitsAllocation": to_uint(
             _get(
                 fee_distribution,
                 "leaderTimeunitsAllocation",
-                "leader_timeunits_allocation",
+                "leader_time_units_allocation",
             ),
             "fees.distribution.leaderTimeunitsAllocation",
         ),
@@ -357,7 +381,7 @@ def create_fees_distribution(
             _get(
                 fee_distribution,
                 "validatorTimeunitsAllocation",
-                "validator_timeunits_allocation",
+                "validator_time_units_allocation",
             ),
             "fees.distribution.validatorTimeunitsAllocation",
         ),
@@ -378,11 +402,7 @@ def create_fees_distribution(
             _get(fee_distribution, "totalMessageFees", "total_message_fees"),
             "fees.distribution.totalMessageFees",
         ),
-        "rotations": _normalize_rotations(
-            _get(fee_distribution, "rotations"),
-            appeal_rounds,
-            "fees.distribution.rotations",
-        ),
+        "rotations": rotations,
         "maxPriceGenPerTimeUnit": to_uint(
             _get(
                 fee_distribution,
@@ -410,6 +430,50 @@ def create_fees_distribution(
     }
 
 
+def create_fees_distribution(
+    fee_distribution: Optional[FeesDistributionInput] = None,
+) -> FeesDistribution:
+    appeal_rounds = to_uint(
+        _get(fee_distribution, "appealRounds", "appeal_rounds"),
+        "fees.distribution.appealRounds",
+    )
+    rotations = _normalize_rotations(
+        _get(fee_distribution, "rotations"),
+        appeal_rounds,
+        "fees.distribution.rotations",
+    )
+    return _create_fees_distribution(fee_distribution, appeal_rounds, rotations)
+
+
+def create_top_up_fees_distribution(
+    fee_distribution: Optional[FeesDistributionInput] = None,
+) -> FeesDistribution:
+    """Normalize a Consensus top-up delta without resubmitting its schedule.
+
+    Existing fee-aware transactions use appealRounds=0/rotations=[]. An
+    explicit non-empty schedule remains valid for first-time fee initialization.
+    """
+    appeal_rounds = to_uint(
+        _get(fee_distribution, "appealRounds", "appeal_rounds"),
+        "fees.distribution.appealRounds",
+    )
+    raw_rotations = _get(fee_distribution, "rotations")
+    if raw_rotations is None or len(raw_rotations) == 0:
+        if appeal_rounds != 0:
+            raise ValueError(
+                "fees.distribution.rotations must contain appealRounds + 1 "
+                "entries when appealRounds is non-zero."
+            )
+        rotations = []
+    else:
+        rotations = _normalize_rotations(
+            raw_rotations,
+            appeal_rounds,
+            "fees.distribution.rotations",
+        )
+    return _create_fees_distribution(fee_distribution, appeal_rounds, rotations)
+
+
 def encode_internal_message_fee_params(
     params: Optional[InternalMessageFeeParamsInput] = None,
 ) -> HexStr:
@@ -418,14 +482,14 @@ def encode_internal_message_fee_params(
         "internalMessageFeeParams.appealRounds",
     )
     encoded = abi_encode(
-        ("(uint256,uint256,uint256,uint256,uint256[])",),
+        ("(uint256,uint256,uint256,uint256,uint256[],uint256,uint256,uint256)",),
         (
             (
                 to_uint(
                     _get(
                         params,
                         "leaderTimeunitsAllocation",
-                        "leader_timeunits_allocation",
+                        "leader_time_units_allocation",
                     ),
                     "internalMessageFeeParams.leaderTimeunitsAllocation",
                 ),
@@ -433,7 +497,7 @@ def encode_internal_message_fee_params(
                     _get(
                         params,
                         "validatorTimeunitsAllocation",
-                        "validator_timeunits_allocation",
+                        "validator_time_units_allocation",
                     ),
                     "internalMessageFeeParams.validatorTimeunitsAllocation",
                 ),
@@ -450,6 +514,30 @@ def encode_internal_message_fee_params(
                     _get(params, "rotations"),
                     appeal_rounds,
                     "internalMessageFeeParams.rotations",
+                ),
+                to_uint(
+                    _get(
+                        params,
+                        "maxPriceGenPerTimeUnit",
+                        "max_price_gen_per_time_unit",
+                    ),
+                    "internalMessageFeeParams.maxPriceGenPerTimeUnit",
+                ),
+                to_uint(
+                    _get(
+                        params,
+                        "storageFeeMaxGasPrice",
+                        "storage_fee_max_gas_price",
+                    ),
+                    "internalMessageFeeParams.storageFeeMaxGasPrice",
+                ),
+                to_uint(
+                    _get(
+                        params,
+                        "receiptFeeMaxGasPrice",
+                        "receipt_fee_max_gas_price",
+                    ),
+                    "internalMessageFeeParams.receiptFeeMaxGasPrice",
                 ),
             ),
         ),
@@ -635,6 +723,10 @@ def extract_studio_fee_policy(config: Any) -> FeePolicyQuote:
         policy.get("receiptGasPrice"),
         "policy.receiptGasPrice",
     )
+    time_unit_overlay_bps = _int_from_unknown(
+        policy.get("timeUnitOverlayBps", 0),
+        "policy.timeUnitOverlayBps",
+    )
     intrinsic_gas = _int_from_unknown(
         policy.get("intrinsicGas", DEFAULT_INTRINSIC_GAS),
         "policy.intrinsicGas",
@@ -655,6 +747,10 @@ def extract_studio_fee_policy(config: Any) -> FeePolicyQuote:
         policy.get("fixedProposeReceiptGas", DEFAULT_FIXED_PROPOSE_RECEIPT_GAS),
         "policy.fixedProposeReceiptGas",
     )
+    fixed_message_reveal_gas = _int_from_unknown(
+        policy.get("fixedMessageRevealGas", DEFAULT_FIXED_MESSAGE_REVEAL_GAS),
+        "policy.fixedMessageRevealGas",
+    )
     explicit_budget_floor = policy.get(
         "messageFeeParamsBudgetFloor",
         config.get("messageFeeParamsBudgetFloor"),
@@ -670,8 +766,12 @@ def extract_studio_fee_policy(config: Any) -> FeePolicyQuote:
             fixed_propose_receipt_gas
             + intrinsic_gas
             + bootloader_overhead
-            + (MIN_RECEIPT_BYTES * calldata_gas_per_byte)
             + (DEFAULT_RECEIPT_SLOTS_CHANGED * gas_per_changed_slot)
+            + fixed_message_reveal_gas
+            + intrinsic_gas
+            + bootloader_overhead
+            + (DEFAULT_MESSAGE_REVEAL_LENGTH_SLOTS * gas_per_changed_slot)
+            + (DEFAULT_NONDET_OUTPUT_LENGTH_BYTES * calldata_gas_per_byte)
         )
     )
 
@@ -687,6 +787,7 @@ def extract_studio_fee_policy(config: Any) -> FeePolicyQuote:
         "storageUnitPrice": storage_unit_price,
         "receiptGasPrice": receipt_gas_price,
         "executionBudgetFloor": execution_budget_floor,
+        "timeUnitOverlayBps": time_unit_overlay_bps,
     }
 
 
@@ -703,6 +804,7 @@ def _default_execution_budget_per_round(policy: FeePolicyQuote) -> int:
     return max(
         DEFAULT_TRANSACTION_EXECUTION_BUDGET_PER_ROUND,
         policy["executionBudgetFloor"],
+        policy["receiptGasPrice"] * DEFAULT_TRANSACTION_EXECUTION_GAS,
     )
 
 
@@ -856,7 +958,7 @@ def observed_simulation_fee_usage(
     observed_execution_budget = execution_fee_consumed + execution_fee_report_total
     recommended_execution_budget = (
         max(
-            _default_execution_budget_per_round(policy),
+            policy["executionBudgetFloor"],
             _with_cap_headroom(observed_execution_budget, execution_headroom_bps),
         )
         if observed_execution_budget > 0
@@ -967,6 +1069,7 @@ def transaction_fee_estimate_from_studio_estimate(
         "feeValue": to_uint(fee_value, "recommendedPreset.feeValue"),
         "fee_value": to_uint(fee_value, "recommendedPreset.feeValue"),
         "policy": policy,
+        "simulation": simulation,
         "observed": observed_simulation_fee_usage(
             {"simulation": simulation},
             policy,
@@ -1052,30 +1155,63 @@ def build_estimated_fees_options_from_simulation(
 def build_estimated_fees_distribution(
     options: Optional[FeeEstimateOptions],
     policy: FeePolicyQuote,
+    default_consensus_max_rotations: BigNumberish,
 ) -> FeesDistribution:
     headroom_bps = to_uint(
         _get(options, "priceCapHeadroomBps", "price_cap_headroom_bps"),
         "priceCapHeadroomBps",
         DEFAULT_PRICE_CAP_HEADROOM_BPS,
     )
-    execution_budget_default = _default_execution_budget_per_round(policy)
+    base_execution_budget_default = _default_execution_budget_per_round(policy)
 
     total_message_fees = _get(options, "totalMessageFees", "total_message_fees")
     message_allocations = _get(options, "messageAllocations", "message_allocations")
+    normalized_message_allocations = (
+        normalize_message_fee_allocations(message_allocations)
+        if message_allocations is not None
+        else None
+    )
     if total_message_fees is None and message_allocations is not None:
         total_message_fees = sum(
             allocation["budget"]
-            for allocation in normalize_message_fee_allocations(message_allocations)
+            for allocation in normalized_message_allocations or []
             if allocation["messageType"] == int(MessageType.External)
             or allocation["parentIndex"] == MESSAGE_ALLOCATION_ROOT_PARENT_INDEX
         )
+    emits_messages = (
+        (
+            normalized_message_allocations is not None
+            and len(normalized_message_allocations) > 0
+        )
+        or (
+            total_message_fees is not None
+            and to_uint(total_message_fees, "totalMessageFees") > 0
+        )
+    )
+    execution_budget_default = (
+        base_execution_budget_default
+        + policy["receiptGasPrice"] * DEFAULT_PARENT_MESSAGE_RECEIPT_HEADROOM
+        if emits_messages
+        else base_execution_budget_default
+    )
+    appeal_rounds = to_uint(
+        _get(options, "appealRounds", "appeal_rounds"),
+        "appealRounds",
+    )
+    rotations = _get(options, "rotations")
+    if rotations is None:
+        default_rotations = to_uint(
+            default_consensus_max_rotations,
+            "defaultConsensusMaxRotations",
+        )
+        rotations = [default_rotations] * (appeal_rounds + 1)
 
     return create_fees_distribution(
         {
             "leaderTimeunitsAllocation": _get(
                 options,
                 "leaderTimeunitsAllocation",
-                "leader_timeunits_allocation",
+                "leader_time_units_allocation",
                 default=DEFAULT_LEADER_TIMEUNITS_ALLOCATION
                 if policy["enabled"]
                 else 0,
@@ -1083,12 +1219,12 @@ def build_estimated_fees_distribution(
             "validatorTimeunitsAllocation": _get(
                 options,
                 "validatorTimeunitsAllocation",
-                "validator_timeunits_allocation",
+                "validator_time_units_allocation",
                 default=DEFAULT_VALIDATOR_TIMEUNITS_ALLOCATION
                 if policy["enabled"]
                 else 0,
             ),
-            "appealRounds": _get(options, "appealRounds", "appeal_rounds"),
+            "appealRounds": appeal_rounds,
             "executionBudgetPerRound": _get(
                 options,
                 "executionBudgetPerRound",
@@ -1101,7 +1237,7 @@ def build_estimated_fees_distribution(
                 "execution_consumed",
             ),
             "totalMessageFees": total_message_fees,
-            "rotations": _get(options, "rotations"),
+            "rotations": rotations,
             "maxPriceGenPerTimeUnit": _get(
                 options,
                 "maxPriceGenPerTimeUnit",
@@ -1143,13 +1279,23 @@ def _validator_index(num_of_validators: int) -> int:
 def _calculate_fee_for_round(
     num_of_validators: int,
     rotations: int,
-    leader_timeunits_allocation: int,
-    validator_timeunits_allocation: int,
+    leader_time_units_allocation: int,
+    validator_time_units_allocation: int,
 ) -> int:
     return rotations * (
-        leader_timeunits_allocation
-        + num_of_validators * validator_timeunits_allocation
+        leader_time_units_allocation
+        + num_of_validators * validator_time_units_allocation
     )
+
+
+def _validators_per_round_safe(round_index: int) -> int:
+    return VALIDATORS_PER_ROUND[
+        min(max(0, int(round_index)), len(VALIDATORS_PER_ROUND) - 1)
+    ]
+
+
+def _successful_appeal_profit(appeal_bond: int) -> int:
+    return appeal_bond + appeal_bond // 2
 
 
 def calculate_local_round_fees(
@@ -1176,10 +1322,8 @@ def calculate_local_round_fees(
         raise ValueError("MaxPriceExceeded")
 
     start_index = _validator_index(num_of_initial_validators)
-    if start_index + distribution["appealRounds"] * 2 >= len(VALIDATORS_PER_ROUND):
-        raise ValueError("InvalidNumOfValidators")
 
-    total = _calculate_fee_for_round(
+    taxable_work = _calculate_fee_for_round(
         VALIDATORS_PER_ROUND[start_index],
         distribution["rotations"][0] + 1,
         distribution["leaderTimeunitsAllocation"],
@@ -1194,22 +1338,51 @@ def calculate_local_round_fees(
         elif offset % 2 == 1:
             rotations_this_round = 1
 
-        total += _calculate_fee_for_round(
-            VALIDATORS_PER_ROUND[start_index + offset],
+        # Consensus indexes appeal/next-normal committees by absolute round
+        # and saturates at the published ladder. Only round zero uses the
+        # caller-selected initial committee.
+        taxable_work += _calculate_fee_for_round(
+            _validators_per_round_safe(offset),
             rotations_this_round,
             distribution["leaderTimeunitsAllocation"],
             distribution["validatorTimeunitsAllocation"],
         )
 
-    if policy["genPerTimeUnit"] > 0:
-        total *= policy["genPerTimeUnit"]
+    price_cap = distribution["maxPriceGenPerTimeUnit"]
+    if price_cap > 0:
+        taxable_work *= price_cap
+
+    appeal_profit_reserve = 0
+    for appeal_ordinal in range(distribution["appealRounds"]):
+        next_normal_bond = _calculate_fee_for_round(
+            _validators_per_round_safe((appeal_ordinal + 1) * 2),
+            distribution["rotations"][appeal_ordinal + 1] + 1,
+            distribution["leaderTimeunitsAllocation"],
+            distribution["validatorTimeunitsAllocation"],
+        )
+        if price_cap > 0:
+            next_normal_bond *= price_cap
+        appeal_profit_reserve += _successful_appeal_profit(next_normal_bond)
+
+    overlay_bps = int(policy.get("timeUnitOverlayBps", 0))
+    if overlay_bps < 0 or overlay_bps >= 10_000:
+        raise ValueError("InvalidTimeUnitOverlayBps")
+    overlay = (
+        taxable_work * overlay_bps // (10_000 - overlay_bps)
+        if overlay_bps > 0
+        else 0
+    )
 
     leader_rounds = sum(
         rotations + 1
         for rotations in distribution["rotations"]
     ) + distribution["appealRounds"]
-    total += distribution["executionBudgetPerRound"] * leader_rounds
-    return total
+    return (
+        taxable_work
+        + appeal_profit_reserve
+        + overlay
+        + distribution["executionBudgetPerRound"] * leader_rounds
+    )
 
 
 def build_add_transaction_params_tuple(

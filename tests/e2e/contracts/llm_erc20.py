@@ -2,14 +2,15 @@
 
 import json
 
-from genlayer import *
+import genlayer as gl
+from genlayer.types import *
 
 
-class LlmErc20(gl.Contract):
-    balances: TreeMap[Address, u256]
+class LlmErc20(gl.contract.Contract):
+    balances: gl.storage.TreeMap[Address, u256]
 
     def __init__(self, total_supply: int) -> None:
-        self.balances[gl.message.sender_address] = u256(total_supply)
+        self.balances[gl.message.sender_address] = total_supply
 
     @gl.public.write
     def transfer(self, amount: int, to_address: str) -> None:
@@ -47,7 +48,7 @@ The balance of the receiver should have increased by the amount sent.
 The total sum of all balances should remain the same before and after the transaction"""
 
         final_result = (
-            gl.eq_principle_prompt_non_comparative(
+            gl.eq_principle.prompt_non_comparative(
                 lambda: input,
                 task=task,
                 criteria=criteria,

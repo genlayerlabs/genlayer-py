@@ -5,6 +5,7 @@ import pytest
 
 from genlayer_py.chains.actions import initialize_consensus_smart_contract
 from genlayer_py.chains.localnet import localnet
+from genlayer_py.chains.studio_devnet import studio_devnet
 from genlayer_py.exceptions import GenLayerError
 
 
@@ -43,6 +44,22 @@ def test_initialize_consensus_refreshes_runtime_contract_for_local_chain():
     )
     assert client.chain.consensus_main_contract == rpc_contract
     assert getattr(client.chain, "__consensus_abi_fetched_from_rpc") is True
+
+
+def test_initialize_consensus_refreshes_runtime_contract_for_studio_devnet():
+    client = _make_client(
+        chain_id=studio_devnet.id,
+        consensus_main_contract={"address": "0x1", "abi": [{"type": "function"}]},
+    )
+    rpc_contract = {"address": "0x2", "abi": [{"type": "function", "name": "foo"}]}
+    client.provider.make_request.return_value = {"result": rpc_contract}
+
+    initialize_consensus_smart_contract(self=client)
+
+    client.provider.make_request.assert_called_once_with(
+        method="sim_getConsensusContract", params=["ConsensusMain"]
+    )
+    assert client.chain.consensus_main_contract == rpc_contract
 
 
 def test_initialize_consensus_falls_back_to_static_contract_on_local_rpc_failure():

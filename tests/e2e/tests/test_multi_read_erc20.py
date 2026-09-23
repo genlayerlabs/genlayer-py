@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 
 from genlayer_py import create_client, create_account
 from genlayer_py.chains import localnet, studionet, testnet_asimov
-from genlayer_py.types import TransactionStatus
 from genlayer_py.assertions import tx_execution_succeeded
 
 # Load environment variables from .env file
@@ -94,7 +93,7 @@ def test_multi_read_erc20(chain_config):
     # Wait for doge deployment
     doge_wait_kwargs = {
         "transaction_hash": doge_deploy_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         doge_wait_kwargs["retries"] = chain_config["retries"]
@@ -115,7 +114,7 @@ def test_multi_read_erc20(chain_config):
     # Wait for shiba deployment
     shiba_wait_kwargs = {
         "transaction_hash": shiba_deploy_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         shiba_wait_kwargs["retries"] = chain_config["retries"]
@@ -138,7 +137,7 @@ def test_multi_read_erc20(chain_config):
     # Wait for multi-read deployment
     multi_read_wait_kwargs = {
         "transaction_hash": multi_read_deploy_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         multi_read_wait_kwargs["retries"] = chain_config["retries"]
@@ -166,7 +165,7 @@ def test_multi_read_erc20(chain_config):
     # Wait for update_token_balances transaction
     update_balances_doge_wait_kwargs = {
         "transaction_hash": update_balances_doge_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         update_balances_doge_wait_kwargs["retries"] = chain_config["retries"]
@@ -201,7 +200,7 @@ def test_multi_read_erc20(chain_config):
     # Wait for update_token_balances transaction
     update_balances_shiba_wait_kwargs = {
         "transaction_hash": update_balances_shiba_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         update_balances_shiba_wait_kwargs["retries"] = chain_config["retries"]

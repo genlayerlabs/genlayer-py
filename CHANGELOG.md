@@ -2,6 +2,208 @@
 
 <!-- version list -->
 
+## v0.19.0-rc.2 (2026-09-03)
+
+### Bug Fixes
+
+- Align localnet chain id with Studio ([#115](https://github.com/genlayerlabs/genlayer-py/pull/115),
+  [`4556920`](https://github.com/genlayerlabs/genlayer-py/commit/4556920d58108642131089f5ecc0a678d592a400))
+
+### Build System
+
+- Keep release lock metadata in sync ([#115](https://github.com/genlayerlabs/genlayer-py/pull/115),
+  [`4556920`](https://github.com/genlayerlabs/genlayer-py/commit/4556920d58108642131089f5ecc0a678d592a400))
+
+
+## v0.19.0-rc.1 (2026-09-03)
+
+### Bug Fixes
+
+- Align Python SDK consumers with the resolution-kernel train
+  ([#109](https://github.com/genlayerlabs/genlayer-py/pull/109),
+  [`85a4782`](https://github.com/genlayerlabs/genlayer-py/commit/85a47821c2771b5d931b754d4a43f1bd0f057246))
+
+- Align Python SDK with train contracts
+  ([#109](https://github.com/genlayerlabs/genlayer-py/pull/109),
+  [`85a4782`](https://github.com/genlayerlabs/genlayer-py/commit/85a47821c2771b5d931b754d4a43f1bd0f057246))
+
+- Bump package version to v0.19 ([#95](https://github.com/genlayerlabs/genlayer-py/pull/95),
+  [`ec7cab9`](https://github.com/genlayerlabs/genlayer-py/commit/ec7cab9f33cd0b5e40003d1dd21a4be6fef2611d))
+
+- Include execution budget floor in fee estimates
+  ([#89](https://github.com/genlayerlabs/genlayer-py/pull/89),
+  [`61dd2c0`](https://github.com/genlayerlabs/genlayer-py/commit/61dd2c0c3b4f0a83771aeb030a0361a141f51e69))
+
+- Include pending transactions in default nonce lookup
+  ([#100](https://github.com/genlayerlabs/genlayer-py/pull/100),
+  [`3583471`](https://github.com/genlayerlabs/genlayer-py/commit/3583471d5c4a8c18da54850961dee541fee1e5e7))
+
+- Keep studio appeals on the pre-train call shape
+  ([#109](https://github.com/genlayerlabs/genlayer-py/pull/109),
+  [`85a4782`](https://github.com/genlayerlabs/genlayer-py/commit/85a47821c2771b5d931b754d4a43f1bd0f057246))
+
+- Read the consensus surfaces the resolution-kernel train exposes
+  ([#109](https://github.com/genlayerlabs/genlayer-py/pull/109),
+  [`85a4782`](https://github.com/genlayerlabs/genlayer-py/commit/85a47821c2771b5d931b754d4a43f1bd0f057246))
+
+- Resolve v0.19 bug hunt regressions ([#99](https://github.com/genlayerlabs/genlayer-py/pull/99),
+  [`3106bc8`](https://github.com/genlayerlabs/genlayer-py/commit/3106bc87955d612b5bb43fa67e225b659b657c55))
+
+- Resolve v0.19-dev bug-hunt findings ([#99](https://github.com/genlayerlabs/genlayer-py/pull/99),
+  [`3106bc8`](https://github.com/genlayerlabs/genlayer-py/commit/3106bc87955d612b5bb43fa67e225b659b657c55))
+
+- Serialize fee payloads for studio estimates
+  ([#88](https://github.com/genlayerlabs/genlayer-py/pull/88),
+  [`5d8d1ce`](https://github.com/genlayerlabs/genlayer-py/commit/5d8d1ce5d74308dc772458a13c81bfff3ce56e1d))
+
+- **appeals**: Admit unfunded rounds safely
+  ([#110](https://github.com/genlayerlabs/genlayer-py/pull/110),
+  [`b88e492`](https://github.com/genlayerlabs/genlayer-py/commit/b88e4929f31587cb3658174ed175f906c2e0fc05))
+
+- **appeals**: Support Studio decision-bound lifecycle
+  ([#109](https://github.com/genlayerlabs/genlayer-py/pull/109),
+  [`85a4782`](https://github.com/genlayerlabs/genlayer-py/commit/85a47821c2771b5d931b754d4a43f1bd0f057246))
+
+- **fees**: Add exact quote and appeal parity
+  ([#110](https://github.com/genlayerlabs/genlayer-py/pull/110),
+  [`b88e492`](https://github.com/genlayerlabs/genlayer-py/commit/b88e4929f31587cb3658174ed175f906c2e0fc05))
+
+- **fees**: Encode internal message price caps
+  ([#110](https://github.com/genlayerlabs/genlayer-py/pull/110),
+  [`b88e492`](https://github.com/genlayerlabs/genlayer-py/commit/b88e4929f31587cb3658174ed175f906c2e0fc05))
+
+- **fees**: Encode schedule-free topups
+  ([#110](https://github.com/genlayerlabs/genlayer-py/pull/110),
+  [`b88e492`](https://github.com/genlayerlabs/genlayer-py/commit/b88e4929f31587cb3658174ed175f906c2e0fc05))
+
+- **fees**: Fund default consensus rotations
+  ([#109](https://github.com/genlayerlabs/genlayer-py/pull/109),
+  [`85a4782`](https://github.com/genlayerlabs/genlayer-py/commit/85a47821c2771b5d931b754d4a43f1bd0f057246))
+
+- **fees**: Mirror consensus deposit quote
+  ([#110](https://github.com/genlayerlabs/genlayer-py/pull/110),
+  [`b88e492`](https://github.com/genlayerlabs/genlayer-py/commit/b88e4929f31587cb3658174ed175f906c2e0fc05))
+
+- **fees**: Move wildcard callKey sentinel to keccak256(empty), deploy key = bytes32(0)
+  ([#93](https://github.com/genlayerlabs/genlayer-py/pull/93),
+  [`6bfa86a`](https://github.com/genlayerlabs/genlayer-py/commit/6bfa86a160a25d789630944e4ed05f0214fc164d))
+
+- **genvm**: Give VecDB its explicit distance metric 🐛
+  ([#105](https://github.com/genlayerlabs/genlayer-py/pull/105),
+  [`39d6a37`](https://github.com/genlayerlabs/genlayer-py/commit/39d6a37a4e6f2bac93ac3c30587a2c53f30d6d53))
+
+- **studio**: Bind appeal actions to decisions
+  ([#110](https://github.com/genlayerlabs/genlayer-py/pull/110),
+  [`b88e492`](https://github.com/genlayerlabs/genlayer-py/commit/b88e4929f31587cb3658174ed175f906c2e0fc05))
+
+- **studio**: Decouple native appeal and lifecycle reads
+  ([#109](https://github.com/genlayerlabs/genlayer-py/pull/109),
+  [`85a4782`](https://github.com/genlayerlabs/genlayer-py/commit/85a47821c2771b5d931b754d4a43f1bd0f057246))
+
+- **studio**: Surface mined envelope reverts
+  ([#110](https://github.com/genlayerlabs/genlayer-py/pull/110),
+  [`b88e492`](https://github.com/genlayerlabs/genlayer-py/commit/b88e4929f31587cb3658174ed175f906c2e0fc05))
+
+### Chores
+
+- **genvm**: Update runner hashes and align v0.3 ABI names ⬆️
+  ([#105](https://github.com/genlayerlabs/genlayer-py/pull/105),
+  [`39d6a37`](https://github.com/genlayerlabs/genlayer-py/commit/39d6a37a4e6f2bac93ac3c30587a2c53f30d6d53))
+
+- **genvm**: Update runner hashes and rename accepted to decided ⬆️
+  ([#105](https://github.com/genlayerlabs/genlayer-py/pull/105),
+  [`39d6a37`](https://github.com/genlayerlabs/genlayer-py/commit/39d6a37a4e6f2bac93ac3c30587a2c53f30d6d53))
+
+### Continuous Integration
+
+- Keep main forwarded to active dev branch
+  ([#92](https://github.com/genlayerlabs/genlayer-py/pull/92),
+  [`dd25ef7`](https://github.com/genlayerlabs/genlayer-py/commit/dd25ef7f43e99a14b8fe42a64e01374845ad4d2d))
+
+- Run tests on pushes to dev branches ([#90](https://github.com/genlayerlabs/genlayer-py/pull/90),
+  [`bc04db8`](https://github.com/genlayerlabs/genlayer-py/commit/bc04db8999b86979273408511c90c9a89620ff49))
+
+- Scope down release/sync-docs to dedicated GitHub Apps
+  ([#76](https://github.com/genlayerlabs/genlayer-py/pull/76),
+  [`375c1c1`](https://github.com/genlayerlabs/genlayer-py/commit/375c1c1b94929fa6536b9481cbb9e06a06970190))
+
+- Skip pre-train smoke on v0.19 PRs ([#109](https://github.com/genlayerlabs/genlayer-py/pull/109),
+  [`85a4782`](https://github.com/genlayerlabs/genlayer-py/commit/85a47821c2771b5d931b754d4a43f1bd0f057246))
+
+- **workflows**: Sync e2e-housekeeper.yml from genlayer-e2e
+  ([#83](https://github.com/genlayerlabs/genlayer-py/pull/83),
+  [`528f2a9`](https://github.com/genlayerlabs/genlayer-py/commit/528f2a99ba915bfd1633f95fc936855f59b138d1))
+
+- **workflows**: Sync e2e-housekeeper.yml from genlayer-e2e
+  ([#81](https://github.com/genlayerlabs/genlayer-py/pull/81),
+  [`3d79679`](https://github.com/genlayerlabs/genlayer-py/commit/3d796797d7594669f095e173a50b2bfbf065a588))
+
+- **workflows**: Sync e2e.yml from genlayer-e2e
+  ([#82](https://github.com/genlayerlabs/genlayer-py/pull/82),
+  [`9af83c6`](https://github.com/genlayerlabs/genlayer-py/commit/9af83c60ae952a7daa3569ea3b6c53e673498b6f))
+
+- **workflows**: Sync e2e.yml from genlayer-e2e
+  ([#80](https://github.com/genlayerlabs/genlayer-py/pull/80),
+  [`1b3137a`](https://github.com/genlayerlabs/genlayer-py/commit/1b3137aeb3cd92c7496e977806e04ee6fdeaefb7))
+
+### Documentation
+
+- Add branching guide ([#94](https://github.com/genlayerlabs/genlayer-py/pull/94),
+  [`ab386b4`](https://github.com/genlayerlabs/genlayer-py/commit/ab386b4139a7019639dcf4e6eae0b6830c0f52a8))
+
+### Features
+
+- Add fee-aware transaction helpers
+  ([`8f35989`](https://github.com/genlayerlabs/genlayer-py/commit/8f359891377530827ce0d062b5499baffa9b54e7))
+
+- Branch-per-major release model
+  ([`8314002`](https://github.com/genlayerlabs/genlayer-py/commit/8314002b7bd510927940527fe08f15987186a486))
+
+- Branch-per-major release model ([#78](https://github.com/genlayerlabs/genlayer-py/pull/78),
+  [`88ad157`](https://github.com/genlayerlabs/genlayer-py/commit/88ad157c84b47b7df9602d62f009d5ad8cf8529c))
+
+- Prepare v0.19 Studio preview and RC release
+  ([#113](https://github.com/genlayerlabs/genlayer-py/pull/113),
+  [`34bff46`](https://github.com/genlayerlabs/genlayer-py/commit/34bff4676be3aaa86f8821136d3aacac58cea073))
+
+- **calldata**: Migrate method-call key "method" -> "" (v0.6 genvm ABI)
+  ([#96](https://github.com/genlayerlabs/genlayer-py/pull/96),
+  [`ef36623`](https://github.com/genlayerlabs/genlayer-py/commit/ef36623ac7e36fb36701449f66bb61f6518d9d2e))
+
+- **fees**: Estimation correctness, wait-for-decided semantics, v0.6 parity with genlayer-js
+  ([#90](https://github.com/genlayerlabs/genlayer-py/pull/90),
+  [`bc04db8`](https://github.com/genlayerlabs/genlayer-py/commit/bc04db8999b86979273408511c90c9a89620ff49))
+
+- **staking**: Support the two-step operator rotation
+  ([#104](https://github.com/genlayerlabs/genlayer-py/pull/104),
+  [`2a689c0`](https://github.com/genlayerlabs/genlayer-py/commit/2a689c0465e8267a5e79641dd754850175d55c6e))
+
+- **transactions**: Layer consumer and protocol lifecycles
+  ([#109](https://github.com/genlayerlabs/genlayer-py/pull/109),
+  [`85a4782`](https://github.com/genlayerlabs/genlayer-py/commit/85a47821c2771b5d931b754d4a43f1bd0f057246))
+
+- **vesting**: Add vesting staking actions
+  ([#97](https://github.com/genlayerlabs/genlayer-py/pull/97),
+  [`30c262c`](https://github.com/genlayerlabs/genlayer-py/commit/30c262c48ec5f089223c584b381101074381e397))
+
+- **vesting**: Validator-leg actions (join/deposit/exit/claim, operator transfer, identity, wallet
+  reads) ([#97](https://github.com/genlayerlabs/genlayer-py/pull/97),
+  [`30c262c`](https://github.com/genlayerlabs/genlayer-py/commit/30c262c48ec5f089223c584b381101074381e397))
+
+- **vesting**: Vesting staking actions + ABI
+  ([#97](https://github.com/genlayerlabs/genlayer-py/pull/97),
+  [`30c262c`](https://github.com/genlayerlabs/genlayer-py/commit/30c262c48ec5f089223c584b381101074381e397))
+
+### Testing
+
+- Add v0.19 bug hunt regressions ([#99](https://github.com/genlayerlabs/genlayer-py/pull/99),
+  [`3106bc8`](https://github.com/genlayerlabs/genlayer-py/commit/3106bc87955d612b5bb43fa67e225b659b657c55))
+
+- **e2e**: Migrate contract fixtures to genvm v0.3 SDK API
+  ([#96](https://github.com/genlayerlabs/genlayer-py/pull/96),
+  [`ef36623`](https://github.com/genlayerlabs/genlayer-py/commit/ef36623ac7e36fb36701449f66bb61f6518d9d2e))
+
+
 ## v0.18.0 (2026-04-22)
 
 ### Bug Fixes

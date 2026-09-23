@@ -1,7 +1,10 @@
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 from genlayer_py.accounts.account import generate_private_key, create_account
+from genlayer_py.accounts.actions import get_current_nonce
 
 
 def test_generate_private_key():
@@ -54,3 +57,25 @@ def test_create_account_with_none_private_key():
     assert (
         account1.address != account2.address
     )  # Different addresses since different random keys
+
+
+def test_get_current_nonce_includes_pending_transactions_by_default():
+    address = "0x0000000000000000000000000000000000000001"
+    client = SimpleNamespace(
+        account=SimpleNamespace(address=address),
+        get_transaction_count=Mock(return_value=7),
+    )
+
+    assert get_current_nonce(client) == 7
+    client.get_transaction_count.assert_called_once_with(address, "pending")
+
+
+def test_get_current_nonce_preserves_explicit_block_identifier():
+    address = "0x0000000000000000000000000000000000000001"
+    client = SimpleNamespace(
+        account=None,
+        get_transaction_count=Mock(return_value=3),
+    )
+
+    assert get_current_nonce(client, address, "latest") == 3
+    client.get_transaction_count.assert_called_once_with(address, "latest")

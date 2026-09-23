@@ -2,8 +2,11 @@ from genlayer_py.logging import logger
 import rlp
 from web3 import Web3
 from eth_abi import decode as abi_decode
-from genlayer_py.consensus.abi import CONSENSUS_MAIN_ABI
 from genlayer_py.abi import calldata
+from genlayer_py.consensus.consensus_main.legacy_abi import (
+    LEGACY_ADD_TRANSACTION_ARGUMENT_TYPES,
+    LEGACY_ADD_TRANSACTION_SELECTOR,
+)
 from genlayer_py.transactions.fees import (
     ADD_TRANSACTION_WITH_FEES_ARGUMENT_TYPES,
     ADD_TRANSACTION_WITH_FEES_SELECTOR,
@@ -24,10 +27,10 @@ def decode_add_transaction_data(encoded_data):
         )
         return _format_fee_aware_add_transaction_data(abi_decoded[0])
 
-    consensus_main_contract = w3.eth.contract(abi=CONSENSUS_MAIN_ABI)
-    contract_fn = consensus_main_contract.get_function_by_name("addTransaction")
+    if selector != LEGACY_ADD_TRANSACTION_SELECTOR:
+        raise ValueError(f"Unsupported addTransaction selector: 0x{selector}")
     abi_decoded = abi_decode(
-        contract_fn.argument_types,
+        LEGACY_ADD_TRANSACTION_ARGUMENT_TYPES,
         w3.to_bytes(hexstr=payload),
     )
     encoded_tx_data_bytes = abi_decoded[4]
@@ -64,8 +67,7 @@ def _format_fee_aware_add_transaction_data(params):
         "user_value": params[6],
         "fees_distribution": decode_fees_distribution_tuple(params[7]),
         "message_allocations": [
-            decode_message_allocation_tuple(allocation)
-            for allocation in params[9]
+            decode_message_allocation_tuple(allocation) for allocation in params[9]
         ],
     }
 

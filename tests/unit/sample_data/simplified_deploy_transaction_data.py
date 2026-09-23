@@ -178,10 +178,9 @@ SIMPLIFIED_DEPLOY_TRANSACTION_DATA = {
     "result": 6,
     "result_name": "MAJORITY_AGREE",
     "sender": "0xd650f318A0C1F940a3b6dFeA695747fA9804D685",
-    "status": 7,
+    "lifecycle": {"state": "finalized", "outcome": "accepted"},
     "to_address": "0xf72aa51B6350C18966923073d3609e1356a3fbBA",
     "tx_id": "0x7684df399f44fb67aa51d03905310a4fce66713c1281a3ba53d63fff9bb4faa8",
     "type": 1,
     "value": 0,
-    "status_name": "FINALIZED",
 }

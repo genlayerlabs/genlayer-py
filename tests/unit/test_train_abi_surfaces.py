@@ -12,14 +12,16 @@ from genlayer_py.consensus.abi import (
 from genlayer_py.staking.abi import STAKING_ABI, VALIDATOR_WALLET_ABI
 
 # Hashes of the recursively canonicalized function surfaces generated from the
-# exact consensus train artifacts at 42ea0aaf7aed9b1426681c37ee046154e22df163.
+# exact consensus train artifacts at 42ea0aaf7aed9b1426681c37ee046154e22df163,
+# with IGenLayerStaking taken from genlayer-consensus#1403 (CON-471:
+# ValidatorStake.live -> hasUnclaimedRewards) at c6b482f16.
 # This covers every nested tuple component, not just top-level selectors or
 # function names.
 EXPECTED_TRAIN_FUNCTION_SURFACE_HASHES = {
     "ConsensusData": "3a7d39f4ed6c6aaa8dc1cfd5035387191f68c737ba499cd9732cf89fc97b7d34",
     "ConsensusMain": "6542ed4ac55be2cdb85d190d2bc9e7e04d13a707cea9d89bde2e53feb2586ed5",
     "Appeals": "7ff07eb47a1e801645e55141bcf75aaae022d46f06c8a94f29806a9fc61a0857",
-    "IGenLayerStaking": "1fd78e63d480800d93d41d3f5bdfd17f572bc5f394cccc7c796098f5ce8156b4",
+    "IGenLayerStaking": "3cbca6944d8f03f271e2f4640ac22209a2e1d3484856963136708f5c4096a0d8",
     "ValidatorWalletBlueprint": "6960726132fd77007eec8a90f036ef4be8d8efdcb6c6b79136c8835bb0b17800",
 }
 

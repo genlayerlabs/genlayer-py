@@ -793,7 +793,8 @@ def _get_add_transaction_abi_version(abi: Optional[list]) -> str:
         inputs = entry.get("inputs", [])
         if len(inputs) == 1 and inputs[0].get("type") == "tuple":
             return "fees"
-        if len(inputs) >= 6:
+        input_names = [inp.get("name", "") for inp in inputs]
+        if "valid_until" in input_names:
             return "v6"
         return "v5"
 

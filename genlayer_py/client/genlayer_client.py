@@ -85,9 +85,11 @@ from genlayer_py.staking.operator_registration import (
 )
 from genlayer_py.config import transaction_config
 from genlayer_py.transactions.fees import (
+    FEES_OMITTED,
     FeeEstimateOptions,
     FeesDistributionInput,
     TransactionFeeOptions,
+    TransactionFeesArgument,
     SimulationFeeEstimateOptions,
 )
 
@@ -170,9 +172,13 @@ class GenLayerClient(Eth):
         kwargs: Optional[Dict[str, CalldataEncodable]] = None,
         sim_config: Optional[SimConfig] = None,
         valid_until: Optional[int] = None,
-        fees: Optional[TransactionFeeOptions] = None,
+        fees: TransactionFeesArgument = FEES_OMITTED,
     ):
-        """Executes a state-modifying function on a contract through consensus. Returns the transaction hash."""
+        """Executes a state-modifying function on a contract through consensus. Returns the transaction hash.
+
+        When ``fees`` is omitted and the chain's fee policy is enabled, the SDK submits the
+        recommended fee estimate. Pass ``fees=None`` to send a gasless transaction.
+        """
         return write_contract(
             self=self,
             address=address,
@@ -226,9 +232,13 @@ class GenLayerClient(Eth):
         leader_only: bool = False,
         sim_config: Optional[SimConfig] = None,
         valid_until: Optional[int] = None,
-        fees: Optional[TransactionFeeOptions] = None,
+        fees: TransactionFeesArgument = FEES_OMITTED,
     ):
-        """Deploys a new intelligent contract to GenLayer. Returns the transaction hash."""
+        """Deploys a new intelligent contract to GenLayer. Returns the transaction hash.
+
+        When ``fees`` is omitted and the chain's fee policy is enabled, the SDK submits the
+        recommended fee estimate. Pass ``fees=None`` to send a gasless transaction.
+        """
         return deploy_contract(
             self=self,
             code=code,

@@ -123,6 +123,11 @@ receipt = client.wait_for_transaction_receipt(
 
 ### Fee presets for transactions
 
+When `fees` is omitted and the chain's fee policy is enabled, `deploy_contract`
+and `write_contract` submit the recommended estimate for that transaction
+(`sim_estimateTransactionFees` on Studio, FeeManager on networks). Pass
+`fees=None` to send a gasless transaction.
+
 Apps can build a trusted fee preset once they know the transaction shape, then
 submit the same preset with the transaction. The user may still override these
 values in wallet or app UI before signing.

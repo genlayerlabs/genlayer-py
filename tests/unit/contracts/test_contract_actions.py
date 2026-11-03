@@ -1,3 +1,4 @@
+import inspect
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -10,8 +11,10 @@ import genlayer_py.contracts.actions as contract_actions
 from genlayer_py.chains import localnet
 from genlayer_py.chains.studio_devnet import studio_devnet
 from genlayer_py.chains.testnet_asimov import testnet_asimov
+from genlayer_py.client.genlayer_client import GenLayerClient
 from genlayer_py.consensus.abi import CONSENSUS_MAIN_ABI
 from genlayer_py.exceptions import GenLayerError
+from genlayer_py.transactions import FEES_OMITTED
 from genlayer_py.transactions.fees import (
     ADD_TRANSACTION_WITH_FEES_ARGUMENT_TYPES,
     ADD_TRANSACTION_WITH_FEES_SELECTOR,
@@ -1876,6 +1879,7 @@ def test_write_contract_refreshes_consensus_abi_before_add_transaction_encoding(
         function_name="ping",
         account=client.local_account,
         value=0,
+        fees=None,
     )
 
     selector = eth_utils.keccak(
@@ -1884,3 +1888,333 @@ def test_write_contract_refreshes_consensus_abi_before_add_transaction_encoding(
     assert result == "0xdeadbeef"
     client.initialize_consensus_smart_contract.assert_called_once_with()
     assert captured["encoded_data"].startswith(f"0x{selector}")
+
+
+DEFAULT_FEES_POLICY_CONFIG = {
+    "enabled": True,
+    "policy": {
+        "genPerTimeUnit": "10",
+        "storageUnitPrice": "20",
+        "receiptGasPrice": "30",
+    },
+}
+
+
+def _studio_preset(fee_value, message_allocations=None):
+    preset = {
+        "distribution": {
+            "leaderTimeunitsAllocation": "100",
+            "validatorTimeunitsAllocation": "200",
+            "appealRounds": "0",
+            "executionBudgetPerRound": "5000",
+            "executionConsumed": "0",
+            "totalMessageFees": "110" if message_allocations else "0",
+            "rotations": ["0"],
+            "maxPriceGenPerTimeUnit": "10",
+            "storageFeeMaxGasPrice": "20",
+            "receiptFeeMaxGasPrice": "30",
+        },
+        "feeValue": str(fee_value),
+    }
+    if message_allocations is not None:
+        preset["messageAllocations"] = message_allocations
+    return {"recommendedPreset": preset}
+
+
+def _make_default_fees_client(monkeypatch, responses):
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=studio_devnet.id)
+    client.chain.fee_manager_contract = None
+    client.initialize_consensus_smart_contract = Mock()
+
+    def make_request(method, params):
+        response = responses.get(method)
+        if response is None:
+            raise AssertionError(f"unexpected method {method}")
+        if isinstance(response, Exception):
+            raise response
+        return {"result": response}
+
+    client.provider = SimpleNamespace(make_request=Mock(side_effect=make_request))
+    captured = {}
+
+    def fake_send_transaction(**kwargs):
+        captured.update(kwargs)
+        return "0xdeadbeef"
+
+    monkeypatch.setattr(contract_actions, "_send_transaction", fake_send_transaction)
+    return client, captured
+
+
+def _requested_methods(client):
+    return [
+        call.kwargs["method"] for call in client.provider.make_request.call_args_list
+    ]
+
+
+def _estimate_request(client):
+    return next(
+        call.kwargs["params"][0]
+        for call in client.provider.make_request.call_args_list
+        if call.kwargs["method"] == "sim_estimateTransactionFees"
+    )
+
+
+def _submitted_fees(captured):
+    return abi_decode(
+        ADD_TRANSACTION_WITH_FEES_ARGUMENT_TYPES,
+        Web3.to_bytes(hexstr=captured["encoded_data"][10:]),
+    )[0]
+
+
+def _submit(client, action, **kwargs):
+    if action == "deploy":
+        return contract_actions.deploy_contract(
+            self=client, code="class Contract: pass", valid_until=123, **kwargs
+        )
+    return contract_actions.write_contract(
+        self=client,
+        address=RECIPIENT,
+        function_name="ping",
+        valid_until=123,
+        **kwargs,
+    )
+
+
+def test_deploy_contract_with_omitted_fees_submits_studio_deploy_estimate(
+    monkeypatch,
+):
+    allocation = {
+        "messageType": MessageType.Internal,
+        "onAcceptance": True,
+        "parentIndex": str(MESSAGE_ALLOCATION_ROOT_PARENT_INDEX),
+        "recipient": RECIPIENT,
+        "callKey": CALL_KEY_DEPLOY,
+        "budget": "110",
+        "feeParams": encode_internal_message_fee_params(),
+    }
+    client, captured = _make_default_fees_client(
+        monkeypatch,
+        {
+            "sim_getFeeConfig": DEFAULT_FEES_POLICY_CONFIG,
+            "sim_estimateTransactionFees": _studio_preset(777_000, [allocation]),
+        },
+    )
+
+    contract_actions.deploy_contract(
+        self=client,
+        code="class Contract: pass",
+        args=[1],
+        leader_only=True,
+        sim_config={"genvm_datetime": "2026-01-01T00:00:00Z"},
+        valid_until=123,
+    )
+
+    request_params = _estimate_request(client)
+    assert request_params["type"] == "deploy"
+    assert request_params["to"] == "0x0000000000000000000000000000000000000000"
+    assert request_params["from"] == SENDER
+    assert request_params["sim_config"] == {"genvm_datetime": "2026-01-01T00:00:00Z"}
+    assert request_params["data"] == contract_actions.serialize(
+        [
+            "class Contract: pass",
+            contract_actions.calldata.encode(
+                contract_actions.make_calldata_object(
+                    method=None, args=[1], kwargs=None
+                )
+            ),
+            True,
+        ]
+    )
+    assert captured["value"] == 777_000
+    params = _submitted_fees(captured)
+    assert params[7][0:2] == (100, 200)
+    assert params[7][3] == 5000
+    assert params[7][5] == 110
+    assert params[7][7:] == (10, 20, 30)
+    assert params[9][0][4] == bytes(32)
+    assert params[9][0][5] == 110
+
+
+def test_write_contract_with_omitted_fees_submits_studio_write_estimate(
+    monkeypatch,
+):
+    client, captured = _make_default_fees_client(
+        monkeypatch,
+        {
+            "sim_getFeeConfig": DEFAULT_FEES_POLICY_CONFIG,
+            "sim_estimateTransactionFees": _studio_preset(555_000),
+        },
+    )
+
+    contract_actions.write_contract(
+        self=client,
+        address=RECIPIENT,
+        function_name="update_storage",
+        args=["after"],
+        value=7,
+        valid_until=123,
+    )
+
+    request_params = _estimate_request(client)
+    assert request_params["type"] == "write"
+    assert request_params["to"] == RECIPIENT
+    assert request_params["value"] == hex(7)
+    assert captured["value"] == 555_000 + 7
+    params = _submitted_fees(captured)
+    assert params[6] == 7
+    assert params[7][0:2] == (100, 200)
+    assert params[7][3] == 5000
+    assert params[7][7:] == (10, 20, 30)
+
+
+@pytest.mark.parametrize("action", ["deploy", "write"])
+def test_omitted_fees_fall_back_to_generic_estimate_when_simulation_fails(
+    action, monkeypatch
+):
+    client, captured = _make_default_fees_client(
+        monkeypatch,
+        {
+            "sim_getFeeConfig": DEFAULT_FEES_POLICY_CONFIG,
+            "sim_estimateTransactionFees": GenLayerError(
+                "sim_estimateTransactionFees failed (code=-32000): execution failed"
+            ),
+        },
+    )
+    generic = contract_actions._estimate_transaction_fees_with_policy(
+        client,
+        None,
+        extract_studio_fee_policy(DEFAULT_FEES_POLICY_CONFIG),
+    )
+
+    _submit(client, action)
+
+    assert captured["value"] == generic["feeValue"]
+    assert _submitted_fees(captured)[7][3] == (
+        generic["distribution"]["executionBudgetPerRound"]
+    )
+
+
+@pytest.mark.parametrize("action", ["deploy", "write"])
+def test_omitted_fees_estimate_errors_are_not_swallowed(action, monkeypatch):
+    client, captured = _make_default_fees_client(
+        monkeypatch,
+        {
+            "sim_getFeeConfig": DEFAULT_FEES_POLICY_CONFIG,
+            "sim_estimateTransactionFees": GenLayerError(
+                "sim_estimateTransactionFees failed (code=-32602): invalid params"
+            ),
+        },
+    )
+
+    with pytest.raises(GenLayerError, match="invalid params"):
+        _submit(client, action)
+    assert captured == {}
+
+
+@pytest.mark.parametrize("action", ["deploy", "write"])
+def test_explicit_none_fees_stay_gasless_without_rpc(action, monkeypatch):
+    client, captured = _make_default_fees_client(monkeypatch, {})
+
+    _submit(client, action, fees=None)
+
+    assert _requested_methods(client) == []
+    assert captured["value"] == 0
+    params = _submitted_fees(captured)
+    assert params[7][:6] == (0, 0, 0, 0, 0, 0)
+    assert params[9] == ()
+
+
+@pytest.mark.parametrize("action", ["deploy", "write"])
+def test_explicit_fees_are_submitted_untouched(action, monkeypatch):
+    client, captured = _make_default_fees_client(monkeypatch, {})
+    fees = {
+        "distribution": {
+            "leaderTimeunitsAllocation": 1,
+            "validatorTimeunitsAllocation": 2,
+            "executionBudgetPerRound": 3,
+            "rotations": [0],
+            "maxPriceGenPerTimeUnit": 4,
+            "storageFeeMaxGasPrice": 5,
+            "receiptFeeMaxGasPrice": 6,
+        },
+        "feeValue": 4321,
+    }
+
+    _submit(client, action, fees=fees)
+
+    assert _requested_methods(client) == []
+    assert captured["value"] == 4321
+    params = _submitted_fees(captured)
+    assert params[7][0:2] == (1, 2)
+    assert params[7][3] == 3
+    assert params[7][7:] == (4, 5, 6)
+
+
+@pytest.mark.parametrize("action", ["deploy", "write"])
+@pytest.mark.parametrize(
+    "fee_config",
+    [
+        {**DEFAULT_FEES_POLICY_CONFIG, "enabled": False},
+        GenLayerError("sim_getFeeConfig failed (code=-32601): Method not found"),
+    ],
+    ids=["policy-disabled", "policy-unavailable"],
+)
+def test_omitted_fees_stay_gasless_without_enabled_fee_policy(
+    action, fee_config, monkeypatch
+):
+    client, captured = _make_default_fees_client(
+        monkeypatch, {"sim_getFeeConfig": fee_config}
+    )
+
+    _submit(client, action)
+
+    assert _requested_methods(client) == ["sim_getFeeConfig"]
+    assert captured["value"] == 0
+    assert _submitted_fees(captured)[7][:6] == (0, 0, 0, 0, 0, 0)
+
+
+@pytest.mark.parametrize("action", ["deploy", "write"])
+def test_omitted_fees_on_fee_manager_network_use_generic_estimate(action, monkeypatch):
+    client, captured = _make_default_fees_client(monkeypatch, {})
+    client.chain.id = testnet_asimov.id
+    client.chain.fee_manager_contract = {
+        "address": "0x4444444444444444444444444444444444444444"
+    }
+    policy = extract_studio_fee_policy(DEFAULT_FEES_POLICY_CONFIG)
+    monkeypatch.setattr(contract_actions, "get_current_fee_policy", lambda _: policy)
+    estimate_calls = []
+
+    def fake_estimate(self, options, quoted_policy):
+        estimate_calls.append((options, quoted_policy))
+        return {
+            "distribution": create_fees_distribution(
+                {
+                    "leaderTimeunitsAllocation": 100,
+                    "validatorTimeunitsAllocation": 200,
+                    "executionBudgetPerRound": 5000,
+                    "rotations": [3],
+                    "maxPriceGenPerTimeUnit": 10,
+                    "storageFeeMaxGasPrice": 20,
+                    "receiptFeeMaxGasPrice": 30,
+                }
+            ),
+            "feeValue": 999,
+        }
+
+    monkeypatch.setattr(
+        contract_actions, "_estimate_transaction_fees_with_policy", fake_estimate
+    )
+
+    _submit(client, action)
+
+    assert estimate_calls == [(None, policy)]
+    assert _requested_methods(client) == []
+    assert captured["value"] == 999
+    assert _submitted_fees(captured)[7][3] == 5000
+
+
+@pytest.mark.parametrize("method_name", ["deploy_contract", "write_contract"])
+def test_client_defaults_fees_to_the_omitted_sentinel(method_name):
+    for target in (GenLayerClient, contract_actions):
+        signature = inspect.signature(getattr(target, method_name))
+        assert signature.parameters["fees"].default is FEES_OMITTED

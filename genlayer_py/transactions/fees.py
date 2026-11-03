@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from enum import IntEnum
-from typing import Any, NotRequired, Optional, TypedDict, Union
+from enum import Enum, IntEnum
+from typing import Any, Final, Literal, NotRequired, Optional, TypedDict, Union
 
 from eth_abi import encode as abi_encode
 from eth_typing import HexStr
@@ -108,6 +108,20 @@ class TransactionFeeOptions(TypedDict, total=False):
     message_allocations: list[MessageFeeAllocationInput]
     feeValue: BigNumberish
     fee_value: BigNumberish
+
+
+class _FeesOmitted(Enum):
+    TOKEN = "FEES_OMITTED"
+
+    def __repr__(self) -> str:
+        return "FEES_OMITTED"
+
+
+# Default for ``fees``: the SDK estimates fees, while an explicit ``None`` stays gasless.
+FEES_OMITTED: Final = _FeesOmitted.TOKEN
+TransactionFeesArgument = Union[
+    TransactionFeeOptions, None, Literal[_FeesOmitted.TOKEN]
+]
 
 
 class FeePolicyQuote(TypedDict):

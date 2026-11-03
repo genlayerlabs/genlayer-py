@@ -30,11 +30,13 @@ from genlayer_py.transactions.fees import (
     DEFAULT_GAS_PER_CHANGED_SLOT,
     DEFAULT_INTRINSIC_GAS,
     DEFAULT_RECEIPT_SLOTS_CHANGED,
+    FEES_OMITTED,
     MIN_RECEIPT_BYTES,
     NormalizedTransactionFees,
     SimulationFeeEstimateOptions,
     TransactionFeeEstimate,
     TransactionFeeOptions,
+    TransactionFeesArgument,
     build_estimated_fees_distribution,
     build_estimated_fees_options_from_simulation,
     calculate_local_round_fees,
@@ -139,7 +141,7 @@ def write_contract(
     kwargs: Optional[Dict[str, CalldataEncodable]] = None,
     sim_config: Optional[SimConfig] = None,
     valid_until: Optional[int] = None,
-    fees: Optional[TransactionFeeOptions] = None,
+    fees: TransactionFeesArgument = FEES_OMITTED,
 ):
     if consensus_max_rotations is None:
         consensus_max_rotations = self.chain.default_consensus_max_rotations
@@ -152,6 +154,18 @@ def write_contract(
     ]
     sender_account = account if account is not None else self.local_account
     serialized_data = serialize(data)
+    if fees is FEES_OMITTED:
+        fees = _default_write_fees(
+            self=self,
+            address=address,
+            function_name=function_name,
+            sender_account=sender_account,
+            args=args,
+            kwargs=kwargs,
+            value=value,
+            leader_only=leader_only,
+            sim_config=sim_config,
+        )
     transaction_fees = _resolve_transaction_fees(
         self=self,
         fees=fees,
@@ -186,7 +200,7 @@ def deploy_contract(
     leader_only: bool = False,
     sim_config: Optional[SimConfig] = None,
     valid_until: Optional[int] = None,
-    fees: Optional[TransactionFeeOptions] = None,
+    fees: TransactionFeesArgument = FEES_OMITTED,
 ):
     if consensus_max_rotations is None:
         consensus_max_rotations = self.chain.default_consensus_max_rotations
@@ -198,6 +212,13 @@ def deploy_contract(
     ]
     serialized_data = serialize(data)
     sender_account = account if account is not None else self.local_account
+    if fees is FEES_OMITTED:
+        fees = _default_deploy_fees(
+            self=self,
+            sender_account=sender_account,
+            serialized_data=serialized_data,
+            sim_config=sim_config,
+        )
     transaction_fees = _resolve_transaction_fees(
         self=self,
         fees=fees,
@@ -1028,6 +1049,112 @@ def estimate_transaction_fees_for_write(
     return estimate_transaction_fees_from_simulation(
         self,
         simulation_options,
+    )
+
+
+def _enabled_fee_policy_for_omitted_fees(
+    self: GenLayerClient,
+) -> Optional[FeePolicyQuote]:
+    try:
+        policy = get_current_fee_policy(self)
+    except GenLayerError:
+        if self.chain.fee_manager_contract and self.chain.fee_manager_contract.get(
+            "address"
+        ):
+            raise
+        # No fee policy source (e.g. a pre-fee Studio): keep the gasless call.
+        return None
+    return policy if policy["enabled"] else None
+
+
+def _is_simulation_execution_failure(error: GenLayerError) -> bool:
+    return "execution failed" in str(error).lower()
+
+
+def _fee_options_from_estimate(
+    estimate: TransactionFeeEstimate,
+) -> TransactionFeeOptions:
+    fees: TransactionFeeOptions = {
+        "distribution": estimate["distribution"],
+        "feeValue": estimate["feeValue"],
+    }
+    message_allocations = estimate.get("messageAllocations")
+    if message_allocations is not None:
+        fees["messageAllocations"] = message_allocations
+    return fees
+
+
+def _default_deploy_fees(
+    self: GenLayerClient,
+    sender_account: Optional[LocalAccount],
+    serialized_data: HexStr,
+    sim_config: Optional[SimConfig],
+) -> Optional[TransactionFeeOptions]:
+    policy = _enabled_fee_policy_for_omitted_fees(self)
+    if policy is None:
+        return None
+    if is_studio_chain(self.chain) and sender_account is not None:
+        request_params = {
+            "type": "deploy",
+            "to": ADDRESS_ZERO,
+            "from": sender_account.address,
+            "data": serialized_data,
+        }
+        if sim_config is not None:
+            request_params["sim_config"] = sim_config
+        try:
+            result = self.provider.make_request(
+                method="sim_estimateTransactionFees",
+                params=[request_params],
+            )["result"]
+        except GenLayerError as exc:
+            # A failing constructor is still submitted, as with explicit fees.
+            if not _is_simulation_execution_failure(exc):
+                raise
+            result = None
+        estimate = transaction_fee_estimate_from_studio_estimate(result, policy)
+        if estimate is not None:
+            return _fee_options_from_estimate(estimate)
+    return _fee_options_from_estimate(
+        _estimate_transaction_fees_with_policy(self, None, policy)
+    )
+
+
+def _default_write_fees(
+    self: GenLayerClient,
+    address: Union[Address, ChecksumAddress],
+    function_name: str,
+    sender_account: Optional[LocalAccount],
+    args: Optional[List[CalldataEncodable]],
+    kwargs: Optional[Dict[str, CalldataEncodable]],
+    value: int,
+    leader_only: bool,
+    sim_config: Optional[SimConfig],
+) -> Optional[TransactionFeeOptions]:
+    policy = _enabled_fee_policy_for_omitted_fees(self)
+    if policy is None:
+        return None
+    if is_studio_chain(self.chain) and sender_account is not None:
+        try:
+            return _fee_options_from_estimate(
+                estimate_transaction_fees_for_write(
+                    self,
+                    address=address,
+                    function_name=function_name,
+                    account=sender_account,
+                    args=args,
+                    kwargs=kwargs,
+                    value=value,
+                    leader_only=leader_only,
+                    sim_config=sim_config,
+                )
+            )
+        except GenLayerError as exc:
+            # A reverting write is still submitted, as with explicit fees.
+            if not _is_simulation_execution_failure(exc):
+                raise
+    return _fee_options_from_estimate(
+        _estimate_transaction_fees_with_policy(self, None, policy)
     )
 
 

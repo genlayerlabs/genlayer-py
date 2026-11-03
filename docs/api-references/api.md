@@ -84,8 +84,11 @@ client.read_contract(address: Union, function_name: str, args: Optional = None, 
 
 Executes a state-modifying function on a contract through consensus. Returns the transaction hash.
 
+When ``fees`` is omitted and the chain's fee policy is enabled, the SDK submits the
+recommended fee estimate. Pass ``fees=None`` to send a gasless transaction.
+
 ```python
-client.write_contract(address: Union, function_name: str, account: Optional = None, consensus_max_rotations: Optional = None, value: int = 0, leader_only: bool = False, args: Optional = None, kwargs: Optional = None, sim_config: Optional = None, valid_until: Optional = None, fees: Optional = None)
+client.write_contract(address: Union, function_name: str, account: Optional = None, consensus_max_rotations: Optional = None, value: int = 0, leader_only: bool = False, args: Optional = None, kwargs: Optional = None, sim_config: Optional = None, valid_until: Optional = None, fees: Union = FEES_OMITTED)
 ```
 
 | Parameter | Type | Required | Default |
@@ -100,7 +103,7 @@ client.write_contract(address: Union, function_name: str, account: Optional = No
 | kwargs | `Optional` | no | None |
 | sim_config | `Optional` | no | None |
 | valid_until | `Optional` | no | None |
-| fees | `Optional` | no | None |
+| fees | `Union` | no | FEES_OMITTED |
 
 ---
 
@@ -131,8 +134,11 @@ client.simulate_write_contract(address: Union, function_name: str, account: Opti
 
 Deploys a new intelligent contract to GenLayer. Returns the transaction hash.
 
+When ``fees`` is omitted and the chain's fee policy is enabled, the SDK submits the
+recommended fee estimate. Pass ``fees=None`` to send a gasless transaction.
+
 ```python
-client.deploy_contract(code: Union, account: Optional = None, args: Optional = None, kwargs: Optional = None, consensus_max_rotations: Optional = None, leader_only: bool = False, sim_config: Optional = None, valid_until: Optional = None, fees: Optional = None)
+client.deploy_contract(code: Union, account: Optional = None, args: Optional = None, kwargs: Optional = None, consensus_max_rotations: Optional = None, leader_only: bool = False, sim_config: Optional = None, valid_until: Optional = None, fees: Union = FEES_OMITTED)
 ```
 
 | Parameter | Type | Required | Default |
@@ -145,7 +151,7 @@ client.deploy_contract(code: Union, account: Optional = None, args: Optional = N
 | leader_only | `bool` | no | False |
 | sim_config | `Optional` | no | None |
 | valid_until | `Optional` | no | None |
-| fees | `Optional` | no | None |
+| fees | `Union` | no | FEES_OMITTED |
 
 ---
 

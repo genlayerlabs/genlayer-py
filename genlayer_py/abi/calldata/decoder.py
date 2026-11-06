@@ -45,7 +45,9 @@ def decode(mem0: Buffer) -> CalldataEncodable:
         elif typ == consts.TYPE_BYTES:
             ret_bytes = mem[:code]
             mem = mem[code:]
-            return ret_bytes
+            # CalldataEncodable includes bytes but not memoryview; consumers
+            # such as to_str() dispatch on isinstance(d, bytes).
+            return bytes(ret_bytes)
         elif typ == consts.TYPE_STR:
             ret_str = mem[:code]
             mem = mem[code:]

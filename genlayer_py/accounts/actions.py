@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from genlayer_py.chains import localnet
+from genlayer_py.chains.utils import is_studio_chain
 from hexbytes import HexBytes
 from web3.types import Nonce, BlockIdentifier, ENS
 from genlayer_py.exceptions import GenLayerError
@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 def fund_account(
     self: GenLayerClient, address: Union[Address, ChecksumAddress, ENS], amount: int
 ) -> HexBytes:
-    if self.chain.id != localnet.id:
-        raise GenLayerError("Client is not connected to the localhost")
+    if not is_studio_chain(self.chain):
+        raise GenLayerError("Account funding is only supported on Studio networks")
     try:
         response = self.provider.make_request(
             method="sim_fundAccount",
@@ -38,4 +38,9 @@ def get_current_nonce(
     if address is None and self.account is None:
         raise GenLayerError("No address provided and no account is connected")
     address_to_use = address or self.account.address
-    return self.get_transaction_count(address_to_use, block_identifier)
+    # Include locally pending transactions by default so consecutive
+    # submissions do not reuse the same nonce before the first is mined.
+    resolved_block_identifier = (
+        "pending" if block_identifier is None else block_identifier
+    )
+    return self.get_transaction_count(address_to_use, resolved_block_identifier)

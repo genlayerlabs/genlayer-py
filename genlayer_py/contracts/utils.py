@@ -9,7 +9,7 @@ def make_calldata_object(
 ) -> CalldataEncodable:
     ret: Dict[str, CalldataEncodable] = {}
     if method is not None:
-        ret["method"] = method
+        ret[""] = method
     if args is not None and len(args) > 0:
         ret["args"] = args
     if kwargs is not None and isinstance(kwargs, dict) and kwargs:

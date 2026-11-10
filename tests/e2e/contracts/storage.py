@@ -1,10 +1,11 @@
 # { "Depends": "py-genlayer:test" }
 
-from genlayer import *
+import genlayer as gl
+from genlayer.types import *
 
 
 # contract class
-class Storage(gl.Contract):
+class Storage(gl.contract.Contract):
     storage: str
 
     # constructor

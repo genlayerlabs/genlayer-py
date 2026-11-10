@@ -1,0 +1,103 @@
+[
+  {
+    "inputs": [],
+    "name": "addressManager",
+    "outputs": [
+      {"internalType": "contract IAddressManager", "name": "", "type": "address"}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "bytes32", "name": "_txId", "type": "bytes32"},
+      {"internalType": "uint256", "name": "_timestamp", "type": "uint256"}
+    ],
+    "name": "getTransactionLifecycle",
+    "outputs": [
+      {
+        "components": [
+          {"internalType": "enum ITransactions.TransactionStatus", "name": "storedStatus", "type": "uint8"},
+          {
+            "components": [
+              {"internalType": "bytes32", "name": "txId", "type": "bytes32"},
+              {"internalType": "enum ITransactions.TransactionStatus", "name": "storedStatus", "type": "uint8"},
+              {"internalType": "enum ITransactions.TransactionStatus", "name": "projectedStatus", "type": "uint8"},
+              {"internalType": "enum IIdlenessPhase.ResolutionAction", "name": "action", "type": "uint8"},
+              {"internalType": "enum ITransactions.ResultType", "name": "result", "type": "uint8"},
+              {"internalType": "bytes32", "name": "resultHash", "type": "bytes32"},
+              {"internalType": "enum ITransactionManager.ResolutionSource", "name": "source", "type": "uint8"},
+              {"internalType": "uint256", "name": "sourceRound", "type": "uint256"},
+              {"internalType": "uint256", "name": "sourceGeneration", "type": "uint256"},
+              {"internalType": "bytes32", "name": "sourceRoundContextHash", "type": "bytes32"},
+              {"internalType": "bytes32", "name": "roundPlanHash", "type": "bytes32"},
+              {"internalType": "uint256", "name": "resultRound", "type": "uint256"},
+              {"internalType": "uint256", "name": "resultGeneration", "type": "uint256"},
+              {"internalType": "uint256", "name": "basisDecisionId", "type": "uint256"},
+              {"internalType": "enum ITransactionManager.ResolutionContext", "name": "context", "type": "uint8"},
+              {"internalType": "bytes32", "name": "attemptId", "type": "bytes32"},
+              {"internalType": "uint256", "name": "boundaryAt", "type": "uint256"},
+              {"internalType": "uint256", "name": "evaluatedAt", "type": "uint256"},
+              {"internalType": "uint256", "name": "snapshotBlock", "type": "uint256"},
+              {"internalType": "uint256", "name": "decisionWindow", "type": "uint256"},
+              {"internalType": "uint256", "name": "appealDeadline", "type": "uint256"},
+              {"internalType": "bool", "name": "materializesDecision", "type": "bool"},
+              {"internalType": "bool", "name": "actionOutcomeDeterministic", "type": "bool"},
+              {"internalType": "bool", "name": "nonCurrentEvaluation", "type": "bool"}
+            ],
+            "internalType": "struct IIdlenessPhase.ResolutionPlan",
+            "name": "resolution",
+            "type": "tuple"
+          },
+          {
+            "components": [
+              {"internalType": "bool", "name": "exists", "type": "bool"},
+              {"internalType": "uint256", "name": "decisionId", "type": "uint256"},
+              {"internalType": "uint256", "name": "basisDecisionId", "type": "uint256"},
+              {"internalType": "enum ITransactionManager.ResolutionContext", "name": "context", "type": "uint8"},
+              {"internalType": "enum ITransactionManager.ResolutionSource", "name": "source", "type": "uint8"},
+              {"internalType": "bytes32", "name": "sourceAttemptId", "type": "bytes32"},
+              {"internalType": "enum ITransactions.TransactionStatus", "name": "sourceStatus", "type": "uint8"},
+              {"internalType": "enum ITransactions.TransactionStatus", "name": "status", "type": "uint8"},
+              {"internalType": "uint256", "name": "sourceRound", "type": "uint256"},
+              {"internalType": "uint256", "name": "sourceGeneration", "type": "uint256"},
+              {"internalType": "bytes32", "name": "sourceRoundContextHash", "type": "bytes32"},
+              {"internalType": "bytes32", "name": "roundPlanHash", "type": "bytes32"},
+              {"internalType": "uint256", "name": "resultRound", "type": "uint256"},
+              {"internalType": "uint256", "name": "resultGeneration", "type": "uint256"},
+              {"internalType": "enum ITransactions.ResultType", "name": "result", "type": "uint8"},
+              {"internalType": "bytes32", "name": "resultHash", "type": "bytes32"},
+              {"internalType": "uint256", "name": "effectiveAt", "type": "uint256"},
+              {"internalType": "uint256", "name": "materializedAt", "type": "uint256"},
+              {"internalType": "uint256", "name": "appealDeadline", "type": "uint256"}
+            ],
+            "internalType": "struct ITransactionManager.DecisionRecord",
+            "name": "latestDecision",
+            "type": "tuple"
+          },
+          {"internalType": "bool", "name": "decisionActive", "type": "bool"}
+        ],
+        "internalType": "struct ConsensusData.TransactionLifecycle",
+        "name": "lifecycle",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "bytes32", "name": "_txId", "type": "bytes32"},
+      {"internalType": "uint256", "name": "_currentTimestamp", "type": "uint256"},
+      {"internalType": "uint256", "name": "_expectedDecisionId", "type": "uint256"}
+    ],
+    "name": "canFinalize",
+    "outputs": [
+      {"internalType": "bool", "name": "ready", "type": "bool"},
+      {"internalType": "uint256", "name": "evaluatedAt", "type": "uint256"},
+      {"internalType": "uint256", "name": "appealDeadline", "type": "uint256"}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

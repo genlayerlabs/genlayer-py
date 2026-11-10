@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from genlayer_py.exceptions import GenLayerError
-from .localnet import localnet
-from .studionet import studionet
 from .testnet_asimov import testnet_asimov
+from .utils import is_studio_chain
 
 from typing import TYPE_CHECKING
 
@@ -23,12 +22,10 @@ def initialize_consensus_smart_contract(
         and bool(self.chain.consensus_main_contract.get("address"))
         and bool(self.chain.consensus_main_contract.get("abi"))
     )
-    is_local_or_studio_chain = self.chain.id in (localnet.id, studionet.id)
-
     if (
         not force_reset
         and has_static_consensus_contract
-        and not is_local_or_studio_chain
+        and not is_studio_chain(self.chain)
     ):
         return
 

@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 
 from genlayer_py import create_client, create_account
 from genlayer_py.chains import localnet, studionet, testnet_asimov
-from genlayer_py.types import TransactionStatus
 from genlayer_py.assertions import tx_execution_succeeded
 
 # Load environment variables from .env file
@@ -106,7 +105,7 @@ def test_multi_file_contract(chain_config):
     # Wait for transaction with retries if specified
     wait_kwargs = {
         "transaction_hash": deploy_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         wait_kwargs["retries"] = chain_config["retries"]
@@ -130,7 +129,7 @@ def test_multi_file_contract(chain_config):
     # Wait for wait transaction
     wait_wait_kwargs = {
         "transaction_hash": wait_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         wait_wait_kwargs["retries"] = chain_config["retries"]

@@ -14,7 +14,7 @@ from genlayer_py.types import (
 from genlayer_py.exceptions import GenLayerError
 from genlayer_py.abi import calldata
 from genlayer_py.abi.transactions import serialize
-from genlayer_py.chains import localnet
+from genlayer_py.chains.utils import is_studio_chain
 from web3.constants import ADDRESS_ZERO
 from web3.logs import DISCARD
 from genlayer_py.contracts.utils import make_calldata_object
@@ -24,6 +24,13 @@ from genlayer_py.transactions.fees import (
     FeesDistributionInput,
     FeesDistribution,
     FEES_DISTRIBUTION_ABI_TYPE,
+    DEFAULT_BOOTLOADER_OVERHEAD,
+    DEFAULT_CALLDATA_GAS_PER_BYTE,
+    DEFAULT_FIXED_PROPOSE_RECEIPT_GAS,
+    DEFAULT_GAS_PER_CHANGED_SLOT,
+    DEFAULT_INTRINSIC_GAS,
+    DEFAULT_RECEIPT_SLOTS_CHANGED,
+    MIN_RECEIPT_BYTES,
     NormalizedTransactionFees,
     SimulationFeeEstimateOptions,
     TransactionFeeEstimate,
@@ -32,6 +39,7 @@ from genlayer_py.transactions.fees import (
     build_estimated_fees_options_from_simulation,
     calculate_local_round_fees,
     create_fees_distribution,
+    create_top_up_fees_distribution,
     encode_fee_aware_add_transaction_data,
     extract_studio_fee_policy,
     fees_distribution_to_abi_tuple,
@@ -49,7 +57,7 @@ def get_contract_schema(
     self: GenLayerClient,
     address: Union[Address, ChecksumAddress],
 ) -> ContractSchema:
-    if self.chain.id != localnet.id:
+    if not is_studio_chain(self.chain):
         raise GenLayerError("Contract schema is not supported on this network")
 
     response = self.provider.make_request(
@@ -62,10 +70,14 @@ def get_contract_schema_for_code(
     self: GenLayerClient,
     contract_code: AnyStr,
 ) -> ContractSchema:
-    if self.chain.id != localnet.id:
+    if not is_studio_chain(self.chain):
         raise GenLayerError("Contract schema is not supported on this network")
 
-    code_bytes = contract_code.encode("utf-8") if isinstance(contract_code, str) else contract_code
+    code_bytes = (
+        contract_code.encode("utf-8")
+        if isinstance(contract_code, str)
+        else contract_code
+    )
     response = self.provider.make_request(
         method="gen_getContractSchemaForCode",
         params=[eth_utils.hexadecimal.encode_hex(code_bytes)],
@@ -86,7 +98,8 @@ def read_contract(
 ) -> CalldataEncodable:
     if account is None and self.local_account is None:
         raise GenLayerError("No account provided and no account is connected")
-    sender_address = self.local_account.address
+    sender = account if account is not None else self.local_account
+    sender_address = sender.address
     data = [
         calldata.encode(
             make_calldata_object(method=function_name, args=args, kwargs=kwargs)
@@ -214,26 +227,47 @@ def appeal_transaction(
     self: GenLayerClient,
     transaction_id: HexStr,
     account: Optional[LocalAccount] = None,
-    value: int = 0,
+    value: Optional[int] = None,
+    expected_decision_id: Optional[int] = None,
 ) -> HexStr:
     """Appeals a consensus transaction. Returns the original transaction_id.
 
     Appeals emit AppealStarted/TransactionActivated events (not NewTransaction),
     so we send the EVM tx directly instead of going through _send_transaction.
+    Both Studio and deployed Consensus bind the appeal to the exact active
+    decision and can resolve omitted decision/value inputs from the
+    authoritative appeal quote. The schedule-extending entry point is used for
+    every appeal because it accepts both pre-funded and unfunded next rounds;
+    ``submitAppeal`` rejects an unfunded next round before collecting its quoted
+    funding.
     """
     sender_account = account if account is not None else self.local_account
     if sender_account is None:
         raise GenLayerError("No account set.")
     if self.chain.consensus_main_contract is None:
         raise GenLayerError("Consensus main contract not configured.")
+    expected_decision_id, resolved_value = _resolve_appeal_parameters(
+        self,
+        transaction_id,
+        expected_decision_id=expected_decision_id,
+        value=value,
+    )
 
-    encoded_data = _encode_submit_appeal_data(self=self, transaction_id=transaction_id)
+    encoded_data = _encode_fee_management_data(
+        self=self,
+        function_name="topUpAndSubmitAppeal",
+        transaction_id=transaction_id,
+        # Consensus derives the appeal shape from live state. This normalized
+        # zero schedule exists only for ABI compatibility.
+        distribution={},
+        expected_decision_id=expected_decision_id,
+    )
 
     _send_consensus_call(
         self=self,
         encoded_data=encoded_data,
         sender_account=sender_account,
-        value=value,
+        value=resolved_value,
         operation_name="Appeal",
     )
 
@@ -244,13 +278,12 @@ def top_up_fees(
     self: GenLayerClient,
     transaction_id: HexStr,
     distribution: FeesDistributionInput,
+    value: int,
     account: Optional[LocalAccount] = None,
-    value: int = 0,
 ) -> HexStr:
     """Deposits additional fee budget for an existing consensus transaction.
 
-    Returns the backend RPC hash: an EVM transaction hash on network backends,
-    or the target GenLayer tx id on Studio/localnet.
+    Returns the signed EVM envelope hash on every backend.
     """
     sender_account = account if account is not None else self.local_account
     encoded_data = _encode_fee_management_data(
@@ -273,24 +306,33 @@ def top_up_and_submit_appeal(
     transaction_id: HexStr,
     distribution: FeesDistributionInput,
     account: Optional[LocalAccount] = None,
-    value: int = 0,
+    value: Optional[int] = None,
+    expected_decision_id: Optional[int] = None,
 ) -> HexStr:
     """Deposits appeal fee budget and submits an appeal in one consensus call.
 
     Returns the original GenLayer transaction id, matching appeal_transaction.
+    Both Studio and deployed Consensus use the decision-bound train shape.
     """
     sender_account = account if account is not None else self.local_account
+    expected_decision_id, resolved_value = _resolve_appeal_parameters(
+        self,
+        transaction_id,
+        expected_decision_id=expected_decision_id,
+        value=value,
+    )
     encoded_data = _encode_fee_management_data(
         self=self,
         function_name="topUpAndSubmitAppeal",
         transaction_id=transaction_id,
         distribution=distribution,
+        expected_decision_id=expected_decision_id,
     )
     _send_consensus_call(
         self=self,
         encoded_data=encoded_data,
         sender_account=sender_account,
-        value=value,
+        value=resolved_value,
         operation_name="Top up and submit appeal",
     )
     return transaction_id
@@ -304,7 +346,9 @@ def get_round_number(
     if self.chain.rounds_storage_contract is None:
         raise GenLayerError("rounds_storage_contract not configured for this chain")
     contract = self.w3.eth.contract(
-        address=self.w3.to_checksum_address(self.chain.rounds_storage_contract["address"]),
+        address=self.w3.to_checksum_address(
+            self.chain.rounds_storage_contract["address"]
+        ),
         abi=self.chain.rounds_storage_contract["abi"],
     )
     tx_bytes = _to_bytes32(self, transaction_id)
@@ -320,7 +364,9 @@ def get_round_data(
     if self.chain.rounds_storage_contract is None:
         raise GenLayerError("rounds_storage_contract not configured for this chain")
     contract = self.w3.eth.contract(
-        address=self.w3.to_checksum_address(self.chain.rounds_storage_contract["address"]),
+        address=self.w3.to_checksum_address(
+            self.chain.rounds_storage_contract["address"]
+        ),
         abi=self.chain.rounds_storage_contract["abi"],
     )
     tx_bytes = _to_bytes32(self, transaction_id)
@@ -335,7 +381,9 @@ def get_last_round_data(
     if self.chain.rounds_storage_contract is None:
         raise GenLayerError("rounds_storage_contract not configured for this chain")
     contract = self.w3.eth.contract(
-        address=self.w3.to_checksum_address(self.chain.rounds_storage_contract["address"]),
+        address=self.w3.to_checksum_address(
+            self.chain.rounds_storage_contract["address"]
+        ),
         abi=self.chain.rounds_storage_contract["abi"],
     )
     tx_bytes = _to_bytes32(self, transaction_id)
@@ -345,36 +393,188 @@ def get_last_round_data(
 def can_appeal(
     self: GenLayerClient,
     transaction_id: HexStr,
+    expected_decision_id: Optional[int] = None,
 ) -> bool:
-    """Checks if a transaction can be appealed."""
+    """Checks whether the exact active decision can be appealed on a network.
+
+    When no decision id is supplied, the latest active decision is read first.
+    The guarded on-chain call returns ``False`` if that decision changes before
+    it is evaluated. Studio uses its lifecycle and appeal-quote RPCs for the
+    same semantics.
+    """
+    if _is_studio_chain(self):
+        lifecycle = self.get_transaction_lifecycle(transaction_id)
+        if not lifecycle["decision_active"]:
+            return False
+        active_decision_id = lifecycle["decision_id"]
+        if (
+            expected_decision_id is not None
+            and expected_decision_id != active_decision_id
+        ):
+            return False
+        try:
+            return get_appeal_quote(self, transaction_id)["decision_id"] == int(
+                active_decision_id
+            )
+        except Exception as exc:
+            if "CanNotAppeal" in str(exc):
+                return False
+            raise
+
     if self.chain.appeals_contract is None:
         raise GenLayerError("appeals_contract not configured for this chain")
-    contract = self.w3.eth.contract(
-        address=self.w3.to_checksum_address(self.chain.appeals_contract["address"]),
-        abi=self.chain.appeals_contract["abi"],
-    )
+    if expected_decision_id is None:
+        expected_decision_id = _get_active_decision_id(self, transaction_id)
+        if expected_decision_id is None:
+            return False
+    contract = _appeals_contract(self)
     tx_bytes = _to_bytes32(self, transaction_id)
-    return contract.functions.canAppeal(tx_bytes).call()
+    return contract.functions.canAppeal(tx_bytes, expected_decision_id).call()
+
+
+def get_appeal_quote(
+    self: GenLayerClient,
+    transaction_id: HexStr,
+) -> Dict[str, int]:
+    """Returns the exact latest-decision appeal charge and race guard.
+
+    ``total`` is the value to submit: the appeal bond plus induced-work
+    funding. Pass ``decision_id`` back to the decision-guarded appeal methods.
+    """
+    if _is_studio_chain(self):
+        response = self.provider.make_request(
+            method="gen_estimateLatestAppealCharge",
+            params=[{"txId": transaction_id}],
+        )
+        if not isinstance(response, dict):
+            raise GenLayerError(
+                "gen_estimateLatestAppealCharge returned an invalid response"
+            )
+        if response.get("error") is not None:
+            raise GenLayerError(
+                f"gen_estimateLatestAppealCharge failed: {response['error']}"
+            )
+        quote = response.get("result")
+        if not isinstance(quote, dict):
+            raise GenLayerError(
+                "gen_estimateLatestAppealCharge returned an invalid result"
+            )
+        decision_id = int(quote["decisionId"])
+        bond = int(quote["bond"])
+        funding = int(quote["funding"])
+        return {
+            "decision_id": decision_id,
+            "bond": bond,
+            "funding": funding,
+            "total": bond + funding,
+            "appeal_deadline": int(quote["appealDeadline"]),
+        }
+    contract = _consensus_data_contract(self)
+    decision_id, bond, funding, appeal_deadline = (
+        contract.functions.estimateLatestAppealCharge(
+            _to_bytes32(self, transaction_id)
+        ).call()
+    )
+    return {
+        "decision_id": int(decision_id),
+        "bond": int(bond),
+        "funding": int(funding),
+        "total": int(bond) + int(funding),
+        "appeal_deadline": int(appeal_deadline),
+    }
+
+
+def get_appeal_charge(
+    self: GenLayerClient,
+    transaction_id: HexStr,
+) -> int:
+    """Returns the full payment required to appeal the latest decision."""
+    return get_appeal_quote(self, transaction_id)["total"]
 
 
 def get_min_appeal_bond(
     self: GenLayerClient,
     transaction_id: HexStr,
 ) -> int:
-    """Calculates the minimum bond required to appeal a transaction."""
-    if self.chain.fee_manager_contract is None or self.chain.rounds_storage_contract is None:
-        raise GenLayerError("fee_manager_contract/rounds_storage_contract not configured for this chain")
+    """Deprecated alias for :func:`get_appeal_charge`.
 
-    round_number = get_round_number(self, transaction_id)
-    tx = self.get_transaction(transaction_id)
-    tx_status = int(tx["status"])
+    Despite its historical name, this returns bond plus induced-work funding.
+    """
+    return get_appeal_charge(self, transaction_id)
 
-    fee_contract = self.w3.eth.contract(
-        address=self.w3.to_checksum_address(self.chain.fee_manager_contract["address"]),
-        abi=self.chain.fee_manager_contract["abi"],
+
+def _consensus_data_contract(self: GenLayerClient):
+    if self.chain.consensus_data_contract is None:
+        raise GenLayerError("consensus_data_contract not configured for this chain")
+    return self.w3.eth.contract(
+        address=self.w3.to_checksum_address(
+            self.chain.consensus_data_contract["address"]
+        ),
+        abi=self.chain.consensus_data_contract["abi"],
     )
-    tx_bytes = _to_bytes32(self, transaction_id)
-    return fee_contract.functions.calculateMinAppealBond(tx_bytes, round_number, tx_status).call()
+
+
+def _appeals_contract(self: GenLayerClient):
+    if self.chain.appeals_contract is None:
+        raise GenLayerError("appeals_contract not configured for this chain")
+    return self.w3.eth.contract(
+        address=self.w3.to_checksum_address(self.chain.appeals_contract["address"]),
+        abi=self.chain.appeals_contract["abi"],
+    )
+
+
+def _get_active_decision_id(
+    self: GenLayerClient,
+    transaction_id: HexStr,
+) -> Optional[int]:
+    lifecycle = (
+        _consensus_data_contract(self)
+        .functions.getTransactionLifecycle(_to_bytes32(self, transaction_id), 0)
+        .call()
+    )
+    latest_decision = lifecycle[2]
+    decision_active = lifecycle[3]
+    return int(latest_decision[1]) if decision_active else None
+
+
+def _resolve_appeal_parameters(
+    self: GenLayerClient,
+    transaction_id: HexStr,
+    expected_decision_id: Optional[int],
+    value: Optional[int],
+) -> tuple[int, int]:
+    if expected_decision_id is not None and value is not None:
+        return expected_decision_id, value
+
+    try:
+        quote = get_appeal_quote(self, transaction_id)
+    except Exception as exc:
+        raise GenLayerError(
+            "Cannot quote an active appeal decision. The transaction may not be "
+            "appealable yet; refresh its lifecycle and retry."
+        ) from exc
+
+    if (
+        expected_decision_id is not None
+        and expected_decision_id != quote["decision_id"]
+    ):
+        raise GenLayerError(
+            f"Appeal decision {expected_decision_id} is stale; the latest active "
+            f"decision is {quote['decision_id']}. Refresh and retry."
+        )
+
+    return (
+        quote["decision_id"] if expected_decision_id is None else expected_decision_id,
+        quote["total"] if value is None else value,
+    )
+
+
+def _is_studio_chain(self: GenLayerClient) -> bool:
+    """Reports whether the client targets the studio-embedded consensus.
+
+    This includes local Studio, the stable hosted Studio, and preview Studio.
+    """
+    return is_studio_chain(self.chain)
 
 
 def _to_bytes32(self: GenLayerClient, hex_str: HexStr) -> bytes:
@@ -397,8 +597,8 @@ def simulate_write_contract(
     sim_config: Optional[SimConfig] = None,
     transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_NONFINAL,
 ) -> dict:
-    if self.chain.id != localnet.id:
-        raise GenLayerError("Client is not connected to the localnet")
+    if not is_studio_chain(self.chain):
+        raise GenLayerError("Simulation is only supported on Studio networks")
     if account is None and self.local_account is None:
         raise GenLayerError("No account provided and no account is connected")
     sender_address = self.local_account.address if account is None else account.address
@@ -442,13 +642,27 @@ def _transaction_fees_to_rpc(
     }
     if normalized["fee_value"] is not None:
         rpc_fees["feeValue"] = normalized["fee_value"]
-    return rpc_fees
+    return _json_safe_rpc_value(rpc_fees)
+
+
+def _json_safe_rpc_value(value):
+    if isinstance(value, (bytes, bytearray)):
+        return "0x" + bytes(value).hex()
+    if isinstance(value, list):
+        return [_json_safe_rpc_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe_rpc_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _json_safe_rpc_value(item) for key, item in value.items()}
+    return value
 
 
 def _encode_submit_appeal_data(
     self: GenLayerClient,
     transaction_id: HexStr,
+    expected_decision_id: Optional[int] = None,
 ):
+    """Encode the decision-bound submitAppeal entrypoint."""
     consensus_main_contract = self.w3.eth.contract(
         abi=self.chain.consensus_main_contract["abi"]
     )
@@ -457,16 +671,21 @@ def _encode_submit_appeal_data(
         transaction_id = transaction_id[2:]
     if len(transaction_id) > 64:
         raise ValueError("transaction_id too long for bytes32")
-    params = abi_encode(
-        contract_fn.argument_types,
-        [self.w3.to_bytes(hexstr=transaction_id)],
-    )
+    if expected_decision_id is None:
+        raise ValueError("submitAppeal requires expected_decision_id")
+    arguments = [self.w3.to_bytes(hexstr=transaction_id), expected_decision_id]
+    params = abi_encode(contract_fn.argument_types, arguments)
     function_selector = eth_utils.keccak(text=contract_fn.signature)[:4].hex()
     encoded_data = "0x" + function_selector + params.hex()
     return encoded_data
 
 
 FEE_MANAGEMENT_ARGUMENT_TYPES = ("bytes32", FEES_DISTRIBUTION_ABI_TYPE)
+TOP_UP_AND_SUBMIT_APPEAL_ARGUMENT_TYPES = (
+    "bytes32",
+    "uint256",
+    FEES_DISTRIBUTION_ABI_TYPE,
+)
 
 
 def _encode_fee_management_data(
@@ -474,20 +693,31 @@ def _encode_fee_management_data(
     function_name: str,
     transaction_id: HexStr,
     distribution: FeesDistributionInput,
+    expected_decision_id: Optional[int] = None,
 ):
+    """Encode the chain's native fee-management entrypoint."""
     if function_name not in ("topUpFees", "topUpAndSubmitAppeal"):
         raise ValueError(f"Unsupported fee management function: {function_name}")
 
     tx_bytes = _to_bytes32(self, transaction_id)
-    fees_distribution = create_fees_distribution(distribution)
-    params = abi_encode(
-        FEE_MANAGEMENT_ARGUMENT_TYPES,
-        [
-            tx_bytes,
-            fees_distribution_to_abi_tuple(fees_distribution),
-        ],
+    fees_distribution = (
+        create_top_up_fees_distribution(distribution)
+        if function_name == "topUpFees"
+        else create_fees_distribution(distribution)
     )
-    signature = f"{function_name}(bytes32,{FEES_DISTRIBUTION_ABI_TYPE})"
+    fees_tuple = fees_distribution_to_abi_tuple(fees_distribution)
+    if function_name == "topUpAndSubmitAppeal":
+        if expected_decision_id is None:
+            raise ValueError("topUpAndSubmitAppeal requires expected_decision_id")
+        argument_types = TOP_UP_AND_SUBMIT_APPEAL_ARGUMENT_TYPES
+        arguments = [tx_bytes, expected_decision_id, fees_tuple]
+        signature = f"{function_name}(bytes32,uint256,{FEES_DISTRIBUTION_ABI_TYPE})"
+    else:
+        argument_types = FEE_MANAGEMENT_ARGUMENT_TYPES
+        arguments = [tx_bytes, fees_tuple]
+        signature = f"{function_name}(bytes32,{FEES_DISTRIBUTION_ABI_TYPE})"
+
+    params = abi_encode(argument_types, arguments)
     function_selector = eth_utils.keccak(text=signature)[:4].hex()
     return "0x" + function_selector + params.hex()
 
@@ -575,27 +805,51 @@ def _get_default_valid_until() -> int:
 
 
 def get_current_fee_policy(self: GenLayerClient) -> FeePolicyQuote:
-    if self.chain.fee_manager_contract and self.chain.fee_manager_contract.get("address"):
+    if self.chain.fee_manager_contract and self.chain.fee_manager_contract.get(
+        "address"
+    ):
         fee_manager_contract = self.w3.eth.contract(
-            address=self.w3.to_checksum_address(self.chain.fee_manager_contract["address"]),
+            address=self.w3.to_checksum_address(
+                self.chain.fee_manager_contract["address"]
+            ),
             abi=FEE_MANAGER_CALCULATE_ROUND_FEES_ABI,
         )
         gen_per_time_unit = fee_manager_contract.functions.GENPerTimeUnit().call()
         storage_unit_price = fee_manager_contract.functions.storageUnitPrice().call()
-        receipt_gas_price = fee_manager_contract.functions.quoteGasPrice().call()
+        quoted_receipt_gas_price = fee_manager_contract.functions.quoteGasPrice().call()
         execution_budget_floor = (
             fee_manager_contract.functions.messageFeeParamsBudgetFloor().call()
         )
+        enabled = (
+            gen_per_time_unit > 0
+            or storage_unit_price > 0
+            or quoted_receipt_gas_price > 0
+        )
+        network_receipt_gas_price = self.w3.eth.gas_price if enabled else 0
+        receipt_gas_price = max(quoted_receipt_gas_price, network_receipt_gas_price)
+        if enabled and receipt_gas_price == 0:
+            raise GenLayerError(
+                "receipt gas price quoted as zero; refusing to build a zero price cap"
+            )
+        local_execution_budget_floor = receipt_gas_price * (
+            DEFAULT_FIXED_PROPOSE_RECEIPT_GAS
+            + DEFAULT_INTRINSIC_GAS
+            + DEFAULT_BOOTLOADER_OVERHEAD
+            + (MIN_RECEIPT_BYTES * DEFAULT_CALLDATA_GAS_PER_BYTE)
+            + (DEFAULT_RECEIPT_SLOTS_CHANGED * DEFAULT_GAS_PER_CHANGED_SLOT)
+        )
         return {
-            "enabled": (
-                gen_per_time_unit > 0
-                or storage_unit_price > 0
-                or receipt_gas_price > 0
-            ),
+            "enabled": enabled,
             "genPerTimeUnit": gen_per_time_unit,
             "storageUnitPrice": storage_unit_price,
             "receiptGasPrice": receipt_gas_price,
-            "executionBudgetFloor": execution_budget_floor,
+            "executionBudgetFloor": max(
+                execution_budget_floor,
+                local_execution_budget_floor,
+            ),
+            # Live networks quote through FeeManager.calculateRoundFees; this
+            # field is only consumed by Studio's local mirror.
+            "timeUnitOverlayBps": 0,
         }
 
     try:
@@ -616,7 +870,11 @@ def estimate_fees_distribution(
     options: Optional[FeeEstimateOptions] = None,
 ) -> FeesDistribution:
     policy = get_current_fee_policy(self)
-    return build_estimated_fees_distribution(options, policy)
+    return build_estimated_fees_distribution(
+        options,
+        policy,
+        self.chain.default_consensus_max_rotations,
+    )
 
 
 def estimate_transaction_fees(
@@ -632,11 +890,19 @@ def _estimate_transaction_fees_with_policy(
     options: Optional[FeeEstimateOptions],
     policy: FeePolicyQuote,
 ) -> TransactionFeeEstimate:
-    distribution = build_estimated_fees_distribution(options, policy)
+    distribution = build_estimated_fees_distribution(
+        options,
+        policy,
+        self.chain.default_consensus_max_rotations,
+    )
 
-    if self.chain.fee_manager_contract and self.chain.fee_manager_contract.get("address"):
+    if self.chain.fee_manager_contract and self.chain.fee_manager_contract.get(
+        "address"
+    ):
         fee_manager_contract = self.w3.eth.contract(
-            address=self.w3.to_checksum_address(self.chain.fee_manager_contract["address"]),
+            address=self.w3.to_checksum_address(
+                self.chain.fee_manager_contract["address"]
+            ),
             abi=FEE_MANAGER_CALCULATE_ROUND_FEES_ABI,
         )
         round_fees = fee_manager_contract.functions.calculateRoundFees(
@@ -705,8 +971,10 @@ def estimate_transaction_fees_for_write(
     sim_config: Optional[SimConfig] = None,
     transaction_hash_variant: TransactionHashVariant = TransactionHashVariant.LATEST_NONFINAL,
 ) -> TransactionFeeEstimate:
-    if self.chain.id != localnet.id:
-        raise GenLayerError("Target write fee estimation is only supported on localnet")
+    if not is_studio_chain(self.chain):
+        raise GenLayerError(
+            "Target write fee estimation is only supported on Studio networks"
+        )
     if account is None and self.local_account is None:
         raise GenLayerError("No account provided and no account is connected")
 
@@ -769,14 +1037,17 @@ def _resolve_transaction_fees(
     num_of_initial_validators: int,
 ) -> NormalizedTransactionFees:
     transaction_fees = normalize_transaction_fees(fees)
-    if (
-        transaction_fees["fee_value"] is not None
-        or not requires_fee_deposit_calculation(transaction_fees["distribution"])
+    if transaction_fees[
+        "fee_value"
+    ] is not None or not requires_fee_deposit_calculation(
+        transaction_fees["distribution"]
     ):
         transaction_fees["fee_value"] = transaction_fees["fee_value"] or 0
         return transaction_fees
 
-    if not self.chain.fee_manager_contract or not self.chain.fee_manager_contract.get("address"):
+    if not self.chain.fee_manager_contract or not self.chain.fee_manager_contract.get(
+        "address"
+    ):
         try:
             policy = get_current_fee_policy(self)
         except GenLayerError as exc:
@@ -824,7 +1095,9 @@ def _encode_add_transaction_data(
         abi=self.chain.consensus_main_contract["abi"]
     )
     contract_fn = consensus_main_contract.get_function_by_name("addTransaction")
-    abi_version = _get_add_transaction_abi_version(self.chain.consensus_main_contract["abi"])
+    abi_version = _get_add_transaction_abi_version(
+        self.chain.consensus_main_contract["abi"]
+    )
     transaction_fees = transaction_fees or normalize_transaction_fees()
     use_fee_aware_transaction = (
         transaction_fees["requires_fee_aware_transaction"] or abi_version == "fees"
@@ -876,7 +1149,7 @@ def _prepare_transaction(
 
     nonce = self.get_current_nonce(address=sender)
 
-    if self.chain.id != localnet.id:
+    if not is_studio_chain(self.chain):
         latest_block = self.w3.eth.get_block("latest")
         base_fee = latest_block["baseFeePerGas"]
         priority_fee = self.w3.to_wei(2, "gwei")
@@ -905,6 +1178,63 @@ def _prepare_transaction(
     return transaction
 
 
+KNOWN_REVERT_SELECTOR_NAMES = {
+    "0x8d53e553": "InsufficientFees",
+    "0xb4132db3": "MaxPriceExceeded",
+    "0x57df8523": "ExecutionBudgetExceeded",
+    "0x305e533c": "BudgetTooLow",
+    "0xa70732ee": "RollupBudgetBelowFloor",
+    "0x632be5a1": "FeeValueMustBeNonZero",
+}
+
+
+def _format_rpc_error(error: Exception) -> str:
+    parts = [str(error)]
+    for attr in ("message", "data"):
+        value = getattr(error, attr, None)
+        if isinstance(value, str) and value.strip():
+            parts.append(value)
+    args = getattr(error, "args", ())
+    for arg in args:
+        if isinstance(arg, dict):
+            for key in ("message", "data", "details", "shortMessage"):
+                value = arg.get(key)
+                if isinstance(value, str) and value.strip():
+                    parts.append(value)
+        elif isinstance(arg, str) and arg.strip():
+            parts.append(arg)
+
+    text = " ".join(dict.fromkeys(parts))
+    selector_name = next(
+        (
+            name
+            for selector, name in KNOWN_REVERT_SELECTOR_NAMES.items()
+            if selector in text
+        ),
+        None,
+    )
+    if selector_name and selector_name not in text:
+        return f"{text} ({selector_name})"
+    return text
+
+
+def _receipt_revert_reason(self: GenLayerClient, tx_hash: HexStr) -> Optional[str]:
+    """Read Studio's additive receipt reason without weakening EVM semantics."""
+    try:
+        response = self.provider.make_request(
+            method="eth_getTransactionReceipt", params=[tx_hash]
+        )
+    except Exception:
+        return None
+    if not isinstance(response, dict):
+        return None
+    receipt = response.get("result")
+    if not isinstance(receipt, dict):
+        return None
+    reason = receipt.get("revertReason") or receipt.get("error")
+    return reason if isinstance(reason, str) and reason.strip() else None
+
+
 def _send_consensus_call(
     self: GenLayerClient,
     encoded_data: HexStr,
@@ -919,25 +1249,29 @@ def _send_consensus_call(
     if self.chain.consensus_main_contract is None:
         raise GenLayerError("Consensus main contract not configured.")
 
-    transaction = _prepare_transaction(
-        self=self,
-        sender=sender_account.address,
-        recipient=self.chain.consensus_main_contract["address"],
-        data=encoded_data,
-        value=value,
-    )
-    signed_transaction = sender_account.sign_transaction(transaction)
-    serialized_transaction = self.w3.to_hex(signed_transaction.raw_transaction)
-    tx_hash = self.provider.make_request(
-        method="eth_sendRawTransaction", params=[serialized_transaction]
-    )["result"]
-    if self.chain.id == localnet.id:
-        return tx_hash
-
+    try:
+        transaction = _prepare_transaction(
+            self=self,
+            sender=sender_account.address,
+            recipient=self.chain.consensus_main_contract["address"],
+            data=encoded_data,
+            value=value,
+        )
+        signed_transaction = sender_account.sign_transaction(transaction)
+        serialized_transaction = self.w3.to_hex(signed_transaction.raw_transaction)
+        tx_hash = self.provider.make_request(
+            method="eth_sendRawTransaction", params=[serialized_transaction]
+        )["result"]
+    except Exception as exc:
+        raise GenLayerError(
+            f"{operation_name} failed: {_format_rpc_error(exc)}"
+        ) from exc
     tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
 
     if tx_receipt.status != 1:
-        raise GenLayerError(f"{operation_name} reverted: EVM tx {tx_hash}")
+        reason = _receipt_revert_reason(self, tx_hash)
+        suffix = f". {reason}" if reason else ""
+        raise GenLayerError(f"{operation_name} reverted: EVM tx {tx_hash}{suffix}")
 
     return tx_hash
 
@@ -956,30 +1290,35 @@ def _send_transaction(
 
     if self.chain.consensus_main_contract is None:
         raise GenLayerError(
-            f"Consensus main contract address not found in chain config for \"{self.chain.name}\".",
+            f'Consensus main contract address not found in chain config for "{self.chain.name}".',
         )
 
-    transaction = _prepare_transaction(
-        self=self,
-        sender=sender_account.address,
-        recipient=self.chain.consensus_main_contract["address"],
-        data=encoded_data,
-        value=value,
-    )
-    signed_transaction = sender_account.sign_transaction(transaction)
-    serialized_transaction = self.w3.to_hex(signed_transaction.raw_transaction)
-    params = [serialized_transaction]
-    if sim_config is not None:
-        params.append(sim_config)
-    tx_hash = self.provider.make_request(
-        method="eth_sendRawTransaction", params=params
-    )["result"]
+    try:
+        transaction = _prepare_transaction(
+            self=self,
+            sender=sender_account.address,
+            recipient=self.chain.consensus_main_contract["address"],
+            data=encoded_data,
+            value=value,
+        )
+        signed_transaction = sender_account.sign_transaction(transaction)
+        serialized_transaction = self.w3.to_hex(signed_transaction.raw_transaction)
+        params = [serialized_transaction]
+        if sim_config is not None:
+            params.append(sim_config)
+        tx_hash = self.provider.make_request(
+            method="eth_sendRawTransaction", params=params
+        )["result"]
+    except Exception as exc:
+        raise GenLayerError(f"Transaction failed: {_format_rpc_error(exc)}") from exc
     tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
 
     if tx_receipt.status != 1:
+        reason = _receipt_revert_reason(self, tx_hash)
+        suffix = f" {reason}" if reason else ""
         raise GenLayerError(
             f"Transaction reverted: EVM tx {tx_hash} to consensus contract "
-            f"{self.chain.consensus_main_contract['address']} was reverted."
+            f"{self.chain.consensus_main_contract['address']} was reverted.{suffix}"
         )
 
     consensus_main_contract = self.w3.eth.contract(

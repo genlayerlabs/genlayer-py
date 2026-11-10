@@ -1,10 +1,11 @@
 # { "Depends": "py-genlayer:test" }
 
-from genlayer import *
+import genlayer as gl
+from genlayer.types import *
 
 
-class UserStorage(gl.Contract):
-    storage: TreeMap[Address, str]
+class UserStorage(gl.contract.Contract):
+    storage: gl.storage.TreeMap[Address, str]
 
     # constructor
     def __init__(self):

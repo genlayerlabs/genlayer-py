@@ -30,23 +30,15 @@ Have ideas for new features or use cases? We're eager to hear them! But first:
 
 ## Branch model
 
-This repo uses a branch-per-major release model. There is no `main`.
-
-- **`v0.18`** — current stable major (semver-zero, so 0.18 IS the major; 0.19 would be a major bump that gets its own branch). PRs for bug fixes / non-breaking features target this branch.
-- **`v<next>-dev`** — when next-major (i.e. next-minor on 0.x) work is in progress, this branch is open for breaking changes. PRs introducing them target this branch, not `v0.18`.
-- **Older majors** stay on the repo for back-ports and security patches. Default branch on github.com is whichever major is current stable.
-
-When you fork or clone, the default branch is `v0.18` today. If you have a `main` branch from a previous checkout, delete it locally:
-
-```sh
-git checkout v0.18
-git branch -D main
-git remote prune origin
-```
+See [docs/BRANCHING.md](docs/BRANCHING.md) for the current release-train model.
+In short: independently releasable work may target the stable branch directly;
+multi-feature or cross-repo train work uses the active `*-dev` integration
+branch and is promoted to the matching stable branch when ready. `main` is only
+the default/static GitHub branch.
 
 ## Releases
 
-Releases are deliberate, not automatic. `scripts/release.sh` bumps the version, updates `CHANGELOG.md`, commits, tags, and pushes; CI takes over from the tag push and publishes to PyPI. See `.claude/skills/release/SKILL.md` for the full flow.
+Releases are deliberate, not automatic. `scripts/release.sh` bumps the version, updates `CHANGELOG.md`, commits, tags, and pushes; CI takes over from the tag push and publishes to PyPI. Release candidates are cut from the active `*-dev` branch (for example, `v0.19.0-rc.1` from `v0.19-dev`), while final versions are cut from the matching stable branch. See `.claude/skills/release/SKILL.md` for the full flow.
 
 **Semver-zero rule**: this package is on a 0.x line, so the MINOR component is the breaking-change boundary. `0.18 → 0.19` is a major bump and needs a new branch — the script refuses `minor`/`major` keywords without `--allow-major`.
 
@@ -170,7 +162,7 @@ The project uses automated semantic versioning based on commit messages:
 | `feat!:`, `fix!:`, or `BREAKING CHANGE:` | **Major** version bump | 1.0.0 → 2.0.0 |
 | `docs:`, `style:`, `refactor:`, `test:`, `chore:`, `build:`, `ci:` | **No** version bump | Version stays the same |
 
-**Important**: Never manually edit version numbers in `pyproject.toml` or other files. The release automation will handle all version updates automatically when PRs are merged to the main branch.
+**Important**: Never manually edit version numbers in `pyproject.toml` or other files. Final releases are cut from the stable branch and release candidates from its matching `*-dev` branch using the release automation described above.
 
 ## Logging Configuration
 

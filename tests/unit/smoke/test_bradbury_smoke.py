@@ -101,8 +101,8 @@ class TestBradburyConsensusContract:
 
 
 @pytest.mark.testnet
-class TestBradburyGetTransactionAllData:
-    """Verify getTransactionAllData returns txExecutionResult."""
+class TestBradburyTransactionRead:
+    """Verify the transaction read returns txExecutionResult."""
 
     def test_get_transaction_returns_execution_result(self):
         """Use the actual SDK client to fetch a known finalized tx and verify tx_execution_result."""
@@ -112,11 +112,21 @@ class TestBradburyGetTransactionAllData:
                 "563f046c187d711127c51213ca62e2e4fee52009a98f0989a73a0a0382d21890"
             )
         )
-        assert tx["tx_execution_result"] in [0, 1, 2]
+        assert tx["tx_execution_result"] in [0, 1, 2, 3, 4, 5]
         assert tx["tx_execution_result_name"] in [
-            "NOT_VOTED", "FINISHED_WITH_RETURN", "FINISHED_WITH_ERROR"
+            "NOT_VOTED",
+            "FINISHED_WITH_RETURN",
+            "FINISHED_WITH_ERROR",
+            "TIMEOUT",
+            "NONDET_DISAGREE",
+            "DETERMINISTIC_VIOLATION",
         ]
-        assert tx["status_name"] is not None
+        assert tx["lifecycle"]["state"] in {
+            "processing",
+            "decided",
+            "finalized",
+            "canceled",
+        }
         assert tx["result_name"] is not None
 
     def test_get_transaction_includes_messages(self):

@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 
 from genlayer_py import create_client, create_account
 from genlayer_py.chains import localnet, studionet, testnet_asimov
-from genlayer_py.types import TransactionStatus
 from genlayer_py.assertions import tx_execution_succeeded
 
 # Load environment variables from .env file
@@ -82,7 +81,7 @@ def test_read_erc20(chain_config):
     # Wait for LLM ERC20 deployment
     llm_erc20_wait_kwargs = {
         "transaction_hash": llm_erc20_deploy_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         llm_erc20_wait_kwargs["retries"] = chain_config["retries"]
@@ -111,7 +110,7 @@ def test_read_erc20(chain_config):
         # Wait for read_erc20 deployment
         read_erc20_wait_kwargs = {
             "transaction_hash": read_erc20_deploy_tx_hash,
-            "status": TransactionStatus.FINALIZED,
+            "wait_until": "finalized",
         }
         if chain_config["retries"]:
             read_erc20_wait_kwargs["retries"] = chain_config["retries"]

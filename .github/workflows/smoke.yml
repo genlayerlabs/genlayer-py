@@ -9,6 +9,10 @@ on:
 jobs:
   smoke:
     name: Testnet Smoke Tests
+    # The v0.19 line intentionally targets the resolution-kernel train and
+    # does not support the currently deployed pre-train testnets. Its live
+    # coverage comes from the cross-repository E2E stack until they upgrade.
+    if: github.event_name != 'pull_request' || github.base_ref != 'v0.19-dev'
     runs-on: ubuntu-latest
     # Bradbury/Asimov RPC reads occasionally stall for 2-3 minutes on
     # single calls (testnet capacity); with 17 testnet-flagged tests

@@ -955,7 +955,26 @@ def observed_simulation_fee_usage(
         _get(report, "totalEstimatedFee", "total_estimated_fee"),
         "simulation.feeReport.totalEstimatedFee",
     )
-    observed_execution_budget = execution_fee_consumed + execution_fee_report_total
+    chargeable_execution = _dict_or_none(
+        _get(report, "chargeableExecution", "chargeable_execution")
+    )
+    chargeable_execution_total = _int_from_unknown(
+        _get(chargeable_execution, "totalExecution", "total_execution"),
+        "simulation.feeReport.chargeableExecution.totalExecution",
+    )
+    genvm_buckets = _dict_or_none(_get(report, "genvmBuckets", "genvm_buckets"))
+    genvm_execution_required = _int_from_unknown(
+        _get(genvm_buckets, "execution"),
+        "simulation.feeReport.genvmBuckets.execution",
+    )
+    # Mirrors Studio's recommended_fee_preset: these figures overlap, so pick one.
+    if execution_fee_consumed > 0:
+        observed_execution_fee = execution_fee_consumed
+    elif chargeable_execution_total > 0:
+        observed_execution_fee = chargeable_execution_total
+    else:
+        observed_execution_fee = execution_fee_report_total
+    observed_execution_budget = max(observed_execution_fee, genvm_execution_required)
     recommended_execution_budget = (
         max(
             policy["executionBudgetFloor"],
@@ -1020,6 +1039,10 @@ def observed_simulation_fee_usage(
     return {
         "executionFeeConsumed": execution_fee_consumed,
         "executionFeeReportTotal": execution_fee_report_total,
+        "chargeableExecutionTotal": chargeable_execution_total,
+        "observedExecutionFee": observed_execution_fee,
+        "genvmExecutionRequired": genvm_execution_required,
+        "observedExecutionBudget": observed_execution_budget,
         "recommendedExecutionBudgetPerRound": recommended_execution_budget,
         "genvmMessageFeeConsumed": genvm_message_fee_consumed,
         "messageFeeBudget": message_fee_budget,

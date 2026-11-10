@@ -1602,7 +1602,11 @@ def test_estimate_transaction_fees_from_simulation_builds_trusted_preset():
     assert estimate["observed"] == {
         "executionFeeConsumed": 100,
         "executionFeeReportTotal": 501_664,
-        "recommendedExecutionBudgetPerRound": 602_117,
+        "chargeableExecutionTotal": 0,
+        "observedExecutionFee": 100,
+        "genvmExecutionRequired": 0,
+        "observedExecutionBudget": 100,
+        "recommendedExecutionBudgetPerRound": 400_000,
         "genvmMessageFeeConsumed": 5,
         "messageFeeBudget": 10,
         "messageFeeConsumed": 5,
@@ -1613,10 +1617,10 @@ def test_estimate_transaction_fees_from_simulation_builds_trusted_preset():
         "externalMessageRemainder": 0,
         "recommendedTotalMessageFees": 6,
     }
-    assert estimate["distribution"]["executionBudgetPerRound"] == 602_117
+    assert estimate["distribution"]["executionBudgetPerRound"] == 400_000
     assert estimate["distribution"]["totalMessageFees"] == 6
     assert estimate["distribution"]["rotations"] == [3]
-    assert estimate["feeValue"] == 2_452_474
+    assert estimate["feeValue"] == 1_644_006
 
 
 def test_simulation_execution_budget_uses_floor_without_default_gas_clobber():
@@ -1781,7 +1785,7 @@ def test_estimate_transaction_fees_for_write_uses_studio_estimate_rpc():
         request_params["fees"]["messageAllocations"][0]["callKey"]
         == "0x" + CALL_KEY_WILDCARD.hex()
     )
-    assert estimate["observed"]["recommendedExecutionBudgetPerRound"] == 602_117
+    assert estimate["observed"]["recommendedExecutionBudgetPerRound"] == 400_000
     assert estimate["observed"]["messageFeeBudget"] == 110
     assert estimate["observed"]["messageFeeConsumed"] == 50
     assert estimate["simulation"]["feeAccounting"]["message_fee_budget"] == "110"

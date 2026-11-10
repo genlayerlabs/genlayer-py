@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.19.0-rc.3 (2026-11-10)
+
+### Bug Fixes
+
+- **fees**: Stop double-counting the observed execution fee
+  ([#120](https://github.com/yeagerai/genlayer-py/pull/120),
+  [`22ab2a7`](https://github.com/yeagerai/genlayer-py/commit/22ab2a7622df89d08f229decf9c68b4b1c484934))
+
+- **staking**: Follow the CON-471 ValidatorStake.live -> hasUnclaimedRewards rename
+  ([#116](https://github.com/yeagerai/genlayer-py/pull/116),
+  [`fd8a931`](https://github.com/yeagerai/genlayer-py/commit/fd8a9311a2370e4fe6b8194e361112b5d153cfed))
+
+
 ## v0.19.0-rc.2 (2026-09-03)
 
 ### Bug Fixes

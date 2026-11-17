@@ -19,7 +19,7 @@ class TestBradburyConfig:
     """Verify Bradbury chain configuration values."""
 
     def test_rpc_url(self):
-        assert TESTNET_JSON_RPC_URL == "https://rpc-bradbury.genlayer.com"
+        assert TESTNET_JSON_RPC_URL == "https://rpc.testnet-chain.genlayer.com"
 
     def test_chain_id(self):
         assert testnet_bradbury.id == 4221
@@ -27,13 +27,13 @@ class TestBradburyConfig:
     def test_consensus_main_address(self):
         assert (
             CONSENSUS_MAIN_CONTRACT["address"]
-            == "0x0112Bf6e83497965A5fdD6Dad1E447a6E004271D"
+            == "0x2E2766cbc3E5e61Ce93bBcdCBb3eAcB82082A019"
         )
 
     def test_consensus_data_address(self):
         assert (
             CONSENSUS_DATA_CONTRACT["address"]
-            == "0x85D7bf947A512Fc640C75327A780c90847267697"
+            == "0xc5FA6f82BEe53598825d6edf7E3e24613082c75B"
         )
 
 
@@ -109,7 +109,7 @@ class TestBradburyTransactionRead:
         client = create_client(chain=testnet_bradbury)
         tx = client.get_transaction(
             transaction_hash=bytes.fromhex(
-                "563f046c187d711127c51213ca62e2e4fee52009a98f0989a73a0a0382d21890"
+                "1ec24f069f8dd00c63e822d1fe969681d9199d5f2268470d9e8a8ed191055564"
             )
         )
         assert tx["tx_execution_result"] in [0, 1, 2, 3, 4, 5]
@@ -134,7 +134,7 @@ class TestBradburyTransactionRead:
         client = create_client(chain=testnet_bradbury)
         tx = client.get_transaction(
             transaction_hash=bytes.fromhex(
-                "563f046c187d711127c51213ca62e2e4fee52009a98f0989a73a0a0382d21890"
+                "1ec24f069f8dd00c63e822d1fe969681d9199d5f2268470d9e8a8ed191055564"
             )
         )
         assert "messages" in tx
@@ -145,7 +145,7 @@ class TestBradburyTransactionRead:
         client = create_client(chain=testnet_bradbury)
         result = client.get_triggered_transaction_ids(
             transaction_hash=bytes.fromhex(
-                "563f046c187d711127c51213ca62e2e4fee52009a98f0989a73a0a0382d21890"
+                "1ec24f069f8dd00c63e822d1fe969681d9199d5f2268470d9e8a8ed191055564"
             )
         )
         assert isinstance(result, list)

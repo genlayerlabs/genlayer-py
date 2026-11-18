@@ -39,6 +39,16 @@ client = create_client(chain=studio_devnet)
 `studio_devnet` targets `https://studio-dev.genlayer.com/api` (chain ID 61997).
 The existing `studionet` preset remains pinned to the stable hosted Studio.
 
+For a hosted Studio with its own chain ID, copy a Studio preset with that ID.
+The copy keeps `is_studio=True`, so Studio-only helpers keep working:
+
+```python
+import dataclasses
+
+chain = dataclasses.replace(studio_devnet, id=61998)
+client = create_client(chain=chain, endpoint="https://<your-studio>/api")
+```
+
 Here’s how to initialize the client and connect to the GenLayer Simulator:
 
 ### Reading a Transaction

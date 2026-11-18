@@ -9,24 +9,25 @@ from genlayer_py.consensus.abi import (
     CONSENSUS_MAIN_ABI,
     CONSENSUS_DATA_ABI,
 )
+from genlayer_py.staking.abi import STAKING_ABI
 
-TESTNET_JSON_RPC_URL = "https://rpc-bradbury.genlayer.com"
-EXPLORER_URL = "https://explorer-bradbury.genlayer.com/"
+TESTNET_JSON_RPC_URL = "https://rpc.testnet-chain.genlayer.com"
+EXPLORER_URL = "https://scan.testnet-chain.genlayer.com"
 
 CONSENSUS_MAIN_CONTRACT: ContractInfo = {
-    "address": "0x0112Bf6e83497965A5fdD6Dad1E447a6E004271D",
+    "address": "0x2E2766cbc3E5e61Ce93bBcdCBb3eAcB82082A019",
     "abi": CONSENSUS_MAIN_ABI,
     "bytecode": "",
 }
 
 CONSENSUS_DATA_CONTRACT: ContractInfo = {
-    "address": "0x85D7bf947A512Fc640C75327A780c90847267697",
+    "address": "0xc5FA6f82BEe53598825d6edf7E3e24613082c75B",
     "abi": CONSENSUS_DATA_ABI,
     "bytecode": "",
 }
 
 FEE_MANAGER_CONTRACT: SimpleContractInfo = {
-    "address": "0xF205868bf5db79d2162843742D18D0900A9E462a",
+    "address": "0x7678587A847712f2A96082AC07883A88D0fc7245",
     "abi": [
         {
             "type": "function",
@@ -43,7 +44,7 @@ FEE_MANAGER_CONTRACT: SimpleContractInfo = {
 }
 
 ROUNDS_STORAGE_CONTRACT: SimpleContractInfo = {
-    "address": "0x7134D05af13A14c0b66Fe129fb930b1d0C420e33",
+    "address": "0x4038d4F72C7aAbA5a442cC0dA946012B9E3f4B8a",
     "abi": [
         {
             "type": "function",
@@ -110,8 +111,13 @@ ROUNDS_STORAGE_CONTRACT: SimpleContractInfo = {
 }
 
 APPEALS_CONTRACT: SimpleContractInfo = {
-    "address": "0xbb8C35AA878D09b9830aFF9e5aAC6492BFbd5471",
+    "address": "0xdc953c3bCf8837987853ca05a78D52fFC3E18651",
     "abi": APPEALS_ABI,
+}
+
+STAKING_CONTRACT: SimpleContractInfo = {
+    "address": "0xD8fBa96C0dBB0257028dBc0107060b958e5c7113",
+    "abi": STAKING_ABI,
 }
 
 
@@ -134,7 +140,7 @@ testnet_bradbury: GenLayerChain = GenLayerChain(
     fee_manager_contract=FEE_MANAGER_CONTRACT,
     rounds_storage_contract=ROUNDS_STORAGE_CONTRACT,
     appeals_contract=APPEALS_CONTRACT,
-    staking_contract=None,
+    staking_contract=STAKING_CONTRACT,
     default_number_of_initial_validators=5,
     default_consensus_max_rotations=3,
 )

@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 from genlayer_py import create_client, create_account
 from genlayer_py.chains import localnet, studionet, testnet_asimov
-from genlayer_py.types import TransactionStatus, GenLayerTransaction
+from genlayer_py.types import GenLayerTransaction
 from genlayer_py.client import GenLayerClient
 from genlayer_py.assertions import tx_execution_succeeded
 
@@ -24,7 +24,7 @@ def wait_for_triggered_transactions(
     for triggered_transaction in tx_receipt["triggered_transactions"]:
         client.wait_for_transaction_receipt(
             transaction_hash=triggered_transaction,
-            status=TransactionStatus.FINALIZED,
+            wait_until="finalized",
         )
 
 
@@ -110,7 +110,7 @@ def test_multi_tenant_storage(chain_config):
     # Wait for first storage deployment
     first_storage_wait_kwargs = {
         "transaction_hash": first_storage_deploy_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         first_storage_wait_kwargs["retries"] = chain_config["retries"]
@@ -133,7 +133,7 @@ def test_multi_tenant_storage(chain_config):
     # Wait for second storage deployment
     second_storage_wait_kwargs = {
         "transaction_hash": second_storage_deploy_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         second_storage_wait_kwargs["retries"] = chain_config["retries"]
@@ -158,7 +158,7 @@ def test_multi_tenant_storage(chain_config):
     # Wait for multi-tenant storage deployment
     multi_tenant_storage_wait_kwargs = {
         "transaction_hash": multi_tenant_storage_deploy_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         multi_tenant_storage_wait_kwargs["retries"] = chain_config["retries"]
@@ -185,7 +185,7 @@ def test_multi_tenant_storage(chain_config):
     # Wait for update_storage transaction
     update_storage_a_wait_kwargs = {
         "transaction_hash": update_storage_a_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         update_storage_a_wait_kwargs["retries"] = chain_config["retries"]
@@ -207,7 +207,7 @@ def test_multi_tenant_storage(chain_config):
     # Wait for update_storage transaction
     update_storage_b_wait_kwargs = {
         "transaction_hash": update_storage_b_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         update_storage_b_wait_kwargs["retries"] = chain_config["retries"]

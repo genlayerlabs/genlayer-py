@@ -14,9 +14,17 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 def clean_readme(content):
     lines = content.split("\n")
-    lines = [l for l in lines if not re.match(r'^\[!\[.*\]\(https://(img\.shields\.io|dcbadge|badge\.fury)', l)]
+    lines = [
+        l
+        for l in lines
+        if not re.match(
+            r"^\[!\[.*\]\(https://(img\.shields\.io|dcbadge|badge\.fury)", l
+        )
+    ]
     content = "\n".join(lines)
-    content = re.sub(r'(## )\S*[\U0001F000-\U0001FFFF\u2600-\u27BF\u200d]+\s*', r'\1', content)
+    content = re.sub(
+        r"(## )\S*[\U0001F000-\U0001FFFF\u2600-\u27BF\u200d]+\s*", r"\1", content
+    )
     return content
 
 
@@ -26,7 +34,12 @@ def format_type(annotation):
     name = getattr(annotation, "__name__", None)
     if name:
         return name
-    return str(annotation).replace("typing.", "").replace("ForwardRef('", "").replace("')", "")
+    return (
+        str(annotation)
+        .replace("typing.", "")
+        .replace("ForwardRef('", "")
+        .replace("')", "")
+    )
 
 
 def generate_method_doc(name, method):
@@ -63,7 +76,9 @@ def generate_method_doc(name, method):
             req_str = "yes" if required else "no"
             type_display = f"`{type_str}`" if type_str else ""
             default_display = default.lstrip(" = ") if default else ""
-            lines.append(f"| {pname} | {type_display} | {req_str} | {default_display} |")
+            lines.append(
+                f"| {pname} | {type_display} | {req_str} | {default_display} |"
+            )
         lines.append("")
 
     if ret:
@@ -86,7 +101,9 @@ def generate_enum_doc(name, enum_class):
 def main():
     from genlayer_py.client.genlayer_client import GenLayerClient
     from genlayer_py.types.transactions import (
-        TransactionStatus, TransactionResult, ExecutionResult, VoteType,
+        ExecutionResult,
+        TransactionResult,
+        VoteType,
     )
 
     output_dir = os.path.join(os.path.dirname(__file__), "..", "docs", "api-references")
@@ -103,11 +120,29 @@ def main():
     lines.append(f"{client_doc}\n")
 
     public_methods = [
-        "fund_account", "get_current_nonce", "initialize_consensus_smart_contract",
-        "read_contract", "write_contract", "simulate_write_contract", "deploy_contract",
-        "get_contract_schema", "get_contract_schema_for_code", "appeal_transaction",
-        "wait_for_transaction_receipt", "get_transaction",
-        "get_triggered_transaction_ids", "debug_trace_transaction",
+        "fund_account",
+        "get_current_nonce",
+        "initialize_consensus_smart_contract",
+        "read_contract",
+        "write_contract",
+        "simulate_write_contract",
+        "deploy_contract",
+        "get_contract_schema",
+        "get_contract_schema_for_code",
+        "appeal_transaction",
+        "top_up_fees",
+        "top_up_and_submit_appeal",
+        "can_appeal",
+        "get_appeal_quote",
+        "get_appeal_charge",
+        "get_min_appeal_bond",
+        "wait_for_decision",
+        "wait_for_finalization",
+        "wait_for_transaction_receipt",
+        "get_transaction",
+        "get_transaction_lifecycle",
+        "get_triggered_transaction_ids",
+        "debug_trace_transaction",
     ]
     for name in public_methods:
         method = getattr(GenLayerClient, name, None)
@@ -117,7 +152,6 @@ def main():
     # Enums
     lines.append("## Types and Enums\n")
     for name, enum_class in [
-        ("TransactionStatus", TransactionStatus),
         ("TransactionResult", TransactionResult),
         ("ExecutionResult", ExecutionResult),
         ("VoteType", VoteType),

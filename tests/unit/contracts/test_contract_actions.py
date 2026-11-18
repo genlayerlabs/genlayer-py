@@ -1,3 +1,4 @@
+import dataclasses
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -1795,6 +1796,40 @@ def test_estimate_transaction_fees_for_write_uses_studio_estimate_rpc():
     assert estimate["distribution"]["rotations"] == [0]
     assert estimate["messageAllocations"][0]["budget"] == 110
     assert estimate["feeValue"] == 100_011_110
+
+
+def test_estimate_transaction_fees_for_write_accepts_studio_preset_with_custom_chain_id():
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client.chain = dataclasses.replace(studio_devnet, id=61998)
+    client.provider = SimpleNamespace(
+        make_request=Mock(side_effect=RuntimeError("stop after the Studio guard"))
+    )
+
+    # Reaching the Studio fee-config RPC proves the Studio-only guard passed.
+    with pytest.raises(GenLayerError, match="Fee policy estimation"):
+        contract_actions.estimate_transaction_fees_for_write(
+            self=client,
+            address=RECIPIENT,
+            function_name="update_storage",
+            args=["after"],
+        )
+    client.provider.make_request.assert_called_once_with(
+        method="sim_getFeeConfig", params=[]
+    )
+
+
+def test_estimate_transaction_fees_for_write_rejects_unknown_chain_without_flag():
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=61998)
+    client.provider = SimpleNamespace(make_request=Mock())
+
+    with pytest.raises(GenLayerError, match="only supported on Studio networks"):
+        contract_actions.estimate_transaction_fees_for_write(
+            self=client,
+            address=RECIPIENT,
+            function_name="update_storage",
+            args=["after"],
+        )
+    client.provider.make_request.assert_not_called()
 
 
 def test_estimate_transaction_fees_from_simulation_preserves_mode2_allocations():

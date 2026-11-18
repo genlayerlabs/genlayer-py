@@ -16,7 +16,7 @@ CONSENSUS_DATA_CONTRACT = {
 }
 
 localnet: GenLayerChain = GenLayerChain(
-    id=61999,
+    id=61127,
     name="GenLayer Localnet",
     rpc_urls={
         "default": {
@@ -36,4 +36,5 @@ localnet: GenLayerChain = GenLayerChain(
     staking_contract=None,
     default_number_of_initial_validators=5,
     default_consensus_max_rotations=3,
+    is_studio=True,
 )

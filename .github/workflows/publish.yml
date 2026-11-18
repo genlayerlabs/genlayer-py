@@ -1,17 +1,19 @@
 name: Publish Package to PyPI
 
 # Tag-driven publish. The release is cut by a human (or Claude via the
-# release skill) running scripts/release.sh on the target stable branch
+# release skill) running scripts/release.sh on the owning version branch
 # — that script bumps pyproject.toml, updates CHANGELOG.md, commits,
 # tags vX.Y.Z, and pushes both the branch commit and the tag. This
 # workflow fires on the tag push, runs tests, sanity-checks the tag
 # matches pyproject.toml, builds, and publishes to PyPI. It never
 # bumps or tags by itself.
 on:
-  workflow_dispatch:
   push:
     tags:
-      - "v*"
+      - "v*.*.*"
+
+permissions:
+  contents: write
 
 jobs:
   run-tests:
@@ -33,16 +35,22 @@ jobs:
       - name: Install Python
         run: uv python install 3.12
 
-      - name: Verify tag matches pyproject.toml version
+      - name: Verify tag, package version, and owning branch
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           PKG_VERSION="$(grep -E '^version = ' pyproject.toml | head -1 | sed -E 's/version = "([^"]+)"/\1/')"
-          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "Tag ($TAG_VERSION) and pyproject.toml ($PKG_VERSION) disagree — refusing to publish." >&2
-            echo "Re-cut the release via scripts/release.sh so the tag and the committed version match." >&2
+          NORMALIZED_VERSION="$(python scripts/release_version.py verify-tag "$TAG_VERSION" "$PKG_VERSION")"
+          EXPECTED_BRANCH="$(python scripts/release_version.py branch "$TAG_VERSION")"
+          git fetch --no-tags origin \
+            "refs/heads/$EXPECTED_BRANCH:refs/remotes/origin/$EXPECTED_BRANCH"
+          TAG_COMMIT="$(git rev-parse "${GITHUB_REF_NAME}^{commit}")"
+          BRANCH_HEAD="$(git rev-parse "origin/$EXPECTED_BRANCH")"
+          if [ "$TAG_COMMIT" != "$BRANCH_HEAD" ]; then
+            echo "Tag $GITHUB_REF_NAME points to $TAG_COMMIT, but $EXPECTED_BRANCH is at $BRANCH_HEAD." >&2
+            echo "Re-cut the release from the current owning branch head via scripts/release.sh." >&2
             exit 1
           fi
-          echo "Tag $GITHUB_REF_NAME matches pyproject.toml $PKG_VERSION."
+          echo "Tag $GITHUB_REF_NAME matches package $NORMALIZED_VERSION and $EXPECTED_BRANCH@$BRANCH_HEAD."
 
       - name: Clean previous builds
         run: rm -rf -- dist build *.egg-info
@@ -63,6 +71,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          RELEASE_FLAGS=()
+          if [ "$(python scripts/release_version.py is-prerelease "$GITHUB_REF_NAME")" = "true" ]; then
+            RELEASE_FLAGS+=(--prerelease)
+          fi
           NOTES="$(awk -v ver="$GITHUB_REF_NAME" '
             $0 ~ "^## \\[?" substr(ver, 2) {capture=1; next}
             capture && /^## / {exit}
@@ -73,4 +85,5 @@ jobs:
           fi
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
-            --notes "$NOTES"
+            --notes "$NOTES" \
+            "${RELEASE_FLAGS[@]}"

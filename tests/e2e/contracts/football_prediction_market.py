@@ -1,12 +1,13 @@
 # { "Depends": "py-genlayer:test" }
 
-from genlayer import *
+import genlayer as gl
+from genlayer.types import *
 
 import json
 import typing
 
 
-class PredictionMarket(gl.Contract):
+class PredictionMarket(gl.contract.Contract):
     has_resolved: bool
     team1: str
     team2: str
@@ -50,7 +51,7 @@ class PredictionMarket(gl.Contract):
         team2 = self.team2
 
         def get_match_result() -> str:
-            web_data = gl.get_webpage(market_resolution_url, mode="text")
+            web_data = gl.nondet.web.render(market_resolution_url, mode="text")
             print(web_data)
 
             task = f"""
@@ -75,11 +76,11 @@ nothing else. Don't include any other words or characters,
 your output must be only JSON without any formatting prefix or suffix.
 This result should be perfectly parsable by a JSON parser without errors.
             """
-            result = gl.exec_prompt(task).replace("```json", "").replace("```", "")
+            result = gl.nondet.exec_prompt(task).replace("```json", "").replace("```", "")
             print(result)
             return json.dumps(json.loads(result), sort_keys=True)
 
-        result_json = json.loads(gl.eq_principle_strict_eq(get_match_result))
+        result_json = json.loads(gl.eq_principle.strict_eq(get_match_result))
 
         if result_json["winner"] > -1:
             self.has_resolved = True

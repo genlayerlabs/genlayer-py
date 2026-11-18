@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 
 from genlayer_py import create_client, create_account
 from genlayer_py.chains import localnet, studionet, testnet_asimov
-from genlayer_py.types import TransactionStatus
 from genlayer_py.assertions import tx_execution_succeeded
 
 # Load environment variables from .env file
@@ -69,7 +68,7 @@ def test_log_indexer(chain_config):
     # Wait for transaction with retries if specified
     wait_kwargs = {
         "transaction_hash": deploy_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         wait_kwargs["retries"] = chain_config["retries"]
@@ -102,7 +101,7 @@ def test_log_indexer(chain_config):
     # Wait for add_log transaction
     add_log_0_wait_kwargs = {
         "transaction_hash": add_log_0_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         add_log_0_wait_kwargs["retries"] = chain_config["retries"]
@@ -130,7 +129,7 @@ def test_log_indexer(chain_config):
     # Wait for add_log transaction
     add_log_1_wait_kwargs = {
         "transaction_hash": add_log_1_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         add_log_1_wait_kwargs["retries"] = chain_config["retries"]
@@ -157,7 +156,7 @@ def test_log_indexer(chain_config):
     # Wait for update_log transaction
     update_log_0_wait_kwargs = {
         "transaction_hash": update_log_0_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         update_log_0_wait_kwargs["retries"] = chain_config["retries"]
@@ -187,7 +186,7 @@ def test_log_indexer(chain_config):
     # Wait for remove_log transaction
     remove_log_0_wait_kwargs = {
         "transaction_hash": remove_log_0_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         remove_log_0_wait_kwargs["retries"] = chain_config["retries"]
@@ -216,7 +215,7 @@ def test_log_indexer(chain_config):
     # Wait for add_log transaction
     add_log_2_wait_kwargs = {
         "transaction_hash": add_log_2_tx_hash,
-        "status": TransactionStatus.FINALIZED,
+        "wait_until": "finalized",
     }
     if chain_config["retries"]:
         add_log_2_wait_kwargs["retries"] = chain_config["retries"]

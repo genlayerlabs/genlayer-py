@@ -751,9 +751,12 @@ def _decode_triggered_txs(
     if not accepted and state != "finalized":
         return []
 
+    # hexbytes>=1 drops the 0x prefix from .hex(); geth-style RPCs reject that.
     event_hashes_by_status = {
-        "finalized": self.w3.keccak(text="TransactionFinalized(bytes32)").hex(),
-        "accepted": self.w3.keccak(text="TransactionAccepted(bytes32)").hex(),
+        "finalized": self.w3.to_hex(
+            self.w3.keccak(text="TransactionFinalized(bytes32)")
+        ),
+        "accepted": self.w3.to_hex(self.w3.keccak(text="TransactionAccepted(bytes32)")),
     }
 
     def process_events_for_status(
@@ -776,7 +779,7 @@ def _decode_triggered_txs(
         if not logs:
             return []
 
-        tx_hash = logs[0]["transactionHash"].hex()
+        tx_hash = self.w3.to_hex(logs[0]["transactionHash"])
         tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
 
         consensus_main_contract = self.w3.eth.contract(

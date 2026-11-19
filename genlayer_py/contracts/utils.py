@@ -1,17 +1,4 @@
-from typing import Optional, List, Dict
-from genlayer_py.types import CalldataEncodable
+# Kept for backwards compatibility; the helper lives with the calldata codec.
+from genlayer_py.abi.calldata.calldata_object import make_calldata_object
 
-
-def make_calldata_object(
-    method: Optional[str] = None,
-    args: Optional[List[CalldataEncodable]] = None,
-    kwargs: Optional[Dict[str, CalldataEncodable]] = None,
-) -> CalldataEncodable:
-    ret: Dict[str, CalldataEncodable] = {}
-    if method is not None:
-        ret[""] = method
-    if args is not None and len(args) > 0:
-        ret["args"] = args
-    if kwargs is not None and isinstance(kwargs, dict) and kwargs:
-        ret["kwargs"] = kwargs
-    return ret
+__all__ = ["make_calldata_object"]

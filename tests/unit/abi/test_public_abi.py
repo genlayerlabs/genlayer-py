@@ -51,3 +51,22 @@ def test_transactions_serialize_is_rlp_hex():
         abi.transactions.serialize([b"a", b"bc"])
         == "0x" + rlp.encode([b"a", b"bc"]).hex()
     )
+
+
+def test_make_calldata_object_legacy_path_is_same_function():
+    from genlayer_py.contracts.utils import make_calldata_object
+
+    assert make_calldata_object is abi.calldata.make_calldata_object
+
+
+def test_abi_package_does_not_import_contracts_package():
+    # Keep the dependency one-way: contracts -> abi, never abi -> contracts.
+    from pathlib import Path
+
+    abi_dir = Path(abi.__file__).parent
+    offenders = [
+        str(path.relative_to(abi_dir))
+        for path in abi_dir.rglob("*.py")
+        if "genlayer_py.contracts" in path.read_text()
+    ]
+    assert offenders == []

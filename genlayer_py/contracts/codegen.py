@@ -60,7 +60,6 @@ class _Types:
                     key.startswith("$") and not key.startswith("$$")
                 ):
                     raise ValueError(f"Unsupported schema field: {key!r}")
-                key = key[1:] if key.startswith("$$") else key
                 fields.append(f"{key!r}: {self.render(value)}")
             name = f"_Record{len(self.records) + 1}"
             self.records.append(
@@ -78,15 +77,17 @@ class _Types:
 
 
 def generate_contract_types(
-    schema: ContractSchema, class_name: str = "Contract"
+    schema: ContractSchema, class_name: str = "Contract", *, strict: bool = False
 ) -> str:
     """Return Python source for a typed read-only contract binding.
 
     Write the result to a ``.py`` module and import its generated class. Bind it
     to a client and contract address, then call view methods directly. Return
     values retain the SDK's decoded representation; no runtime validation or
-    conversion is performed. Unsupported types or unsafe identifiers raise
-    ``ValueError``. Write methods and deployment remain on the existing client.
+    conversion is performed. Unsupported method/parameter names skip that method
+    with a source comment; ``strict=True`` instead raises ``ValueError``. Invalid
+    class names and unsupported types always raise ``ValueError``. Write methods
+    and deployment remain on the existing client.
     """
     _identifier(class_name)
     types = _Types()
@@ -95,11 +96,17 @@ def generate_contract_types(
     for name, method in sorted(schema["methods"].items()):
         if not method["readonly"]:
             continue
-        _identifier(name)
         params = method["params"]
         kwparams = method["kwparams"]
-        names = [_identifier(param[0]) for param in params]
-        kwnames = [_identifier(key) for key in sorted(kwparams)]
+        try:
+            _identifier(name)
+            names = [_identifier(param[0]) for param in params]
+            kwnames = [_identifier(key) for key in sorted(kwparams)]
+        except ValueError as error:
+            if strict:
+                raise
+            methods.append(f"    # Skipped method {ascii(name)}: {ascii(str(error))}\n")
+            continue
         if len(set(names + kwnames)) != len(names + kwnames):
             raise ValueError(f"Duplicate parameters in {name!r}")
         signature = ["_binding"]

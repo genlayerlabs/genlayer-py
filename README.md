@@ -461,8 +461,29 @@ validation or conversion and use the client's default read options. Use
 `client.read_contract` directly for custom read options. Writes and deployment
 continue to use the existing client API. Schema defaults are not available, so
 all generated arguments are required. Class, method and parameter names must be
-ASCII Python identifiers without a leading underscore; unsupported names or
-schema types raise `ValueError`. Regenerate the module when the schema changes.
+ASCII Python identifiers without a leading underscore. A method with an unsupported
+name or parameter name is skipped with a diagnostic comment in the generated
+source; use `generate_contract_types(schema, strict=True)` to raise `ValueError`
+instead. Invalid class names and unsupported schema types always raise
+`ValueError`. Regenerate the module when the schema changes.
+
+Record field names are preserved literally, including any `$$` prefix. GenVM
+[emits dataclass record fields without escaping](https://github.com/genlayerlabs/genvm/blob/abb71bf891695b737e6a4f5211f4740a3b25543d/runners/genlayer-py-std/src/genlayer/_internal/get_schema.py#L83);
+its `_escape_dict_prop` helper is used for keyword parameter names, not record
+fields. The generator does not infer a record-key unescaping convention.
+
+### Validating generated types
+
+The normal unit suite is offline: `uv run pytest tests/unit -m "not testnet"`.
+Wheel installation and strict mypy checks are opt-in:
+
+```sh
+uv run pytest tests/packaging -m packaging
+```
+
+This check requires `uv` and network access for the isolated wheel/mypy install.
+It fails if `uv` is absent; it does not silently skip. Default pytest runs exclude
+`packaging` tests.
 
 ## 🚀 Key Features
 

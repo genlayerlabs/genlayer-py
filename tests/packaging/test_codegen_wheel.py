@@ -8,9 +8,10 @@ import sys
 import pytest
 
 
-@pytest.mark.skipif(shutil.which("uv") is None, reason="Wheel check requires uv")
+@pytest.mark.packaging
 def test_generated_types_from_installed_wheel(tmp_path):
-    repository = Path(__file__).resolve().parents[3]
+    assert shutil.which("uv"), "Packaging checks require uv; install it before running"
+    repository = Path(__file__).resolve().parents[2]
     subprocess.run(
         ["uv", "build", "--out-dir", str(tmp_path)], cwd=repository, check=True
     )

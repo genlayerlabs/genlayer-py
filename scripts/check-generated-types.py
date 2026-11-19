@@ -1,7 +1,7 @@
 """Check generated bindings against the installed wheel, outside the source tree.
 
 Run with an isolated environment containing the built wheel and mypy.
-The unit suite invokes this through test_codegen_wheel.py.
+Run explicitly with: uv run pytest tests/packaging -m packaging
 """
 
 from pathlib import Path

@@ -64,13 +64,13 @@ def test_types(tmp_path, value, expected):
     )
 
 
-def test_nested_records_and_escaped_fields(tmp_path):
+def test_nested_records_preserve_literal_fields(tmp_path):
     module = load_binding(
         tmp_path,
         generate_contract_types(schema({"user": {"name": "string"}, "$$value": "int"})),
     )
     fields = get_type_hints(module.Contract_read_Result)
-    assert fields["$value"] is int
+    assert fields["$$value"] is int
     assert get_type_hints(fields["user"]) == {"name": str}
 
 
@@ -101,11 +101,11 @@ def test_unsafe_names(name):
     with pytest.raises(ValueError):
         generate_contract_types(schema("int"), name)
     with pytest.raises(ValueError):
-        generate_contract_types(schema("int", [[name, "int"]]))
+        generate_contract_types(schema("int", [[name, "int"]]), strict=True)
     data = schema("int")
     data["methods"][name] = data["methods"].pop("read")
     with pytest.raises(ValueError):
-        generate_contract_types(data)
+        generate_contract_types(data, strict=True)
 
 
 def test_duplicate_parameters():
@@ -148,3 +148,27 @@ def test_parameter_does_not_shadow_result_alias(tmp_path):
     client = Mock()
     client.read_contract.return_value = 42
     assert module.Contract(client, "0x123").read(1) == 42
+
+
+@pytest.mark.parametrize(
+    "name", ["class", "_hidden", "bad-name", "x\nraise RuntimeError()"]
+)
+@pytest.mark.parametrize("location", ["method", "positional", "keyword"])
+def test_unsupported_name_skips_only_affected_method(tmp_path, name, location):
+    data = schema("int")
+    method = {"readonly": True, "params": [], "kwparams": {}, "ret": "int"}
+    if location == "method":
+        data["methods"][name] = method
+    else:
+        data["methods"]["unsupported"] = method
+        if location == "positional":
+            method["params"] = [[name, "int"]]
+        else:
+            method["kwparams"] = {name: "int"}
+    source = generate_contract_types(data)
+    module = load_binding(tmp_path, source)
+    assert "# Skipped method" in source
+    assert hasattr(module.Contract, "read")
+    assert not hasattr(module.Contract, name if location == "method" else "unsupported")
+    with pytest.raises(ValueError):
+        generate_contract_types(data, strict=True)

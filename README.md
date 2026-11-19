@@ -443,3 +443,45 @@ We welcome contributions to GenLayerPY SDK! Whether it's new features, improved 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+### Generate typed contract reads
+
+Generate a Python module from a schema returned by `get_contract_schema` or
+`get_contract_schema_for_code` on a supported Studio network:
+
+```python
+from pathlib import Path
+from genlayer_py import generate_contract_types
+
+schema = client.get_contract_schema(contract_address)
+Path("storage_types.py").write_text(
+    generate_contract_types(schema, class_name="Storage"), encoding="utf-8"
+)
+```
+
+Import the generated module in your application. For example, if the schema
+contains a view method `get_balance(owner: address) -> int`:
+
+```python
+from storage_types import Storage
+from genlayer_py.types import CalldataAddress
+
+storage = Storage(client, contract_address)  # client must have a connected account
+balance: int = storage.get_balance(CalldataAddress(owner_address))
+```
+
+Generated methods have typed positional-only arguments and keyword-only arguments
+matching the schema. Each view method exports a `<Class>_<method>_Result` type
+alias. Structured results use `TypedDict`, so editors can check dictionary keys
+and their types. Nested records, unions, dictionaries and arrays are supported;
+addresses use `CalldataAddress`. Fixed-length arrays are typed as lists of the
+union of their element types, matching the SDK decoder, without enforcing length.
+
+Generation is offline and returns source text; it does not write files, execute
+schema code, or make RPC calls. Bindings preserve decoded values without runtime
+validation or conversion and use the client's default read options. Use
+`client.read_contract` directly for custom read options. Writes and deployment
+continue to use the existing client API. Schema defaults are not available, so
+all generated arguments are required. Class, method and parameter names must be
+ASCII Python identifiers without a leading underscore; unsupported names or
+schema types raise `ValueError`. Regenerate the module when the schema changes.

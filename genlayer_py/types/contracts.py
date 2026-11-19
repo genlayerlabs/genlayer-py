@@ -6,7 +6,7 @@ class ContractMethodBase(TypedDict):
     kwparams: Dict[str, Any]
 
 
-class ContractMethod:
+class ContractMethod(ContractMethodBase):
     ret: Any
     readonly: bool
 

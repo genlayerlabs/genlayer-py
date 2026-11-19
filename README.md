@@ -422,28 +422,6 @@ print(abi.calldata.to_str(decoded))       # human-readable form
 abi.transactions.serialize([encoded, False])
 ```
 
-## 🚀 Key Features
-
-* **Client Creation**: Easily create and configure a client to connect to GenLayer’s network.
-* **Transaction Handling**: Send and manage transactions on the GenLayer network.
-* **Gas Estimation**: Estimate gas fees for executing transactions on GenLayer.
-
-_* under development_
-
-
-## 📖 Documentation
-
-For detailed information on how to use GenLayerPY SDK, please refer to our [documentation](https://docs.genlayer.com/api-references/genlayer-py).
-
-
-## Contributing
-
-We welcome contributions to GenLayerPY SDK! Whether it's new features, improved infrastructure, or better documentation, your input is valuable. Please read our [CONTRIBUTING](https://github.com/genlayerlabs/genlayer-py/blob/main/CONTRIBUTING.md) guide for guidelines on how to submit your contributions.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ### Generate typed contract reads
 
 Generate a Python module from a schema returned by `get_contract_schema` or
@@ -485,3 +463,25 @@ continue to use the existing client API. Schema defaults are not available, so
 all generated arguments are required. Class, method and parameter names must be
 ASCII Python identifiers without a leading underscore; unsupported names or
 schema types raise `ValueError`. Regenerate the module when the schema changes.
+
+## 🚀 Key Features
+
+* **Client Creation**: Easily create and configure a client to connect to GenLayer’s network.
+* **Transaction Handling**: Send and manage transactions on the GenLayer network.
+* **Gas Estimation**: Estimate gas fees for executing transactions on GenLayer.
+
+_* under development_
+
+
+## 📖 Documentation
+
+For detailed information on how to use GenLayerPY SDK, please refer to our [documentation](https://docs.genlayer.com/api-references/genlayer-py).
+
+
+## Contributing
+
+We welcome contributions to GenLayerPY SDK! Whether it's new features, improved infrastructure, or better documentation, your input is valuable. Please read our [CONTRIBUTING](https://github.com/genlayerlabs/genlayer-py/blob/main/CONTRIBUTING.md) guide for guidelines on how to submit your contributions.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

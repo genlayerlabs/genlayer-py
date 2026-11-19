@@ -403,6 +403,25 @@ print(trace["stderr"])        # standard error output
 print(trace["genvm_log"])     # detailed GenVM execution logs
 ```
 
+### Encoding and decoding calldata
+
+The GenVM calldata codec used by the client is available directly through `genlayer_py.abi`:
+
+```python
+from genlayer_py import abi, CalldataAddress
+
+payload = abi.calldata.make_calldata_object(
+    method="transfer",
+    args=[CalldataAddress("0x1111111111111111111111111111111111111111"), 10],
+)
+encoded = abi.calldata.encode(payload)    # bytes
+decoded = abi.calldata.decode(encoded)    # back to Python values
+print(abi.calldata.to_str(decoded))       # human-readable form
+
+# RLP-serialize transaction payloads (returns a 0x-prefixed hex string)
+abi.transactions.serialize([encoded, False])
+```
+
 ## 🚀 Key Features
 
 * **Client Creation**: Easily create and configure a client to connect to GenLayer’s network.

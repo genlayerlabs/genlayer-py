@@ -422,6 +422,69 @@ print(abi.calldata.to_str(decoded))       # human-readable form
 abi.transactions.serialize([encoded, False])
 ```
 
+### Generate typed contract reads
+
+Generate a Python module from a schema returned by `get_contract_schema` or
+`get_contract_schema_for_code` on a supported Studio network:
+
+```python
+from pathlib import Path
+from genlayer_py import generate_contract_types
+
+schema = client.get_contract_schema(contract_address)
+Path("storage_types.py").write_text(
+    generate_contract_types(schema, class_name="Storage"), encoding="utf-8"
+)
+```
+
+Import the generated module in your application. For example, if the schema
+contains a view method `get_balance(owner: address) -> int`:
+
+```python
+from storage_types import Storage
+from genlayer_py.types import CalldataAddress
+
+storage = Storage(client, contract_address)  # client must have a connected account
+balance: int = storage.get_balance(CalldataAddress(owner_address))
+```
+
+Generated methods have typed positional-only arguments and keyword-only arguments
+matching the schema. Each view method exports a `<Class>_<method>_Result` type
+alias. Structured results use `TypedDict`, so editors can check dictionary keys
+and their types. Nested records, unions, dictionaries and arrays are supported;
+addresses use `CalldataAddress`. Fixed-length arrays are typed as lists of the
+union of their element types, matching the SDK decoder, without enforcing length.
+
+Generation is offline and returns source text; it does not write files, execute
+schema code, or make RPC calls. Bindings preserve decoded values without runtime
+validation or conversion and use the client's default read options. Use
+`client.read_contract` directly for custom read options. Writes and deployment
+continue to use the existing client API. Schema defaults are not available, so
+all generated arguments are required. Class, method and parameter names must be
+ASCII Python identifiers without a leading underscore. A method with an unsupported
+name or parameter name is skipped with a diagnostic comment in the generated
+source; use `generate_contract_types(schema, strict=True)` to raise `ValueError`
+instead. Invalid class names and unsupported schema types always raise
+`ValueError`. Regenerate the module when the schema changes.
+
+Record field names are preserved literally, including any `$$` prefix. GenVM
+[emits dataclass record fields without escaping](https://github.com/genlayerlabs/genvm/blob/abb71bf891695b737e6a4f5211f4740a3b25543d/runners/genlayer-py-std/src/genlayer/_internal/get_schema.py#L83);
+its `_escape_dict_prop` helper is used for keyword parameter names, not record
+fields. The generator does not infer a record-key unescaping convention.
+
+### Validating generated types
+
+The normal unit suite is offline: `uv run pytest tests/unit -m "not testnet"`.
+Wheel installation and strict mypy checks are opt-in:
+
+```sh
+uv run pytest tests/packaging -m packaging
+```
+
+This check requires `uv` and network access for the isolated wheel/mypy install.
+It fails if `uv` is absent; it does not silently skip. Default pytest runs exclude
+`packaging` tests.
+
 ## 🚀 Key Features
 
 * **Client Creation**: Easily create and configure a client to connect to GenLayer’s network.

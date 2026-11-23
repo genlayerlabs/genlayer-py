@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v0.19.0 (2026-11-23)
+
+### Bug Fixes
+
+- **chains**: Detect Studio networks by flag so custom chain ids work
+  ([#122](https://github.com/genlayerlabs/genlayer-py/pull/122),
+  [`0c18daa`](https://github.com/genlayerlabs/genlayer-py/commit/0c18daad07b9aac7c9cf7a2a422d9d1af824a138))
+
+- **chains**: Point testnet_bradbury at the Bradbury Phase 2 contracts
+  ([#121](https://github.com/genlayerlabs/genlayer-py/pull/121),
+  [`753f0e1`](https://github.com/genlayerlabs/genlayer-py/commit/753f0e177df2cb35fb8e302425653157b1effe8d))
+
+- **transactions**: Send 0x-prefixed topics when reading triggered transactions
+  ([#121](https://github.com/genlayerlabs/genlayer-py/pull/121),
+  [`753f0e1`](https://github.com/genlayerlabs/genlayer-py/commit/753f0e177df2cb35fb8e302425653157b1effe8d))
+
+
 ## v0.19.0-rc.3 (2026-11-10)
 
 ### Bug Fixes

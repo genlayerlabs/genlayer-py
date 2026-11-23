@@ -32,7 +32,7 @@ SIMPLIFIED_WRITE_TRANSACTION_DATA = {
                     "stake": 1,
                 },
                 "calldata": {
-                    "readable": '{"args":["Can you please give me your coin ?"],"method":"ask_for_coin"}'
+                    "readable": '{"":"ask_for_coin","args":["Can you please give me your coin ?"]}'
                 },
                 "eq_outputs": {
                     "0": {
@@ -66,7 +66,7 @@ SIMPLIFIED_WRITE_TRANSACTION_DATA = {
                     "stake": 1,
                 },
                 "calldata": {
-                    "readable": '{"args":["Can you please give me your coin ?"],"method":"ask_for_coin"}'
+                    "readable": '{"":"ask_for_coin","args":["Can you please give me your coin ?"]}'
                 },
                 "eq_outputs": {},
                 "result": {"status": "return", "payload": {"readable": "null"}},
@@ -169,7 +169,7 @@ SIMPLIFIED_WRITE_TRANSACTION_DATA = {
     "created_at": "2025-07-23T15:24:43.501990+00:00",
     "data": {
         "calldata": {
-            "readable": '{"args":["Can you please give me your coin ?"],"method":"ask_for_coin"}'
+            "readable": '{"":"ask_for_coin","args":["Can you please give me your coin ?"]}'
         }
     },
     "from_address": "0xd650f318A0C1F940a3b6dFeA695747fA9804D685",
@@ -208,10 +208,9 @@ SIMPLIFIED_WRITE_TRANSACTION_DATA = {
     "result": 6,
     "result_name": "MAJORITY_AGREE",
     "sender": "0xd650f318A0C1F940a3b6dFeA695747fA9804D685",
-    "status": 7,
+    "lifecycle": {"state": "finalized", "outcome": "accepted"},
     "to_address": "0xf72aa51B6350C18966923073d3609e1356a3fbBA",
     "tx_id": "0x0ae9327d0d81df24f03cef4dab94571c662c50b09f69dbe29305466aa9529ff6",
     "type": 2,
     "value": 0,
-    "status_name": "FINALIZED",
 }

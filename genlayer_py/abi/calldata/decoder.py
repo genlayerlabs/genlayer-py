@@ -8,11 +8,24 @@ from genlayer_py.exceptions import GenLayerError
 def decode(mem0: Buffer) -> CalldataEncodable:
     mem: memoryview = memoryview(mem0)
 
+    def take(length: int, label: str) -> memoryview:
+        nonlocal mem
+        if len(mem) < length:
+            raise GenLayerError(
+                f"truncated calldata while reading {label}: "
+                f"expected {length} bytes, found {len(mem)}"
+            )
+        result = mem[:length]
+        mem = mem[length:]
+        return result
+
     def read_uleb128() -> int:
         nonlocal mem
         ret = 0
         off = 0
         while True:
+            if len(mem) == 0:
+                raise GenLayerError("unexpected end of calldata while reading ULEB128")
             m = mem[0]
             ret = ret | ((m & 0x7F) << off)
             off += 7
@@ -33,9 +46,7 @@ def decode(mem0: Buffer) -> CalldataEncodable:
             if code == consts.SPECIAL_TRUE:
                 return True
             if code == consts.SPECIAL_ADDR:
-                ret_addr = mem[: CalldataAddress.SIZE]
-                mem = mem[CalldataAddress.SIZE :]
-                return CalldataAddress(ret_addr)
+                return CalldataAddress(take(CalldataAddress.SIZE, "address"))
             raise GenLayerError(f"Unknown special {bin(code)} {hex(code)}")
         code = code >> 3
         if typ == consts.TYPE_PINT:
@@ -43,12 +54,9 @@ def decode(mem0: Buffer) -> CalldataEncodable:
         elif typ == consts.TYPE_NINT:
             return -code - 1
         elif typ == consts.TYPE_BYTES:
-            ret_bytes = mem[:code]
-            mem = mem[code:]
-            return ret_bytes
+            return take(code, "bytes")
         elif typ == consts.TYPE_STR:
-            ret_str = mem[:code]
-            mem = mem[code:]
+            ret_str = take(code, "string")
             return str(ret_str, encoding="utf-8")
         elif typ == consts.TYPE_ARR:
             ret_arr = []
@@ -60,8 +68,7 @@ def decode(mem0: Buffer) -> CalldataEncodable:
             prev = None
             for _i in range(code):
                 le = read_uleb128()
-                key = str(mem[:le], encoding="utf-8")
-                mem = mem[le:]
+                key = str(take(le, "map key"), encoding="utf-8")
                 if prev is not None:
                     assert prev < key
                 prev = key

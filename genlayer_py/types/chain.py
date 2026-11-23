@@ -40,3 +40,4 @@ class GenLayerChain(Chain):
     staking_contract: Optional[SimpleContractInfo]
     default_number_of_initial_validators: int
     default_consensus_max_rotations: int
+    is_studio: bool = False

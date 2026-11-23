@@ -135,7 +135,7 @@ class TestEncoderDecoderRoundTrip:
         assert decoded["recipient_address"].lower() == recipient.lower()
         assert decoded["num_of_initial_validators"] == num_validators
         assert decoded["max_rotations"] == max_rotations
-        assert decoded["tx_data"]["decoded"]["call_data"]["method"] == "my_method"
+        assert decoded["tx_data"]["decoded"]["call_data"][""] == "my_method"
         assert decoded["tx_data"]["decoded"]["leader_only"] is True
         assert decoded["tx_data"]["decoded"]["type"] == "call"
 

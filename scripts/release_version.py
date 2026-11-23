@@ -38,9 +38,17 @@ class ReleaseVersion:
         return self.rc is not None
 
     @property
+    def stable_branch(self) -> str:
+        return f"v{self.major}.{self.minor}"
+
+    @property
+    def dev_branch(self) -> str:
+        return f"{self.stable_branch}-dev"
+
+    @property
     def release_branch(self) -> str:
-        suffix = "-dev" if self.is_prerelease else ""
-        return f"v{self.major}.{self.minor}{suffix}"
+        # Branch whose head the tag must be: dev for RCs, stable for finals.
+        return self.dev_branch if self.is_prerelease else self.stable_branch
 
 
 def parse_release_version(value: str) -> ReleaseVersion:
@@ -73,22 +81,30 @@ def validate_branch_version(branch: str, value: str) -> ReleaseVersion:
             f"not {branch}"
         )
 
-    branch_is_dev = branch_match.group("dev") is not None
-    if branch_is_dev and not version.is_prerelease:
-        raise ValueError(f"final release {version.normalized} must be cut from v{version.major}.{version.minor}")
-    if not branch_is_dev and version.is_prerelease:
+    if branch_match.group("dev") is None:
         raise ValueError(
-            f"release candidate {version.normalized} must be cut from "
-            f"v{version.major}.{version.minor}-dev"
+            f"{version.normalized} must be cut from {version.dev_branch}; "
+            f"{branch} only moves through release.sh --promote"
         )
     return version
+
+
+_RED_CONCLUSIONS = frozenset({"failure", "timed_out", "startup_failure", "action_required"})
+
+
+def runs_verdict(conclusions: list[str]) -> str:
+    """Summarize the workflow runs of one commit: green, red or missing."""
+    if any(conclusion in _RED_CONCLUSIONS for conclusion in conclusions):
+        return "red"
+    return "green" if "success" in conclusions else "missing"
 
 
 def _usage() -> str:
     return (
         "usage: release_version.py normalize <version> | branch <version> | "
+        "dev-branch <version> | stable-branch <version> | "
         "is-prerelease <version> | validate <branch> <version> | "
-        "verify-tag <tag> <package-version>"
+        "verify-tag <tag> <package-version> | runs-verdict [conclusion ...]"
     )
 
 
@@ -99,6 +115,10 @@ def main(argv: list[str]) -> int:
             print(parse_release_version(argv[2]).normalized)
         elif command == "branch" and len(argv) == 3:
             print(parse_release_version(argv[2]).release_branch)
+        elif command == "dev-branch" and len(argv) == 3:
+            print(parse_release_version(argv[2]).dev_branch)
+        elif command == "stable-branch" and len(argv) == 3:
+            print(parse_release_version(argv[2]).stable_branch)
         elif command == "is-prerelease" and len(argv) == 3:
             print("true" if parse_release_version(argv[2]).is_prerelease else "false")
         elif command == "validate" and len(argv) == 4:
@@ -112,6 +132,8 @@ def main(argv: list[str]) -> int:
                     f"version {package_version.normalized}"
                 )
             print(tag_version.normalized)
+        elif command == "runs-verdict":
+            print(runs_verdict(argv[2:]))
         else:
             raise ValueError(_usage())
     except (IndexError, ValueError) as exc:

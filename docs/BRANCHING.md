@@ -41,11 +41,34 @@ When an integration train is ready, open a promotion PR from the integration
 branch to the matching stable branch, for example `v0.19-dev` to `v0.19`.
 
 That promotion PR is the release-readiness gate and must pass required
-cross-repo `E2E Tests`. The final package release is cut from the stable branch
-using a version tag after the stable branch is ready. A release candidate may
-be cut earlier from the matching integration branch; RC tags use
-`vX.Y.Z-rc.N`, publish as PyPI prereleases, and never substitute for the
+cross-repo `E2E Tests`. The stable branch rejects any commit without a green
+`E2E Tests` check, so the final version bump is made on the integration branch
+before promotion, never on the stable branch after it:
+
+1. `scripts/release.sh X.Y.Z` on `vX.Y-dev` pushes the release commit (version,
+   lockfile, `CHANGELOG.md`) to the integration branch, without a tag. It is now
+   the head of the promotion PR.
+2. `Tests` and `E2E Tests` run on that commit.
+3. `scripts/release.sh --promote X.Y.Z` fast-forwards `vX.Y` to that exact
+   commit with a plain push and pushes the annotated tag `vX.Y.Z` on it. The
+   tag push triggers the publish workflow.
+
+The promotion PR is never merged with the merge button. A merge or squash
+commit is a new commit that `E2E Tests` did not run on, and a squash also
+breaks ancestry between the two branches. After the fast-forward GitHub marks
+the PR as merged by itself.
+
+If a fix lands on the integration branch after the release commit, revert the
+release commit and run step 1 again, so the tested commit and the changelog
+include the fix.
+
+A release candidate may be cut earlier from the integration branch with
+`scripts/release.sh X.Y.Z-rc.N`; RC tags use `vX.Y.Z-rc.N`, sit on the
+integration branch, publish as PyPI prereleases, and never substitute for the
 promotion PR's final release gate.
+
+An older stable line that has no integration branch needs one to release:
+create `vX.Y-dev` from `vX.Y`, land the fix there, and follow the same steps.
 
 ## `main`
 

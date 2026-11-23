@@ -45,7 +45,7 @@ Releases are deliberate, not automatic. Every release commit is made on the `*-d
   1. `scripts/release.sh 0.19.1` on `v0.19-dev` pushes the release commit without a tag. That commit is the head of the promotion PR `v0.19-dev` → `v0.19`, so `Tests` and `E2E Tests` run on it. From this push until step 2 is done, nothing else merges into `v0.19-dev`: a commit that lands after the release commit forces a new release commit and a new E2E run.
   2. Once both are green on that commit, `scripts/release.sh --promote 0.19.1` fast-forwards `v0.19` to it with a plain push and tags it.
 
-Only `--promote` lands the promotion PR. Never use the merge button, GitHub auto-merge, the E2E app's merge train (`/merge-train` or its merge action) or the Legatus self-merge loop on it: a merge or squash commit is a commit `E2E Tests` did not run on, and a squash also breaks ancestry between the two branches. The fast-forward closes the PR as merged.
+Only `--promote` lands the promotion PR. Never use the merge button, GitHub auto-merge, the E2E app's merge train (`/merge`, `/merge-train` or its merge action) or the Legatus self-merge loop on it: a merge or squash commit is a commit `E2E Tests` did not run on, and a squash also breaks ancestry between the two branches. The fast-forward closes the PR as merged.
 
 The stable branch only accepts commits that already have a green `E2E Tests` check, which is why the version bump happens on dev before promotion and not on the stable branch after it. `--dry-run` runs the checks of any of these commands without changing anything; options are accepted before or after the version (`scripts/release.sh --dry-run 0.19.1`). See `.claude/skills/release/SKILL.md` for the full flow.
 

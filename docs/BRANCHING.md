@@ -38,6 +38,28 @@ release commits are only made there.
 PRs into integration branches may run `E2E Tests` as advisory checks. They are
 not the release gate.
 
+## Starting a new line
+
+A new line `vX.Y` starts as `vX.Y-dev`, cut from the integration branch of the
+line before it. Two things have to be true before its first final:
+
+- The previous line's final is in its history. Merge the previous stable
+  branch (it carries the final tag, for example `v0.19` with `v0.19.0`) into
+  `vX.Y-dev`, and again if the previous line ships a patch before the new
+  line's first final. The release tool derives the next version from the newest
+  final tag it can reach: without that merge it still computes a version of the
+  previous line, and `scripts/release.sh` refuses the first final.
+- The stable branch `vX.Y` exists (see "Stable Branches").
+
+The first release candidate of the line is forced with a keyword:
+`scripts/release.sh minor --allow-major` gives `X.Y.0-rc.1`. After it, ask for
+the version itself (`X.Y.0-rc.2`, then `X.Y.0`). A keyword counts from the last
+release candidate and would skip a version, which the script refuses.
+
+The line also needs at least one `feat` (or breaking) commit since the previous
+final. With only fixes, history keeps deriving a version of the previous line
+and the script refuses the final `X.Y.0`.
+
 ## Promotion and Release
 
 When an integration train is ready, open a promotion PR from the integration

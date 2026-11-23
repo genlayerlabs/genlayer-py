@@ -366,6 +366,30 @@ EOF
   fi
 fi
 
+# Until this line has a final, versions derive from the previous line's final.
+# shellcheck disable=SC2046
+previous_final="$(helper previous-line-final "$branch" $(git tag -l 'v[0-9]*'))"
+line_base="${branch#v}"
+line_base="${line_base%-dev}.0"
+if [ -n "$previous_final" ] &&
+  ! git rev-parse --verify --quiet "refs/tags/v$line_base" >/dev/null &&
+  ! git merge-base --is-ancestor "refs/tags/v$previous_final^{commit}" HEAD; then
+  if [ "$kind" = "final" ]; then
+    cat >&2 <<EOF
+v$previous_final, the newest final of an earlier line, is not in the history
+of $branch. The first final of this line ($line_base) is derived from it:
+merge that line's stable branch into $branch first (see "Starting a new
+line" in docs/BRANCHING.md).
+EOF
+    exit 1
+  fi
+  cat >&2 <<EOF
+Warning: v$previous_final, the newest final of an earlier line, is not in the
+history of $branch. Merge that line's stable branch into $branch before the
+final $line_base (see "Starting a new line" in docs/BRANCHING.md).
+EOF
+fi
+
 # The empty-array guard keeps bash 3.2 (macOS) working under set -u.
 computed_raw="$("${PSR[@]}" version --print ${release_flags[@]+"${release_flags[@]}"})"
 next_version="$(helper normalize "$computed_raw")" || exit 2
@@ -375,13 +399,37 @@ if [[ -n "${requested_version:-}" && "$requested_version" != "$next_version" ]];
 Requested $requested_version, but the release history and conventional commits
 produce $next_version. Refusing to publish an unexpected version.
 EOF
-  if [ "$kind" = "final" ] && [ "$(helper is-prerelease "$last_version")" = "false" ]; then
+  if [ "$(helper dev-branch "$next_version")" != "$branch" ]; then
+    if [ "$(helper dev-branch "$last_version")" = "$branch" ]; then
+      cat >&2 <<EOF
+No feat or breaking commit landed on $branch since the previous line's final,
+so history still derives a version of that line, and a forced level would count
+past $requested_version. Land the change that opens this line as a feat (or
+breaking) commit, then ask for $requested_version again.
+EOF
+    else
+      forced="minor --allow-major"
+      [ "$kind" = "final" ] && forced="--final $forced"
+      echo "$next_version is not on the line of $branch. The first release of a line is forced with a keyword: $0 $forced" >&2
+    fi
+  elif [ "$kind" = "final" ] && [ "$(helper is-prerelease "$last_version")" = "false" ]; then
     echo "If only chore/ci/docs commits landed, force the level: $0 --final patch" >&2
   fi
   exit 1
 fi
 
 helper validate "$branch" "$next_version" >/dev/null
+
+# A forced level counts from the last release candidate and can jump a version.
+skipped="$(helper predecessor "$next_version")"
+if [ -n "$skipped" ] && ! git rev-parse --verify --quiet "refs/tags/v$skipped" >/dev/null; then
+  cat >&2 <<EOF
+Refusing $next_version: $skipped was never released (no tag v$skipped), so this
+would skip it. Ask for the version itself, for example '$0 $skipped' for
+the final or '$0 $skipped-rc.N' for a release candidate.
+EOF
+  exit 1
+fi
 stable="$(helper stable-branch "$next_version")"
 
 if [ "$last_version" = "$next_version" ]; then
@@ -392,7 +440,15 @@ helper assert-newer "$next_version" "$current_version" "$last_version" >/dev/nul
 
 # A final has to reach the stable branch by fast-forward: catch a diverged
 # stable branch now, before an E2E run is spent on the release commit.
-if git fetch --quiet origin "+refs/heads/$stable:refs/remotes/origin/$stable" 2>/dev/null; then
+# ls-remote exits 2 when the branch is not there; anything else is a failed lookup.
+stable_rc=0
+git ls-remote --exit-code --heads origin "refs/heads/$stable" >/dev/null || stable_rc=$?
+if [ "$stable_rc" -ne 0 ] && [ "$stable_rc" -ne 2 ]; then
+  echo "Could not ask origin whether $stable exists (git's error is above); refusing to release." >&2
+  exit 1
+fi
+if [ "$stable_rc" -eq 0 ]; then
+  git fetch --quiet origin "+refs/heads/$stable:refs/remotes/origin/$stable"
   if ! git merge-base --is-ancestor "origin/$stable" HEAD; then
     if [ "$kind" = "final" ]; then
       cat >&2 <<EOF
@@ -424,11 +480,8 @@ if [ "$cur_major" = "0" ]; then
 Refusing $last_version → $next_version without --allow-major.
 
 This package is still on a 0.x line, so the MINOR component is the
-breaking-change boundary (per semver). 0.$cur_minor → 0.$next_minor
-counts as a major bump and should land on a new branch (v0.$next_minor)
-following the model in CONTRIBUTING.md.
-
-If you actually want this on the current branch, pass --allow-major.
+breaking-change boundary (per semver): $next_version is the first release
+of the v0.$next_minor line. Pass --allow-major to confirm.
 EOF
       exit 1
     fi
@@ -437,9 +490,8 @@ elif [ "$next_major" != "$cur_major" ] && [ "$ALLOW_MAJOR" -ne 1 ]; then
   cat >&2 <<EOF
 Refusing major bump $last_version → $next_version without --allow-major.
 
-In this repo's release model, a major bump means cutting a new branch
-(v$next_major). Don't tag a major on top of
-the v$cur_major branch — see CONTRIBUTING.md.
+$next_version is the first release of a new major line. Pass
+--allow-major to confirm.
 EOF
   exit 1
 fi

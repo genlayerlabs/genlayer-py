@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 import sys
+import tomllib
 
 import pytest
 
@@ -31,13 +32,22 @@ def test_release_version_normalizes_pep440_rc_spellings(
     assert version.is_prerelease is is_prerelease
 
 
+@pytest.mark.parametrize("raw", ["0.19.1", "0.19.1-rc.2"])
+def test_release_version_names_the_dev_and_stable_branch_of_its_line(raw):
+    version = release_version.parse_release_version(raw)
+
+    assert version.dev_branch == "v0.19-dev"
+    assert version.stable_branch == "v0.19"
+
+
 @pytest.mark.parametrize(
     ("branch", "version", "message"),
     [
         ("main", "0.19.0", "not a release branch"),
         ("v0.18-dev", "0.19.0-rc.1", "belongs to v0.19"),
+        ("v0.18-dev", "0.19.0", "belongs to v0.19"),
         ("v0.19", "0.19.0-rc.1", "must be cut from v0.19-dev"),
-        ("v0.19-dev", "0.19.0", "must be cut from v0.19"),
+        ("v0.19", "0.19.0", "must be cut from v0.19-dev"),
     ],
 )
 def test_release_version_rejects_wrong_release_route(branch, version, message):
@@ -45,10 +55,45 @@ def test_release_version_rejects_wrong_release_route(branch, version, message):
         release_version.validate_branch_version(branch, version)
 
 
-def test_release_version_accepts_rc_only_on_owning_dev_line():
-    version = release_version.validate_branch_version("v0.19-dev", "0.19.0rc1")
+@pytest.mark.parametrize(
+    ("raw", "normalized"),
+    [("0.19.0rc1", "0.19.0-rc.1"), ("0.19.0", "0.19.0"), ("v0.19.1", "0.19.1")],
+)
+def test_release_version_accepts_rcs_and_finals_on_owning_dev_line(raw, normalized):
+    version = release_version.validate_branch_version("v0.19-dev", raw)
 
-    assert version.normalized == "0.19.0-rc.1"
+    assert version.normalized == normalized
+
+
+@pytest.mark.parametrize(
+    ("conclusions", "verdict"),
+    [
+        ([], "missing"),
+        (["cancelled", "skipped"], "missing"),
+        (["success"], "green"),
+        (["success", "cancelled"], "green"),
+        (["success", "failure"], "red"),
+        (["timed_out"], "red"),
+    ],
+)
+def test_runs_verdict_needs_a_green_run_and_no_red_one(conclusions, verdict):
+    assert release_version.runs_verdict(conclusions) == verdict
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        (["dev-branch", "0.19.1"], "v0.19-dev"),
+        (["stable-branch", "0.19.1"], "v0.19"),
+        (["branch", "0.19.1"], "v0.19"),
+        (["branch", "0.19.1-rc.1"], "v0.19-dev"),
+        (["runs-verdict"], "missing"),
+        (["runs-verdict", "success", "success"], "green"),
+    ],
+)
+def test_release_version_cli_prints_branches_and_verdicts(argv, expected, capsys):
+    assert release_version.main(["release_version.py", *argv]) == 0
+    assert capsys.readouterr().out.strip() == expected
 
 
 @pytest.mark.parametrize("version", ["0.19.0-alpha.1", "0.19.0-rc.0", "00.19.0"])
@@ -61,3 +106,103 @@ def test_release_tag_and_package_version_compare_after_normalization():
     assert release_version.main(
         ["release_version.py", "verify-tag", "v0.19.0-rc.1", "0.19.0rc1"]
     ) == 0
+
+
+@pytest.mark.parametrize(
+    ("version", "existing"),
+    [
+        ("0.19.1", ["0.19.0"]),
+        ("0.19.1", ["0.19.1-rc.2", "0.19.0"]),
+        ("0.19.1-rc.2", ["0.19.1-rc.1"]),
+        ("0.19.1-rc.1", []),
+    ],
+)
+def test_release_version_accepts_a_version_newer_than_the_existing_ones(
+    version, existing
+):
+    assert release_version.assert_newer(version, existing).normalized == version
+
+
+@pytest.mark.parametrize(
+    ("version", "existing", "blocker"),
+    [
+        ("0.19.1-rc.1", ["0.19.1"], "0.19.1"),
+        ("0.19.1", ["0.19.0", "0.19.1"], "0.19.1"),
+        ("0.19.0-rc.9", ["0.19.0"], "0.19.0"),
+        ("0.19.1-rc.1", ["0.19.1-rc.2"], "0.19.1-rc.2"),
+    ],
+)
+def test_release_version_refuses_a_version_that_does_not_move_forward(
+    version, existing, blocker
+):
+    with pytest.raises(ValueError, match=f"not newer than {blocker}"):
+        release_version.assert_newer(version, existing)
+
+
+def test_runs_verdict_reports_a_run_that_is_still_in_progress():
+    assert release_version.runs_verdict(["success", "pending"]) == "pending"
+    assert release_version.runs_verdict(["pending", "failure"]) == "red"
+
+
+def test_release_version_cli_checks_that_a_version_moves_forward(capsys):
+    assert release_version.main(["release_version.py", "assert-newer", "0.19.1", "0.19.0"]) == 0
+    assert capsys.readouterr().out.strip() == "0.19.1"
+    assert release_version.main(["release_version.py", "assert-newer", "0.19.1-rc.1", "0.19.1"]) == 2
+    assert "not newer than 0.19.1" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("version", "expected"),
+    [
+        ("0.20.0", ""),
+        ("0.20.0-rc.2", ""),
+        ("0.20.1", "0.20.0"),
+        ("0.20.3-rc.1", "0.20.2"),
+    ],
+)
+def test_predecessor_is_the_final_a_release_must_not_skip(version, expected):
+    assert release_version.predecessor(version) == expected
+
+
+@pytest.mark.parametrize(
+    ("branch", "tags", "expected"),
+    [
+        ("v0.20-dev", ["v0.18.0", "v0.19.0", "v0.19.1-rc.1", "v0.20.0-rc.1"], "0.19.0"),
+        ("v0.20-dev", ["v0.19.0", "v0.19.2", "v0.18.7"], "0.19.2"),
+        ("v0.20-dev", ["v0.20.0", "v0.21.0", "not-a-version"], ""),
+        ("v0.19", ["v0.18.0", "v1.0.0-beta"], "0.18.0"),
+    ],
+)
+def test_previous_line_final_is_the_newest_final_of_an_older_line(
+    branch, tags, expected
+):
+    assert release_version.previous_line_final(branch, tags) == expected
+
+
+def test_previous_line_final_needs_a_release_branch():
+    with pytest.raises(ValueError, match="not a release branch"):
+        release_version.previous_line_final("main", ["v0.19.0"])
+
+
+def test_release_version_cli_prints_the_gap_helpers(capsys):
+    assert release_version.main(["x", "predecessor", "0.20.1"]) == 0
+    assert (
+        release_version.main(["x", "previous-line-final", "v0.20-dev", "v0.19.0"]) == 0
+    )
+    assert capsys.readouterr().out.split() == ["0.20.0", "0.19.0"]
+
+
+def test_semantic_release_only_releases_from_dev_branches():
+    config_path = Path(__file__).parents[2] / "releaserc.toml"
+    branch_config = tomllib.loads(config_path.read_text())["semantic_release"][
+        "branches"
+    ]
+
+    # release.sh adds --as-prerelease for RCs, so the group itself stays final.
+    assert branch_config == {
+        "dev": {
+            "match": r"^v[0-9]+\.[0-9]+-dev$",
+            "prerelease_token": "rc",
+            "prerelease": False,
+        },
+    }

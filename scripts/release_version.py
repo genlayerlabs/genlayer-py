@@ -110,6 +110,31 @@ def assert_newer(value: str, existing: list[str]) -> ReleaseVersion:
     return version
 
 
+def predecessor(value: str) -> str:
+    """The final a release needs before it: X.Y.(Z-1), or nothing for X.Y.0."""
+    version = parse_release_version(value)
+    if version.patch == 0:
+        return ""
+    return f"{version.major}.{version.minor}.{version.patch - 1}"
+
+
+def previous_line_final(branch: str, tags: list[str]) -> str:
+    """Newest final of a line older than the branch's, among the given tags."""
+    branch_match = _BRANCH_PATTERN.fullmatch(branch)
+    if branch_match is None:
+        raise ValueError(f"{branch!r} is not a release branch; use vX.Y or vX.Y-dev")
+    line = (int(branch_match.group("major")), int(branch_match.group("minor")))
+    finals = []
+    for tag in tags:
+        try:
+            version = parse_release_version(tag)
+        except ValueError:
+            continue
+        if not version.is_prerelease and (version.major, version.minor) < line:
+            finals.append(version)
+    return max(finals, key=lambda v: v.sort_key).normalized if finals else ""
+
+
 def runs_verdict(conclusions: list[str]) -> str:
     """Summarize the workflow runs of one commit: green, red, pending or missing."""
     if any(conclusion in _RED_CONCLUSIONS for conclusion in conclusions):
@@ -126,6 +151,7 @@ def _usage() -> str:
         "is-prerelease <version> | validate <branch> <version> | "
         "verify-tag <tag> <package-version> | "
         "assert-newer <version> [existing-version ...] | "
+        "predecessor <version> | previous-line-final <branch> [tag ...] | "
         "runs-verdict [conclusion ...]"
     )
 
@@ -156,6 +182,10 @@ def main(argv: list[str]) -> int:
             print(tag_version.normalized)
         elif command == "assert-newer" and len(argv) >= 3:
             print(assert_newer(argv[2], argv[3:]).normalized)
+        elif command == "predecessor" and len(argv) == 3:
+            print(predecessor(argv[2]))
+        elif command == "previous-line-final" and len(argv) >= 3:
+            print(previous_line_final(argv[2], argv[3:]))
         elif command == "runs-verdict":
             print(runs_verdict(argv[2:]))
         else:

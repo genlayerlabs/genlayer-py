@@ -151,6 +151,47 @@ def test_release_version_cli_checks_that_a_version_moves_forward(capsys):
     assert "not newer than 0.19.1" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize(
+    ("version", "expected"),
+    [
+        ("0.20.0", ""),
+        ("0.20.0-rc.2", ""),
+        ("0.20.1", "0.20.0"),
+        ("0.20.3-rc.1", "0.20.2"),
+    ],
+)
+def test_predecessor_is_the_final_a_release_must_not_skip(version, expected):
+    assert release_version.predecessor(version) == expected
+
+
+@pytest.mark.parametrize(
+    ("branch", "tags", "expected"),
+    [
+        ("v0.20-dev", ["v0.18.0", "v0.19.0", "v0.19.1-rc.1", "v0.20.0-rc.1"], "0.19.0"),
+        ("v0.20-dev", ["v0.19.0", "v0.19.2", "v0.18.7"], "0.19.2"),
+        ("v0.20-dev", ["v0.20.0", "v0.21.0", "not-a-version"], ""),
+        ("v0.19", ["v0.18.0", "v1.0.0-beta"], "0.18.0"),
+    ],
+)
+def test_previous_line_final_is_the_newest_final_of_an_older_line(
+    branch, tags, expected
+):
+    assert release_version.previous_line_final(branch, tags) == expected
+
+
+def test_previous_line_final_needs_a_release_branch():
+    with pytest.raises(ValueError, match="not a release branch"):
+        release_version.previous_line_final("main", ["v0.19.0"])
+
+
+def test_release_version_cli_prints_the_gap_helpers(capsys):
+    assert release_version.main(["x", "predecessor", "0.20.1"]) == 0
+    assert (
+        release_version.main(["x", "previous-line-final", "v0.20-dev", "v0.19.0"]) == 0
+    )
+    assert capsys.readouterr().out.split() == ["0.20.0", "0.19.0"]
+
+
 def test_semantic_release_only_releases_from_dev_branches():
     config_path = Path(__file__).parents[2] / "releaserc.toml"
     branch_config = tomllib.loads(config_path.read_text())["semantic_release"][

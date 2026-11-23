@@ -22,7 +22,7 @@ If they ask "publish to PyPI directly" — refuse and point at this flow. The re
 - Branches are named after the release line they ship: `v0.19` (stable) and `v0.19-dev` (integration). When the next line becomes stable, the previous one stays available for back-ports.
 - Tags live within those branches: `v0.19.1`, `v0.19.2`, ... on the stable branch; `v0.19.1-rc.1` on the dev branch.
 - The stable branch has a ruleset that rejects any commit without a green `E2E Tests` check. A release commit therefore can't be created on the stable branch: it is created on dev, tested there, and the stable branch is fast-forwarded to it.
-- The promotion PR `vX.Y-dev` → `vX.Y` is where `E2E Tests` runs. Only `--promote` lands it: it pushes the fast-forward and GitHub closes the PR as merged. It is never merged with the merge button, GitHub auto-merge, the E2E app's merge train (`/merge-train` or its merge action) or the Legatus self-merge loop: a merge or squash commit is a commit `E2E Tests` did not run on, and a squash also breaks ancestry between the two branches.
+- The promotion PR `vX.Y-dev` → `vX.Y` is where `E2E Tests` runs. Only `--promote` lands it: it pushes the fast-forward and GitHub closes the PR as merged. It is never merged with the merge button, GitHub auto-merge, the E2E app's merge train (`/merge`, `/merge-train` or its merge action) or the Legatus self-merge loop: a merge or squash commit is a commit `E2E Tests` did not run on, and a squash also breaks ancestry between the two branches.
 - **Semver-zero rule**: this package is still on a 0.x line, so the MINOR component is the breaking-change boundary. `0.18 → 0.19` IS a major bump. `scripts/release.sh` refuses minor and major bumps without `--allow-major` while we're on 0.x.
 - A major (= minor on 0.x) bump means cutting a new branch pair (`v0.20-dev` / `v0.20`) — not tagging on top of the current one.
 - `CHANGELOG.md` is updated in the release commit by python-semantic-release; an explicit requested version must match the version computed from release history and conventional commits.
@@ -74,7 +74,7 @@ If they ask "publish to PyPI directly" — refuse and point at this flow. The re
    ```text
    /run-e2e all
    ```
-   Wait for `Tests` and `E2E Tests` to be green on the release commit. Do not merge the PR, and do not let anything else merge it (auto-merge, `/merge-train`, Legatus).
+   Wait for `Tests` and `E2E Tests` to be green on the release commit. Do not merge the PR, and do not let anything else merge it (auto-merge, `/merge`, `/merge-train`, Legatus).
 
 6. **Promote.**
    ```bash
@@ -106,7 +106,7 @@ If they ask "publish to PyPI directly" — refuse and point at this flow. The re
 
 - **Minor or major bump on 0.x without `--allow-major`**. Those are major bumps in semver-zero and belong on a new stable/dev branch pair.
 - **Releasing from `main` or from the stable branch** — the script only makes release commits on `vX.Y-dev`.
-- **Merging the promotion PR** with the merge button, GitHub auto-merge, `/merge-train` (the E2E app's merge action) or the Legatus self-merge loop, or pushing anything to the stable branch other than the `--promote` fast-forward.
+- **Merging the promotion PR** with the merge button, GitHub auto-merge, `/merge` or `/merge-train` (the E2E app's merge commands) or the Legatus self-merge loop, or pushing anything to the stable branch other than the `--promote` fast-forward.
 - **Tagging by hand** — a final tag that isn't the stable head, or an RC tag that isn't the dev head, is rejected by `publish.yml`.
 - **Hand-editing `pyproject.toml` to bump the version** — the script keeps pyproject, the lockfile, the CHANGELOG entry, the commit message, and the tag in lockstep.
 - **Publishing a tag where `publish.yml` failed** — fix the underlying issue, re-cut the release (delete the bad tag locally and on origin, re-run the script).

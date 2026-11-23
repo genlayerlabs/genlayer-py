@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 import sys
+import tomllib
 
 import pytest
 
@@ -105,3 +106,62 @@ def test_release_tag_and_package_version_compare_after_normalization():
     assert release_version.main(
         ["release_version.py", "verify-tag", "v0.19.0-rc.1", "0.19.0rc1"]
     ) == 0
+
+
+@pytest.mark.parametrize(
+    ("version", "existing"),
+    [
+        ("0.19.1", ["0.19.0"]),
+        ("0.19.1", ["0.19.1-rc.2", "0.19.0"]),
+        ("0.19.1-rc.2", ["0.19.1-rc.1"]),
+        ("0.19.1-rc.1", []),
+    ],
+)
+def test_release_version_accepts_a_version_newer_than_the_existing_ones(
+    version, existing
+):
+    assert release_version.assert_newer(version, existing).normalized == version
+
+
+@pytest.mark.parametrize(
+    ("version", "existing", "blocker"),
+    [
+        ("0.19.1-rc.1", ["0.19.1"], "0.19.1"),
+        ("0.19.1", ["0.19.0", "0.19.1"], "0.19.1"),
+        ("0.19.0-rc.9", ["0.19.0"], "0.19.0"),
+        ("0.19.1-rc.1", ["0.19.1-rc.2"], "0.19.1-rc.2"),
+    ],
+)
+def test_release_version_refuses_a_version_that_does_not_move_forward(
+    version, existing, blocker
+):
+    with pytest.raises(ValueError, match=f"not newer than {blocker}"):
+        release_version.assert_newer(version, existing)
+
+
+def test_runs_verdict_reports_a_run_that_is_still_in_progress():
+    assert release_version.runs_verdict(["success", "pending"]) == "pending"
+    assert release_version.runs_verdict(["pending", "failure"]) == "red"
+
+
+def test_release_version_cli_checks_that_a_version_moves_forward(capsys):
+    assert release_version.main(["release_version.py", "assert-newer", "0.19.1", "0.19.0"]) == 0
+    assert capsys.readouterr().out.strip() == "0.19.1"
+    assert release_version.main(["release_version.py", "assert-newer", "0.19.1-rc.1", "0.19.1"]) == 2
+    assert "not newer than 0.19.1" in capsys.readouterr().err
+
+
+def test_semantic_release_only_releases_from_dev_branches():
+    config_path = Path(__file__).parents[2] / "releaserc.toml"
+    branch_config = tomllib.loads(config_path.read_text())["semantic_release"][
+        "branches"
+    ]
+
+    # release.sh adds --as-prerelease for RCs, so the group itself stays final.
+    assert branch_config == {
+        "dev": {
+            "match": r"^v[0-9]+\.[0-9]+-dev$",
+            "prerelease_token": "rc",
+            "prerelease": False,
+        },
+    }

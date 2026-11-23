@@ -13,8 +13,9 @@
 #   scripts/release.sh <X.Y.Z>              (on vX.Y-dev)
 #     Release commit pushed to vX.Y-dev, no tag. It becomes the head of
 #     the promotion PR vX.Y-dev -> vX.Y, so E2E Tests runs on it.
-#   scripts/release.sh --promote <X.Y.Z>    (any checkout)
+#   scripts/release.sh --promote <X.Y.Z>    (any checkout with this script)
 #     Fast-forwards vX.Y to that commit with a plain push, then tags it.
+#     If an earlier run moved vX.Y but did not push the tag, it only tags.
 #
 # The stable branch only accepts commits with a green E2E Tests check,
 # so the release commit has to exist (and pass) on dev before it can
@@ -24,7 +25,7 @@
 #   scripts/release.sh patch|minor|major           release candidate of that bump
 #   scripts/release.sh --final patch|minor|major   final of that bump (step 1)
 #
-# Options:
+# Options (accepted before or after the version):
 #   --dry-run       Run every check and print the plan; change nothing.
 #   --allow-major   Allow a 0.x minor bump or a major bump (see below).
 #   --final         With a keyword, prepare a final instead of an RC.
@@ -34,45 +35,66 @@
 # change boundary. 0.18 -> 0.19 IS a major bump and needs --allow-major.
 #
 # Checks before a release commit (each one refuses on failure):
-#   - On vX.Y-dev, working tree clean, HEAD equal to origin/vX.Y-dev
+#   - origin is this repository; on vX.Y-dev, clean, HEAD equal to origin
 #   - A green Tests workflow run exists for that exact commit
-#   - The requested version matches what the commit history produces
+#   - The requested version matches what the commit history produces and
+#     is newer than the version already in pyproject.toml
+#   - For a final: origin/vX.Y exists and is an ancestor of HEAD
 #
 # Checks before --promote:
-#   - origin/vX.Y-dev head is the release commit of X.Y.Z
-#   - origin/vX.Y is an ancestor of it (the push is a fast-forward)
+#   - Tag vX.Y.Z does not exist on origin
+#   - origin/vX.Y-dev head is the release commit of X.Y.Z and origin/vX.Y
+#     is an ancestor of it, or origin/vX.Y already is that release commit
 #   - Tests and E2E Tests are green on that exact commit
-#   - Tag vX.Y.Z does not exist yet
 
 set -euo pipefail
 
+# Checks are read from this repository, so origin has to be it too.
+REPO="genlayerlabs/genlayer-py"
+TESTS_WORKFLOW="tests.yml"
 E2E_CHECK="E2E Tests"
-E2E_APP="ci-core-e2e-runner"
+# GitHub App the stable-branch ruleset requires the check from.
+E2E_APP_ID=2929262
 PSR=(uvx --from 'python-semantic-release==10.0.2' semantic-release -c releaserc.toml)
 
-ALLOW_MAJOR=0
-DRY_RUN=0
-PROMOTE=0
-FINAL=0
-while [[ "${1:-}" == --* ]]; do
-  case "$1" in
-    --allow-major) ALLOW_MAJOR=1 ;;
-    --dry-run) DRY_RUN=1 ;;
-    --promote) PROMOTE=1 ;;
-    --final) FINAL=1 ;;
-    *) echo "Unknown option: $1" >&2; exit 2 ;;
-  esac
-  shift
-done
-
-VERSION_ARG="${1:-}"
-if [ -z "$VERSION_ARG" ]; then
+usage() {
   cat >&2 <<EOF
 Usage: $0 [--dry-run] [--allow-major] <X.Y.Z-rc.N>      release candidate
        $0 [--dry-run] [--allow-major] <X.Y.Z>           final, step 1
        $0 [--dry-run] --promote <X.Y.Z>                 final, step 2
        $0 [--dry-run] [--allow-major] [--final] patch|minor|major
 EOF
+}
+
+ALLOW_MAJOR=0
+DRY_RUN=0
+PROMOTE=0
+FINAL=0
+VERSION_ARG=""
+for arg in "$@"; do
+  case "$arg" in
+    --allow-major) ALLOW_MAJOR=1 ;;
+    --dry-run) DRY_RUN=1 ;;
+    --promote) PROMOTE=1 ;;
+    --final) FINAL=1 ;;
+    -*)
+      echo "Unknown option: $arg" >&2
+      usage
+      exit 2
+      ;;
+    *)
+      if [ -n "$VERSION_ARG" ]; then
+        echo "Unexpected extra argument: $arg" >&2
+        usage
+        exit 2
+      fi
+      VERSION_ARG="$arg"
+      ;;
+  esac
+done
+
+if [ -z "$VERSION_ARG" ]; then
+  usage
   exit 2
 fi
 
@@ -92,15 +114,40 @@ package_version_at() {
   git show "$1:pyproject.toml" | grep -E '^version = ' | head -1 | sed -E 's/version = "([^"]+)"/\1/'
 }
 
+require_canonical_origin() {
+  local url
+  url="$(git config --get remote.origin.url | tr '[:upper:]' '[:lower:]' || true)"
+  if ! [[ "$url" =~ github\.com[:/]+$REPO(\.git)?/?$ ]]; then
+    cat >&2 <<EOF
+origin is '${url:-unset}', not github.com/$REPO.
+The checks are read from $REPO, so the branches and the tag have to be
+pushed there as well. Run this from a clone whose origin is that repository.
+EOF
+    exit 1
+  fi
+}
+
+# True when the commit is the release commit of the version.
+is_release_commit() {
+  [ "$(git log -1 --format=%s "$1")" = "chore(release): $2" ] &&
+    [ "$(helper normalize "$(package_version_at "$1")" 2>/dev/null)" = "$2" ]
+}
+
 require_green_tests() {
   local sha="$1" conclusions verdict
-  conclusions="$(gh run list --workflow tests.yml --commit "$sha" --json conclusion --jq '.[].conclusion' 2>/dev/null || true)"
+  conclusions="$(gh run list -R "$REPO" --workflow "$TESTS_WORKFLOW" --commit "$sha" --limit 100 \
+    --json status,conclusion \
+    --jq '.[] | if .status == "completed" then .conclusion else "pending" end' 2>/dev/null || true)"
   # shellcheck disable=SC2086
   verdict="$(helper runs-verdict $conclusions)"
   case "$verdict" in
     green) ;;
     red)
       echo "A Tests workflow run on $sha is not green. Refusing to release a red commit." >&2
+      exit 1
+      ;;
+    pending)
+      echo "A Tests workflow run on $sha is still running. Wait for it and retry." >&2
       exit 1
       ;;
     *)
@@ -112,10 +159,11 @@ require_green_tests() {
 
 require_green_e2e() {
   local sha="$1" dev="$2" stable="$3" state
+  # filter=all: the newest check run decides, so a rerun in progress is not hidden.
   state="$(
-    gh api -X GET "repos/{owner}/{repo}/commits/$sha/check-runs" \
-      -f check_name="$E2E_CHECK" -f filter=latest -f per_page=100 \
-      --jq "[.check_runs[] | select(.app.slug == \"$E2E_APP\")] | sort_by(.id) | last
+    gh api -X GET "repos/$REPO/commits/$sha/check-runs" \
+      -f check_name="$E2E_CHECK" -f filter=all -f per_page=100 \
+      --jq "[.check_runs[] | select(.app.id == $E2E_APP_ID)] | sort_by(.id) | last
             | if . == null then \"missing\" else (.conclusion // .status) end" 2>/dev/null || echo "unknown"
   )"
   if [ "$state" != "success" ]; then
@@ -130,12 +178,13 @@ EOF
 }
 
 promote() {
-  local version dev stable tag sha stable_sha subject
+  local version dev stable tag sha dev_sha stable_sha tag_sha have_tag=0
   version="$(helper normalize "$VERSION_ARG")" || exit 2
   if [ "$(helper is-prerelease "$version")" = "true" ]; then
     echo "$version is a release candidate: RCs are tagged on the dev branch and never promoted." >&2
     exit 2
   fi
+  require_canonical_origin
   dev="$(helper dev-branch "$version")"
   stable="$(helper stable-branch "$version")"
   tag="v$version"
@@ -146,23 +195,31 @@ promote() {
     echo "Could not fetch $dev and $stable from origin. Both branches must exist before promoting." >&2
     exit 1
   fi
-  sha="$(git rev-parse "origin/$dev")"
+  dev_sha="$(git rev-parse "origin/$dev")"
   stable_sha="$(git rev-parse "origin/$stable")"
 
   if [ -n "$(git ls-remote --tags origin "refs/tags/$tag")" ]; then
     echo "Tag $tag already exists on origin; $version is already released." >&2
     exit 1
   fi
-  if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
-    echo "A local tag $tag exists but is not on origin. Delete it (git tag -d $tag) and retry." >&2
-    exit 1
-  fi
 
-  subject="$(git log -1 --format=%s "$sha")"
-  if [ "$subject" != "chore(release): $version" ]; then
+  if is_release_commit "$stable_sha" "$version"; then
+    # An earlier run moved the stable branch but did not push the tag.
+    sha="$stable_sha"
+  elif is_release_commit "$dev_sha" "$version"; then
+    sha="$dev_sha"
+    if ! git merge-base --is-ancestor "$stable_sha" "$sha"; then
+      cat >&2 <<EOF
+$stable ($stable_sha) is not an ancestor of $dev ($sha), so $stable can't
+be fast-forwarded. Merge $stable into $dev, cut the release commit again
+and let the checks run on the new head.
+EOF
+      exit 1
+    fi
+  else
     cat >&2 <<EOF
 The head of $dev is not the release commit of $version:
-  $sha $subject
+  $dev_sha $(git log -1 --format=%s "$dev_sha")
 
 Run 'scripts/release.sh $version' on $dev first. If commits landed after
 the release commit, revert it, then cut it again so the changelog and the
@@ -170,15 +227,14 @@ tested commit include them.
 EOF
     exit 1
   fi
-  helper verify-tag "$tag" "$(package_version_at "$sha")" >/dev/null
 
-  if [ "$stable_sha" != "$sha" ] && ! git merge-base --is-ancestor "$stable_sha" "$sha"; then
-    cat >&2 <<EOF
-$stable ($stable_sha) is not an ancestor of $dev ($sha), so $stable can't
-be fast-forwarded. Merge $stable into $dev, cut the release commit again
-and let the checks run on the new head.
-EOF
-    exit 1
+  if tag_sha="$(git rev-parse --verify --quiet "refs/tags/$tag^{commit}")"; then
+    if [ "$tag_sha" != "$sha" ] || [ "$(git cat-file -t "refs/tags/$tag")" != "tag" ]; then
+      echo "A local tag $tag exists that is not an annotated tag on $sha. Delete it (git tag -d $tag) and retry." >&2
+      exit 1
+    fi
+    # Left by a run whose tag push failed.
+    have_tag=1
   fi
 
   require_green_tests "$sha"
@@ -189,23 +245,29 @@ EOF
     if [ "$stable_sha" = "$sha" ]; then
       echo "  $stable is already at $sha; no branch push needed."
     else
-      echo "  would run: git push origin $sha:refs/heads/$stable"
+      echo "  would run: git push --no-follow-tags origin $sha:refs/heads/$stable"
     fi
-    echo "  would run: git tag -a $tag -m $tag $sha && git push origin refs/tags/$tag"
+    if [[ "$have_tag" -eq 1 ]]; then
+      echo "  would run: git push origin refs/tags/$tag (local tag already on $sha)"
+    else
+      echo "  would run: git tag -a $tag -m $tag $sha && git push origin refs/tags/$tag"
+    fi
     echo "Dry run complete; no branch, tag, push, or publication was performed."
     exit 0
   fi
 
   # Plain fast-forward: keeps ancestry, and the promotion PR closes as merged.
   if [ "$stable_sha" != "$sha" ]; then
-    git push origin "$sha:refs/heads/$stable"
+    git push --no-follow-tags origin "$sha:refs/heads/$stable"
   fi
-  git tag -a "$tag" -m "$tag" "$sha"
+  if [[ "$have_tag" -eq 0 ]]; then
+    git tag -a "$tag" -m "$tag" "$sha"
+  fi
   git push origin "refs/tags/$tag"
 
   echo
   echo "Pushed $tag on $stable. publish.yml will fire on the tag and ship to PyPI."
-  echo "Track it at: https://github.com/genlayerlabs/genlayer-py/actions"
+  echo "Track it at: https://github.com/$REPO/actions"
 }
 
 if [[ "$PROMOTE" -eq 1 ]]; then
@@ -236,7 +298,8 @@ if [ -n "$(git status --porcelain)" ]; then
   exit 1
 fi
 
-git fetch --tags origin "$branch"
+require_canonical_origin
+git fetch --tags origin "+refs/heads/$branch:refs/remotes/origin/$branch"
 local_sha="$(git rev-parse HEAD)"
 remote_sha="$(git rev-parse "origin/$branch")"
 if [ "$local_sha" != "$remote_sha" ]; then
@@ -274,7 +337,28 @@ if [ "$kind" = "rc" ]; then
   release_flags+=(--as-prerelease --prerelease-token rc)
 fi
 
-computed_raw="$("${PSR[@]}" version --print "${release_flags[@]}")"
+last_tag="$(git describe --tags --abbrev=0 --match 'v*.*.*' 2>/dev/null || true)"
+if [[ -z "$last_tag" ]]; then
+  echo "No previous release tag is reachable from $branch; refusing to infer release boundaries." >&2
+  exit 1
+fi
+last_version="$(helper normalize "$last_tag")" || exit 2
+current_version="$(helper normalize "$(package_version_at HEAD)")" || exit 2
+
+# Asked from origin: a local tag may be left over from a failed tag push.
+if [ "$(helper is-prerelease "$current_version")" = "false" ] &&
+  [ -z "$(git ls-remote --tags origin "refs/tags/v$current_version")" ]; then
+  cat >&2 <<EOF
+pyproject.toml is at $current_version, which has no tag on origin: $branch
+carries an unpublished final release commit. Finish it with
+'scripts/release.sh --promote $current_version'. If it must not ship and the
+stable branch has not moved to it, revert that commit and run this again.
+EOF
+  exit 1
+fi
+
+# The empty-array guard keeps bash 3.2 (macOS) working under set -u.
+computed_raw="$("${PSR[@]}" version --print ${release_flags[@]+"${release_flags[@]}"})"
 next_version="$(helper normalize "$computed_raw")" || exit 2
 
 if [[ -n "${requested_version:-}" && "$requested_version" != "$next_version" ]]; then
@@ -282,7 +366,7 @@ if [[ -n "${requested_version:-}" && "$requested_version" != "$next_version" ]];
 Requested $requested_version, but the release history and conventional commits
 produce $next_version. Refusing to publish an unexpected version.
 EOF
-  if [ "$kind" = "final" ]; then
+  if [ "$kind" = "final" ] && [ "$(helper is-prerelease "$last_version")" = "false" ]; then
     echo "If only chore/ci/docs commits landed, force the level: $0 --final patch" >&2
   fi
   exit 1
@@ -291,25 +375,33 @@ fi
 helper validate "$branch" "$next_version" >/dev/null
 stable="$(helper stable-branch "$next_version")"
 
-last_tag="$(git describe --tags --abbrev=0 --match 'v*.*.*' 2>/dev/null || true)"
-if [[ -z "$last_tag" ]]; then
-  echo "No previous release tag is reachable from $branch; refusing to infer release boundaries." >&2
-  exit 1
-fi
-last_version="$(helper normalize "$last_tag")" || exit 2
 if [ "$last_version" = "$next_version" ]; then
   echo "v$next_version is already tagged and nothing releasable landed since. Nothing to release." >&2
   exit 1
 fi
-current_version="$(helper normalize "$(package_version_at HEAD)")" || exit 2
-if [ "$current_version" = "$next_version" ]; then
+helper assert-newer "$next_version" "$current_version" "$last_version" >/dev/null
+
+# A final has to reach the stable branch by fast-forward: catch a diverged
+# stable branch now, before an E2E run is spent on the release commit.
+if git fetch --quiet origin "+refs/heads/$stable:refs/remotes/origin/$stable" 2>/dev/null; then
+  if ! git merge-base --is-ancestor "origin/$stable" HEAD; then
+    if [ "$kind" = "final" ]; then
+      cat >&2 <<EOF
+$stable has commits that are not in $branch, so it can't be fast-forwarded
+to a release commit made here. Merge $stable into $branch first.
+EOF
+      exit 1
+    fi
+    echo "Warning: $stable has commits that are not in $branch; merge it before the final." >&2
+  fi
+elif [ "$kind" = "final" ]; then
   cat >&2 <<EOF
-pyproject.toml is already at $next_version, so $branch carries an untagged
-release commit for it. Promote it (scripts/release.sh --promote $next_version)
-or, if commits landed after it, revert that release commit and run this again.
+$stable does not exist on origin. The promotion PR needs it as its base:
+create it from a commit that is already in $branch (see docs/BRANCHING.md).
 EOF
   exit 1
 fi
+
 cur_major="${last_version%%.*}"
 next_major="${next_version%%.*}"
 cur_minor="$(echo "$last_version" | cut -d. -f2)"
@@ -349,18 +441,18 @@ else
   echo "Preparing final v$next_version on $branch (previous release: v$last_version); no tag until --promote."
 fi
 
-if [[ "$DRY_RUN" -eq 1 ]]; then
-  echo "Dry run complete; no release commit, tag, push, or publication was performed."
-  exit 0
-fi
-
 if git rev-parse --verify --quiet "refs/tags/v$next_version" >/dev/null; then
   echo "Tag v$next_version already exists locally; refusing to reuse it." >&2
   exit 1
 fi
 
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  echo "Dry run complete; no release commit, tag, push, or publication was performed."
+  exit 0
+fi
+
 # The tool writes the version and changelog, commits and tags locally.
-"${PSR[@]}" version "${release_flags[@]}" --no-push --no-vcs-release
+"${PSR[@]}" version ${release_flags[@]+"${release_flags[@]}"} --no-push --no-vcs-release
 
 if [ "$(git rev-parse HEAD)" = "$local_sha" ]; then
   echo "Release tool did not create a release commit for v$next_version; nothing to push." >&2
@@ -377,16 +469,16 @@ if [ "$kind" = "rc" ]; then
     echo "Release tool did not create the expected tag v$next_version; refusing to push." >&2
     exit 1
   fi
-  git push origin "$branch"
-  git push origin "v$next_version"
+  git push --no-follow-tags origin "$branch"
+  git push origin "refs/tags/v$next_version"
 
   echo
   echo "Pushed v$next_version. publish.yml will fire on the tag and ship to PyPI."
-  echo "Track it at: https://github.com/genlayerlabs/genlayer-py/actions"
+  echo "Track it at: https://github.com/$REPO/actions"
   exit 0
 fi
 
-git push origin "$branch"
+git push --no-follow-tags origin "$branch"
 release_sha="$(git rev-parse HEAD)"
 
 cat <<EOF
@@ -394,11 +486,14 @@ cat <<EOF
 Pushed the release commit of v$next_version to $branch ($release_sha). No tag yet.
 
 Next:
-  1. Open the promotion PR $branch -> $stable (or reuse the open one) and
+  1. Hold every merge into $branch until step 3 is done: a commit landing
+     after this one forces a new release commit and a new E2E run.
+  2. Open the promotion PR $branch -> $stable (or reuse the open one) and
      run E2E on it: comment /run-e2e all.
-  2. When Tests and $E2E_CHECK are green on $release_sha:
+  3. When Tests and $E2E_CHECK are green on $release_sha:
        scripts/release.sh --promote $next_version
 
-Do not press the merge button on that PR: --promote fast-forwards $stable
-to this commit and GitHub then closes the PR as merged.
+Nothing else may merge that PR: no merge button, no auto-merge, no
+/merge-train, no Legatus self-merge. --promote fast-forwards $stable to
+this commit and GitHub then closes the PR as merged.
 EOF

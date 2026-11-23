@@ -45,7 +45,7 @@ If they ask "publish to PyPI directly" — refuse and point at this flow. The re
    ```
    The real command commits `chore(release): X.Y.Z-rc.N`, tags it, and pushes both to the dev branch.
 
-   The first RC of a new line is forced with the `minor` keyword: an explicit `0.20.0-rc.1` is refused whenever history does not already produce it. After that first RC, ask for the version itself (`0.20.0-rc.2`, then `0.20.0`): a keyword counts from the last RC and would skip a version, which the script refuses. Before the first release of a new line, the previous line's stable branch (with its final tag, `v0.19` with `v0.19.0`) has to be merged into the new dev branch; the script refuses the first final without it. See "Starting a new line" in `docs/BRANCHING.md`.
+   The first RC of a new line is forced with the `minor` keyword: an explicit `0.20.0-rc.1` is refused whenever history does not already produce it. After that first RC, ask for the version itself (`0.20.0-rc.2`, then `0.20.0`): a keyword counts from the last RC and would skip a version, which the script refuses. Before the first release of a new line, the previous line's stable branch (with its final tag, `v0.19` with `v0.19.0`) has to be merged into the new dev branch; the script refuses the first final without it, at step 1 and again at `--promote` (the previous line may ship a patch in between). See "Starting a new line" in `docs/BRANCHING.md`.
 4. **Watch the publish workflow** (see below).
 
 ## Steps: final

@@ -49,6 +49,9 @@ line before it. Two things have to be true before its first final:
   line's first final. The release tool derives the next version from the newest
   final tag it can reach: without that merge it still computes a version of the
   previous line, and `scripts/release.sh` refuses the first final.
+  `--promote` checks it again against the tags on origin: if the previous line
+  shipped a final after step 1, revert the release commit, merge, and cut it
+  again.
 - The stable branch `vX.Y` exists (see "Stable Branches").
 
 The first release candidate of the line is forced with a keyword:

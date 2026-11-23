@@ -45,6 +45,8 @@
 #   - Tag vX.Y.Z does not exist on origin
 #   - origin/vX.Y-dev head is the release commit of X.Y.Z and origin/vX.Y
 #     is an ancestor of it, or origin/vX.Y already is that release commit
+#   - For X.Y.0: the newest final of an earlier line on origin is in the
+#     history of that commit
 #   - Tests and E2E Tests are green on that exact commit
 
 set -euo pipefail
@@ -179,6 +181,7 @@ EOF
 
 promote() {
   local version dev stable tag sha dev_sha stable_sha tag_sha remote_tag have_tag=0
+  local remote_tags previous_final previous_stable
   version="$(helper normalize "$VERSION_ARG")" || exit 2
   if [ "$(helper is-prerelease "$version")" = "true" ]; then
     echo "$version is a release candidate: RCs are tagged on the dev branch and never promoted." >&2
@@ -230,6 +233,42 @@ the release commit, revert it, then cut it again so the changelog and the
 tested commit include them.
 EOF
     exit 1
+  fi
+
+  # An earlier line may have shipped a final since step 1 checked this.
+  if [ -z "$(helper predecessor "$version")" ]; then
+    if ! remote_tags="$(git ls-remote --tags --refs origin 'refs/tags/v[0-9]*')"; then
+      echo "Could not list the tags on origin; refusing to promote." >&2
+      exit 1
+    fi
+    # shellcheck disable=SC2046
+    previous_final="$(helper previous-line-final "$dev" $(printf '%s\n' "$remote_tags" | sed 's|.*refs/tags/||'))"
+    if [ -n "$previous_final" ]; then
+      previous_stable="$(helper stable-branch "$previous_final")"
+      if ! git fetch --quiet --no-tags origin "refs/tags/v$previous_final"; then
+        echo "Could not fetch tag v$previous_final from origin (git's error is above); refusing to promote." >&2
+        exit 1
+      fi
+      if ! git merge-base --is-ancestor "FETCH_HEAD^{commit}" "$sha"; then
+        if [ "$sha" = "$stable_sha" ]; then
+          # Too late to refuse: the release commit is already on the stable branch.
+          cat >&2 <<EOF
+Warning: v$previous_final, the newest final of an earlier line, is not in the
+history of $stable, which already carries the release commit of $version.
+Tagging it anyway; merge $previous_stable into $dev before the next release.
+EOF
+        else
+          cat >&2 <<EOF
+v$previous_final, the newest final of an earlier line, is not in the history
+of the release commit of $version ($sha).
+Revert that commit on $dev, merge $previous_stable into $dev, run
+'scripts/release.sh $version' again and let the checks run on the new head
+(see "Starting a new line" in docs/BRANCHING.md).
+EOF
+          exit 1
+        fi
+      fi
+    fi
   fi
 
   if tag_sha="$(git rev-parse --verify --quiet "refs/tags/$tag^{commit}")"; then
@@ -393,14 +432,35 @@ fi
 # The empty-array guard keeps bash 3.2 (macOS) working under set -u.
 computed_raw="$("${PSR[@]}" version --print ${release_flags[@]+"${release_flags[@]}"})"
 next_version="$(helper normalize "$computed_raw")" || exit 2
+next_dev="$(helper dev-branch "$next_version")"
+# Empty unless the computed version is on an earlier line than this branch.
+earlier_line="$(helper previous-line-final "$branch" "v${next_version%%-*}")"
 
 if [[ -n "${requested_version:-}" && "$requested_version" != "$next_version" ]]; then
   cat >&2 <<EOF
 Requested $requested_version, but the release history and conventional commits
 produce $next_version. Refusing to publish an unexpected version.
 EOF
-  if [ "$(helper dev-branch "$next_version")" != "$branch" ]; then
-    if [ "$(helper dev-branch "$last_version")" = "$branch" ]; then
+  if [ "$next_dev" != "$branch" ]; then
+    if [ -z "$earlier_line" ]; then
+      level_flags=(--patch)
+      forced="--final patch"
+      if [ "$kind" = "rc" ]; then
+        level_flags+=(--as-prerelease --prerelease-token rc)
+        forced="patch"
+      fi
+      forced_version="$(helper normalize "$("${PSR[@]}" version --print "${level_flags[@]}")")" || exit 2
+      if [ "$forced_version" = "$requested_version" ]; then
+        echo "A feat or breaking commit landed since the last final, so history derives the next line. To release it on $branch, force the level: $0 $forced" >&2
+      else
+        cat >&2 <<EOF
+A feat or breaking commit landed since the last final, so history derives the
+next line, and a forced patch ('$0 $forced') counts from the newest release
+tag in the repository and gives $forced_version. This script cannot produce
+$requested_version from this history.
+EOF
+      fi
+    elif [ "$(helper dev-branch "$last_version")" = "$branch" ]; then
       cat >&2 <<EOF
 No feat or breaking commit landed on $branch since the previous line's final,
 so history still derives a version of that line, and a forced level would count
@@ -418,6 +478,20 @@ EOF
   exit 1
 fi
 
+if [ -z "${requested_version:-}" ] && [ "$next_dev" != "$branch" ]; then
+  if [ -n "$earlier_line" ]; then
+    forced="minor --allow-major"
+    [ "$kind" = "final" ] && forced="--final $forced"
+    echo "'$VERSION_ARG' gives $next_version, which is on an earlier line than $branch. The first release of a line is forced with: $0 $forced" >&2
+  else
+    cat >&2 <<EOF
+'$VERSION_ARG' counts from the newest release tag in the repository and gives
+$next_version, which is past the line of $branch. Ask for the version itself
+instead (X.Y.Z, or X.Y.Z-rc.N for a release candidate).
+EOF
+  fi
+  exit 2
+fi
 helper validate "$branch" "$next_version" >/dev/null
 
 # A forced level counts from the last release candidate and can jump a version.

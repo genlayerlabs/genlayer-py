@@ -47,12 +47,22 @@
 	},
 	{
 		"inputs": [],
+		"name": "InvalidRegistry",
+		"type": "error"
+	},
+	{
+		"inputs": [],
 		"name": "InvalidRevealLeaderData",
 		"type": "error"
 	},
 	{
 		"inputs": [],
 		"name": "LegacyProposeReceiptRetired",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "MessageEnvelopeRequired",
 		"type": "error"
 	},
 	{
@@ -89,7 +99,17 @@
 	},
 	{
 		"inputs": [],
+		"name": "ProtocolNotSealed",
+		"type": "error"
+	},
+	{
+		"inputs": [],
 		"name": "ReentrancyGuardReentrantCall",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "RegistryBindingLocked",
 		"type": "error"
 	},
 	{
@@ -381,6 +401,31 @@
 		"anonymous": false,
 		"inputs": [
 			{
+				"indexed": true,
+				"internalType": "bytes32",
+				"name": "txId",
+				"type": "bytes32"
+			},
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "decisionId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "recipient",
+				"type": "address"
+			}
+		],
+		"name": "FinalizationEffectsDeferred",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
 				"indexed": false,
 				"internalType": "uint64",
 				"name": "version",
@@ -583,6 +628,19 @@
 		"inputs": [
 			{
 				"indexed": true,
+				"internalType": "address",
+				"name": "recipient",
+				"type": "address"
+			}
+		],
+		"name": "SuccessorPumpDeferred",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
 				"internalType": "bytes32",
 				"name": "txId",
 				"type": "bytes32"
@@ -640,6 +698,31 @@
 			}
 		],
 		"name": "TransactionFinalized",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "bytes32",
+				"name": "txId",
+				"type": "bytes32"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "oldLeader",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "newLeader",
+				"type": "address"
+			}
+		],
+		"name": "TransactionLeaderReplaced",
 		"type": "event"
 	},
 	{
@@ -1186,7 +1269,13 @@
 			}
 		],
 		"name": "addTransaction",
-		"outputs": [],
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "txId",
+				"type": "bytes32"
+			}
+		],
 		"stateMutability": "payable",
 		"type": "function"
 	},
@@ -1240,6 +1329,81 @@
 			}
 		],
 		"name": "commitVote",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "txId",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "uint256",
+				"name": "expectedDecisionId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "expectedGeneration",
+				"type": "uint256"
+			}
+		],
+		"name": "continueAcceptanceMessages",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "complete",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "recipient",
+				"type": "address"
+			}
+		],
+		"name": "continueRecomputation",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "txId",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "uint256",
+				"name": "decisionId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "recipient",
+				"type": "address"
+			},
+			{
+				"internalType": "bool",
+				"name": "processMessages",
+				"type": "bool"
+			},
+			{
+				"internalType": "bool",
+				"name": "sendOnAcceptance",
+				"type": "bool"
+			}
+		],
+		"name": "deferRecoveredFinalization",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -1539,6 +1703,24 @@
 		"inputs": [
 			{
 				"internalType": "bytes32",
+				"name": "txId",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "uint256",
+				"name": "expectedDecisionId",
+				"type": "uint256"
+			}
+		],
+		"name": "finalizeTransactionDeferred",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
 				"name": "_txId",
 				"type": "bytes32"
 			}
@@ -1602,6 +1784,19 @@
 			}
 		],
 		"name": "initialize",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "txId",
+				"type": "bytes32"
+			}
+		],
+		"name": "invalidatePreemptedHead",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -1953,47 +2148,64 @@
 	{
 		"inputs": [
 			{
-				"internalType": "bytes32",
-				"name": "_txId",
-				"type": "bytes32"
-			},
-			{
-				"internalType": "bytes32",
-				"name": "_txExecutionHash",
-				"type": "bytes32"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_processingBlock",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_storageFeeUsed",
-				"type": "uint256"
-			},
-			{
-				"internalType": "bytes",
-				"name": "_eqBlocksOutputs",
-				"type": "bytes"
-			},
-			{
-				"internalType": "bytes",
-				"name": "_vrfProof",
-				"type": "bytes"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_reportedMessageFeesTotal",
-				"type": "uint256"
-			},
-			{
-				"internalType": "bytes32",
-				"name": "_expectedAttemptId",
-				"type": "bytes32"
+				"components": [
+					{
+						"internalType": "bytes32",
+						"name": "txId",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "txExecutionHash",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "uint256",
+						"name": "processingBlock",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "storageFeeUsed",
+						"type": "uint256"
+					},
+					{
+						"internalType": "bytes",
+						"name": "eqBlocksOutputs",
+						"type": "bytes"
+					},
+					{
+						"internalType": "bytes",
+						"name": "vrfProof",
+						"type": "bytes"
+					},
+					{
+						"internalType": "uint256",
+						"name": "reportedMessageFeesTotal",
+						"type": "uint256"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "expectedAttemptId",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "uint256",
+						"name": "messageBytes",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "messageCount",
+						"type": "uint256"
+					}
+				],
+				"internalType": "struct IConsensusMainWithFees.MessageEnvelopeProposal",
+				"name": "p",
+				"type": "tuple"
 			}
 		],
-		"name": "proposeReceiptWithMessages",
+		"name": "proposeReceiptWithMessageEnvelope",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -2001,12 +2213,112 @@
 	{
 		"inputs": [
 			{
-				"internalType": "address",
-				"name": "ghost",
-				"type": "address"
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bytes",
+				"name": "",
+				"type": "bytes"
+			},
+			{
+				"internalType": "bytes",
+				"name": "",
+				"type": "bytes"
+			},
+			{
+				"internalType": "uint256",
+				"name": "reportedTotal",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
 			}
 		],
-		"name": "registerGhostContract",
+		"name": "proposeReceiptWithMessages",
+		"outputs": [],
+		"stateMutability": "pure",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "protocolComponentId",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"stateMutability": "pure",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "recipient",
+				"type": "address"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "currentTxId",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "bool",
+				"name": "withFees",
+				"type": "bool"
+			}
+		],
+		"name": "pumpHeadBatchItem",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "cancelledOnly",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "recipient",
+				"type": "address"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "currentTxId",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "bool",
+				"name": "withFees",
+				"type": "bool"
+			}
+		],
+		"name": "pumpSuccessors",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -2070,6 +2382,19 @@
 			}
 		],
 		"name": "resolveTransactions",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "txId",
+				"type": "bytes32"
+			}
+		],
+		"name": "retryFinalizationPromotion",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -2350,6 +2675,19 @@
 			}
 		],
 		"name": "transferOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "txId",
+				"type": "bytes32"
+			}
+		],
+		"name": "voidFrozenAppeal",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"

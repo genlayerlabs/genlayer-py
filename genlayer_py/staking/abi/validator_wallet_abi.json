@@ -37,6 +37,11 @@
 	},
 	{
 		"inputs": [],
+		"name": "InvalidOperatorTransferDelay",
+		"type": "error"
+	},
+	{
+		"inputs": [],
 		"name": "InvalidPossessionProof",
 		"type": "error"
 	},
@@ -84,6 +89,11 @@
 	},
 	{
 		"inputs": [],
+		"name": "OwnerRevoked",
+		"type": "error"
+	},
+	{
+		"inputs": [],
 		"name": "PubKeyIsZero",
 		"type": "error"
 	},
@@ -95,6 +105,22 @@
 	{
 		"inputs": [],
 		"name": "ReentrancyGuardReentrantCall",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "authorizedGeneration",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "currentGeneration",
+				"type": "uint256"
+			}
+		],
+		"name": "StaleOperatorAuthorization",
 		"type": "error"
 	},
 	{
@@ -113,6 +139,31 @@
 			}
 		],
 		"name": "Initialized",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "index",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256[2]",
+				"name": "key",
+				"type": "uint256[2]"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "registeredAt",
+				"type": "uint256"
+			}
+		],
+		"name": "OperatorKeyRecorded",
 		"type": "event"
 	},
 	{
@@ -615,6 +666,85 @@
 	{
 		"inputs": [
 			{
+				"internalType": "uint256",
+				"name": "_electionId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address[]",
+				"name": "_candidates",
+				"type": "address[]"
+			}
+		],
+		"name": "govCastBallot",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "weight",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_proposalId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint8",
+				"name": "_support",
+				"type": "uint8"
+			},
+			{
+				"internalType": "string",
+				"name": "_reason",
+				"type": "string"
+			}
+		],
+		"name": "govCastVote",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "weight",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_to",
+				"type": "address"
+			}
+		],
+		"name": "govDelegate",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "governanceController",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
 				"internalType": "bytes32",
 				"name": "role",
 				"type": "bytes32"
@@ -860,7 +990,7 @@
 						"type": "tuple[]"
 					}
 				],
-				"internalType": "struct IConsensusMain.LeaderRevealVoteParams",
+				"internalType": "struct IConsensusMainWithFees.LeaderRevealVoteParams",
 				"name": "_params",
 				"type": "tuple"
 			}
@@ -878,6 +1008,30 @@
 				"internalType": "address",
 				"name": "",
 				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_created",
+				"type": "uint256"
+			}
+		],
+		"name": "operatorKeyAt",
+		"outputs": [
+			{
+				"internalType": "uint256[2]",
+				"name": "key",
+				"type": "uint256[2]"
+			},
+			{
+				"internalType": "bool",
+				"name": "predates",
+				"type": "bool"
 			}
 		],
 		"stateMutability": "view",
@@ -917,6 +1071,19 @@
 	},
 	{
 		"inputs": [],
+		"name": "operatorTransferReadyAt",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
 		"name": "owner",
 		"outputs": [
 			{
@@ -930,12 +1097,38 @@
 	},
 	{
 		"inputs": [],
+		"name": "ownershipGeneration",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
 		"name": "pendingOperator",
 		"outputs": [
 			{
 				"internalType": "address",
 				"name": "",
 				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "pendingOperatorGeneration",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
 			}
 		],
 		"stateMutability": "view",
@@ -1044,6 +1237,71 @@
 	{
 		"inputs": [
 			{
+				"components": [
+					{
+						"internalType": "bytes32",
+						"name": "txId",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "txExecutionHash",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "uint256",
+						"name": "processingBlock",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "storageFeeUsed",
+						"type": "uint256"
+					},
+					{
+						"internalType": "bytes",
+						"name": "eqBlocksOutputs",
+						"type": "bytes"
+					},
+					{
+						"internalType": "bytes",
+						"name": "vrfProof",
+						"type": "bytes"
+					},
+					{
+						"internalType": "uint256",
+						"name": "reportedMessageFeesTotal",
+						"type": "uint256"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "expectedAttemptId",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "uint256",
+						"name": "messageBytes",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "messageCount",
+						"type": "uint256"
+					}
+				],
+				"internalType": "struct IConsensusMainWithFees.MessageEnvelopeProposal",
+				"name": "proposal",
+				"type": "tuple"
+			}
+		],
+		"name": "proposeReceiptWithMessageEnvelope",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
 				"internalType": "bytes32",
 				"name": "_txId",
 				"type": "bytes32"
@@ -1086,7 +1344,7 @@
 		],
 		"name": "proposeReceiptWithMessages",
 		"outputs": [],
-		"stateMutability": "nonpayable",
+		"stateMutability": "view",
 		"type": "function"
 	},
 	{
@@ -1382,6 +1640,19 @@
 		"name": "validatorExit",
 		"outputs": [],
 		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "vestingOperatorRegistryVersion",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "pure",
 		"type": "function"
 	},
 	{

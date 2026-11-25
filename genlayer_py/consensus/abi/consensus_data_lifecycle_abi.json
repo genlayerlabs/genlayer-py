@@ -75,7 +75,8 @@
             "name": "latestDecision",
             "type": "tuple"
           },
-          {"internalType": "bool", "name": "decisionActive", "type": "bool"}
+          {"internalType": "bool", "name": "decisionActive", "type": "bool"},
+          {"internalType": "uint256", "name": "executionGeneration", "type": "uint256"}
         ],
         "internalType": "struct ConsensusData.TransactionLifecycle",
         "name": "lifecycle",

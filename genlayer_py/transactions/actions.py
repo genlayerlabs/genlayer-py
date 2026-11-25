@@ -436,7 +436,8 @@ def _read_transaction_lifecycle(
         ),
         block_number,
     )
-    stored_status, resolution, latest_decision, decision_active = lifecycle
+    # Read by position: v0.6.0 appends executionGeneration to the struct.
+    stored_status, resolution, latest_decision, decision_active = lifecycle[:4]
     projected_status = resolution[2]
     resolution_action = resolution[3]
     resolution_source = resolution[6]

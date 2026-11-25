@@ -27,13 +27,13 @@ class TestBradburyConfig:
     def test_consensus_main_address(self):
         assert (
             CONSENSUS_MAIN_CONTRACT["address"]
-            == "0x2E2766cbc3E5e61Ce93bBcdCBb3eAcB82082A019"
+            == "0x0f4F0e05475723790E4a2ed0598370783C300926"
         )
 
     def test_consensus_data_address(self):
         assert (
             CONSENSUS_DATA_CONTRACT["address"]
-            == "0xc5FA6f82BEe53598825d6edf7E3e24613082c75B"
+            == "0x2247b85b7ca7fb1Fea990b4aFAB4328D9c597f28"
         )
 
 

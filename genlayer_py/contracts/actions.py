@@ -48,6 +48,7 @@ from genlayer_py.transactions.fees import (
     to_uint,
     transaction_fee_estimate_from_studio_estimate,
 )
+from genlayer_py.transactions.actions import _is_method_not_found_error
 
 if TYPE_CHECKING:
     from genlayer_py.client import GenLayerClient
@@ -1031,11 +1032,47 @@ def estimate_transaction_fees_for_write(
     )
 
 
+_FEE_OPTION_KEYS = (
+    "distribution",
+    "messageAllocations",
+    "message_allocations",
+    "feeValue",
+    "fee_value",
+)
+
+
+def _caller_set_fees(fees: Optional[TransactionFeeOptions]) -> bool:
+    return bool(fees) and any(fees.get(key) is not None for key in _FEE_OPTION_KEYS)
+
+
+def _is_fee_policy_enabled(self: GenLayerClient) -> bool:
+    """Whether the chain charges fees. Studio builds without sim_getFeeConfig do not."""
+    studio = is_studio_chain(self.chain)
+    fee_manager = getattr(self.chain, "fee_manager_contract", None)
+    if not studio and not (fee_manager and fee_manager.get("address")):
+        return False
+    try:
+        return bool(get_current_fee_policy(self)["enabled"])
+    except GenLayerError as exc:
+        if studio and _is_method_not_found_error(exc):
+            return False
+        raise
+
+
 def _resolve_transaction_fees(
     self: GenLayerClient,
     fees: Optional[TransactionFeeOptions],
     num_of_initial_validators: int,
 ) -> NormalizedTransactionFees:
+    if not _caller_set_fees(fees) and _is_fee_policy_enabled(self):
+        # A zero-fee submission would be mined and revert.
+        raise GenLayerError(
+            "fees are required on this chain: build them with "
+            "estimate_transaction_fees() (on Studio, "
+            "estimate_transaction_fees_for_write() sizes them for a write) and "
+            'pass fees={"distribution": ..., "feeValue": ...}.'
+        )
+
     transaction_fees = normalize_transaction_fees(fees)
     if transaction_fees[
         "fee_value"

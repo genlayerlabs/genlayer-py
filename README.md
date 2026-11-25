@@ -131,7 +131,16 @@ receipt = client.wait_for_transaction_receipt(
 )
 ```
 
+The call above sends no fees, so it only works on a chain whose fee policy is
+disabled. On a fee-enabled chain, pass `fees` as shown in the next section.
+
 ### Fee presets for transactions
+
+On a chain whose fee policy is enabled, `deploy_contract` and `write_contract`
+reject a call without `fees` before signing or sending anything. Build the fees
+with `estimate_transaction_fees()` or, on Studio,
+`estimate_transaction_fees_for_write()`, and pass them explicitly. Any fee field
+you set, including `feeValue: 0`, is submitted as given.
 
 Apps can build a trusted fee preset once they know the transaction shape, then
 submit the same preset with the transaction. The user may still override these

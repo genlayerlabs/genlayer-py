@@ -918,6 +918,7 @@ def _make_client(add_transaction_abi, chain_id=localnet.id):
         },
         default_number_of_initial_validators=5,
         default_consensus_max_rotations=3,
+        fee_manager_contract=None,
     )
     local_account = SimpleNamespace(address=SENDER)
     return SimpleNamespace(
@@ -925,6 +926,23 @@ def _make_client(add_transaction_abi, chain_id=localnet.id):
         local_account=local_account,
         provider=Mock(),
         w3=Web3(),
+    )
+
+
+def _studio_fee_config_provider(enabled):
+    return SimpleNamespace(
+        make_request=Mock(
+            return_value={
+                "result": {
+                    "enabled": enabled,
+                    "policy": {
+                        "genPerTimeUnit": "10" if enabled else "0",
+                        "storageUnitPrice": "20" if enabled else "0",
+                        "receiptGasPrice": "30" if enabled else "0",
+                    },
+                }
+            }
+        )
     )
 
 
@@ -1895,6 +1913,7 @@ def test_write_contract_refreshes_consensus_abi_before_add_transaction_encoding(
     monkeypatch,
 ):
     client = _make_client(ADD_TRANSACTION_ABI_V5)
+    client.provider = _studio_fee_config_provider(enabled=False)
     client.initialize_consensus_smart_contract = Mock(
         side_effect=lambda: client.chain.consensus_main_contract.__setitem__(
             "abi", ADD_TRANSACTION_ABI_V6
@@ -1923,3 +1942,154 @@ def test_write_contract_refreshes_consensus_abi_before_add_transaction_encoding(
     assert result == "0xdeadbeef"
     client.initialize_consensus_smart_contract.assert_called_once_with()
     assert captured["encoded_data"].startswith(f"0x{selector}")
+
+
+FEES_REQUIRED_MATCH = "fees are required on this chain"
+NETWORK_CHAIN_ID = 4221
+
+
+def _capture_send(monkeypatch):
+    send = Mock(return_value="0xdeadbeef")
+    monkeypatch.setattr(contract_actions, "_send_transaction", send)
+    return send
+
+
+def _write_without_fees(client, **kwargs):
+    return contract_actions.write_contract(
+        self=client,
+        address=RECIPIENT,
+        function_name="ping",
+        account=client.local_account,
+        **kwargs,
+    )
+
+
+def _deploy_without_fees(client, **kwargs):
+    return contract_actions.deploy_contract(
+        self=client,
+        code="# contract",
+        account=client.local_account,
+        **kwargs,
+    )
+
+
+@pytest.mark.parametrize("submit", [_write_without_fees, _deploy_without_fees])
+@pytest.mark.parametrize("fees", [None, {}, {"feeValue": None}])
+def test_omitted_fees_are_rejected_before_sending_when_studio_charges_fees(
+    monkeypatch, submit, fees
+):
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client.provider = _studio_fee_config_provider(enabled=True)
+    client.initialize_consensus_smart_contract = Mock()
+    send = _capture_send(monkeypatch)
+
+    with pytest.raises(GenLayerError, match=FEES_REQUIRED_MATCH) as error:
+        submit(client, fees=fees)
+
+    assert "estimate_transaction_fees()" in str(error.value)
+    assert "estimate_transaction_fees_for_write()" in str(error.value)
+    send.assert_not_called()
+
+
+@pytest.mark.parametrize("submit", [_write_without_fees, _deploy_without_fees])
+def test_omitted_fees_stay_gasless_when_studio_fee_policy_is_disabled(
+    monkeypatch, submit
+):
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client.provider = _studio_fee_config_provider(enabled=False)
+    client.initialize_consensus_smart_contract = Mock()
+    send = _capture_send(monkeypatch)
+
+    assert submit(client) == "0xdeadbeef"
+    assert send.call_args.kwargs["value"] == 0
+
+
+@pytest.mark.parametrize("submit", [_write_without_fees, _deploy_without_fees])
+def test_omitted_fees_stay_gasless_on_studio_without_fee_config(monkeypatch, submit):
+    client = _make_client(ADD_TRANSACTION_ABI_V6)
+    client.provider = SimpleNamespace(
+        make_request=Mock(
+            side_effect=GenLayerError(
+                "sim_getFeeConfig failed (code=-32601): Method not found"
+            )
+        )
+    )
+    client.initialize_consensus_smart_contract = Mock()
+    send = _capture_send(monkeypatch)
+
+    assert submit(client) == "0xdeadbeef"
+    assert send.call_args.kwargs["value"] == 0
+
+
+def test_omitted_fees_surface_other_studio_fee_config_failures(monkeypatch):
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client.provider = SimpleNamespace(
+        make_request=Mock(
+            side_effect=GenLayerError("Request to http://studio failed: timeout")
+        )
+    )
+    client.initialize_consensus_smart_contract = Mock()
+    send = _capture_send(monkeypatch)
+
+    with pytest.raises(GenLayerError, match="Fee policy estimation is not supported"):
+        _write_without_fees(client)
+
+    send.assert_not_called()
+
+
+@pytest.mark.parametrize("submit", [_write_without_fees, _deploy_without_fees])
+def test_omitted_fees_skip_the_policy_read_without_a_policy_source(
+    monkeypatch, submit
+):
+    client = _make_client(ADD_TRANSACTION_ABI_V6, chain_id=NETWORK_CHAIN_ID)
+    client.initialize_consensus_smart_contract = Mock()
+    send = _capture_send(monkeypatch)
+
+    assert submit(client) == "0xdeadbeef"
+    client.provider.make_request.assert_not_called()
+    assert send.call_args.kwargs["value"] == 0
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_omitted_fees_follow_the_fee_manager_policy_on_network_chains(
+    monkeypatch, enabled
+):
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES, chain_id=NETWORK_CHAIN_ID)
+    client.chain.fee_manager_contract = {
+        "address": "0x4444444444444444444444444444444444444444"
+    }
+    client.initialize_consensus_smart_contract = Mock()
+    read_policy = Mock(return_value={"enabled": enabled})
+    monkeypatch.setattr(contract_actions, "get_current_fee_policy", read_policy)
+    send = _capture_send(monkeypatch)
+
+    if enabled:
+        with pytest.raises(GenLayerError, match=FEES_REQUIRED_MATCH):
+            _write_without_fees(client)
+        send.assert_not_called()
+    else:
+        assert _write_without_fees(client) == "0xdeadbeef"
+    read_policy.assert_called_once_with(client)
+
+
+@pytest.mark.parametrize("submit", [_write_without_fees, _deploy_without_fees])
+@pytest.mark.parametrize(
+    "fees",
+    [
+        {"feeValue": 0},
+        {"fee_value": 7},
+        {"feeValue": 5, "distribution": {"executionBudgetPerRound": 0}},
+    ],
+)
+def test_caller_set_fees_are_sent_without_reading_the_policy(
+    monkeypatch, submit, fees
+):
+    client = _make_client(ADD_TRANSACTION_ABI_WITH_FEES)
+    client.provider = _studio_fee_config_provider(enabled=True)
+    client.initialize_consensus_smart_contract = Mock()
+    send = _capture_send(monkeypatch)
+
+    assert submit(client, fees=fees) == "0xdeadbeef"
+    client.provider.make_request.assert_not_called()
+    expected = fees.get("feeValue", fees.get("fee_value"))
+    assert send.call_args.kwargs["value"] == expected

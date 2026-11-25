@@ -42,6 +42,11 @@
 	},
 	{
 		"inputs": [],
+		"name": "InvalidRegistry",
+		"type": "error"
+	},
+	{
+		"inputs": [],
 		"name": "InvalidSender",
 		"type": "error"
 	},
@@ -75,6 +80,16 @@
 			}
 		],
 		"name": "OwnableUnauthorizedAccount",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "ProtocolNotSealed",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "RegistryBindingLocked",
 		"type": "error"
 	},
 	{
@@ -409,6 +424,43 @@
 			}
 		],
 		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "_txId",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_expectedDecisionId",
+				"type": "uint256"
+			}
+		],
+		"name": "previewAppealJuryCount",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "protocolComponentId",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"stateMutability": "pure",
 		"type": "function"
 	},
 	{

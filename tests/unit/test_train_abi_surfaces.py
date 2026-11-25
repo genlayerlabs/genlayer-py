@@ -12,17 +12,17 @@ from genlayer_py.consensus.abi import (
 from genlayer_py.staking.abi import STAKING_ABI, VALIDATOR_WALLET_ABI
 
 # Hashes of the recursively canonicalized function surfaces generated from the
-# exact consensus train artifacts at 42ea0aaf7aed9b1426681c37ee046154e22df163,
-# with IGenLayerStaking taken from genlayer-consensus#1403 (CON-471:
-# ValidatorStake.live -> hasUnclaimedRewards) at c6b482f16.
+# genlayer-consensus v0.6.0 artifacts (8805afba138cb98ca9142cb94c01acca7e4b5d80),
+# the release Bradbury Phase 3 runs: ConsensusData, ConsensusMainWithFees,
+# Appeals, IGenLayerStaking and ValidatorWalletBlueprint.
 # This covers every nested tuple component, not just top-level selectors or
 # function names.
 EXPECTED_TRAIN_FUNCTION_SURFACE_HASHES = {
-    "ConsensusData": "3a7d39f4ed6c6aaa8dc1cfd5035387191f68c737ba499cd9732cf89fc97b7d34",
-    "ConsensusMain": "6542ed4ac55be2cdb85d190d2bc9e7e04d13a707cea9d89bde2e53feb2586ed5",
-    "Appeals": "7ff07eb47a1e801645e55141bcf75aaae022d46f06c8a94f29806a9fc61a0857",
-    "IGenLayerStaking": "3cbca6944d8f03f271e2f4640ac22209a2e1d3484856963136708f5c4096a0d8",
-    "ValidatorWalletBlueprint": "6960726132fd77007eec8a90f036ef4be8d8efdcb6c6b79136c8835bb0b17800",
+    "ConsensusData": "de78eb7b9b950bf3ad7c1b4e4486f123f3b32faf90c3576ca0fc326940b4c850",
+    "ConsensusMain": "4b553fbf4b43e1ce9f2a7ad46a482b0970ef204077a5d4fb2698ea8dcb6cb2d0",
+    "Appeals": "8f73cc982a95ed727f165d1b221eb227a40fe68862cef51a51cfbbcb7ef560e1",
+    "IGenLayerStaking": "2fa0b1287b943f719f5e900b14b55a24f196554edbfd8230cff605466bca24a1",
+    "ValidatorWalletBlueprint": "3befb78d9eed9d50a60cac7508bc8c9b076ad43d5b523f15eba15f673051fedb",
 }
 
 

@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Build distribution: `uv build`
 
 ### Release
-- Semantic version release: `./scripts/semantic-version-release.sh`
+- Release (RC or final, on the `vX.Y-dev` branch): `./scripts/release.sh --dry-run <version>`, see `.claude/skills/release/SKILL.md`
 - Verify upstream: `./scripts/verify-upstream.sh`
 
 ## Architecture Overview
@@ -79,4 +79,4 @@ Main SDK exports from `genlayer_py/__init__.py`:
 1. The SDK is distributed via PyPI as `genlayer-py`
 2. Supports Python 3.12+ with web3.py as the core dependency
 3. Uses setuptools for packaging with automatic JSON ABI inclusion
-4. Semantic versioning with automated release scripts
+4. Versions are bumped only by `scripts/release.sh` (python-semantic-release); do not edit them manually

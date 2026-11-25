@@ -31,16 +31,25 @@ Have ideas for new features or use cases? We're eager to hear them! But first:
 ## Branch model
 
 See [docs/BRANCHING.md](docs/BRANCHING.md) for the current release-train model.
-In short: independently releasable work may target the stable branch directly;
-multi-feature or cross-repo train work uses the active `*-dev` integration
-branch and is promoted to the matching stable branch when ready. `main` is only
-the default/static GitHub branch.
+In short: every change targets the `*-dev` integration branch of its line, and
+that branch is promoted to the matching stable branch by `scripts/release.sh
+--promote` when a release is ready. PRs do not target a stable branch directly.
+`main` is only the default/static GitHub branch.
 
 ## Releases
 
-Releases are deliberate, not automatic. `scripts/release.sh` bumps the version, updates `CHANGELOG.md`, commits, tags, and pushes; CI takes over from the tag push and publishes to PyPI. Release candidates are cut from the active `*-dev` branch (for example, `v0.19.0-rc.1` from `v0.19-dev`), while final versions are cut from the matching stable branch. See `.claude/skills/release/SKILL.md` for the full flow.
+Releases are deliberate, not automatic. Every release commit is made on the `*-dev` branch of its line by `scripts/release.sh`, which bumps the version and updates `CHANGELOG.md`; CI takes over from the tag push and publishes to PyPI.
 
-**Semver-zero rule**: this package is on a 0.x line, so the MINOR component is the breaking-change boundary. `0.18 → 0.19` is a major bump and needs a new branch — the script refuses `minor`/`major` keywords without `--allow-major`.
+- **Release candidate** (one step): `scripts/release.sh 0.19.1-rc.1` on `v0.19-dev` commits, tags and pushes.
+- **Final** (two steps, with a merge hold in between):
+  1. `scripts/release.sh 0.19.1` on `v0.19-dev` pushes the release commit without a tag. That commit is the head of the promotion PR `v0.19-dev` → `v0.19`, so `Tests` and `E2E Tests` run on it. From this push until step 2 is done, nothing else merges into `v0.19-dev`: a commit that lands after the release commit forces a new release commit and a new E2E run.
+  2. Once both are green on that commit, `scripts/release.sh --promote 0.19.1` fast-forwards `v0.19` to it with a plain push and tags it.
+
+Only `--promote` lands the promotion PR. Never use the merge button, GitHub auto-merge, the E2E app's merge train (`/merge`, `/merge-train` or its merge action) or the Legatus self-merge loop on it: a merge or squash commit is a commit `E2E Tests` did not run on, and a squash also breaks ancestry between the two branches. The fast-forward closes the PR as merged.
+
+The stable branch only accepts commits that already have a green `E2E Tests` check, which is why the version bump happens on dev before promotion and not on the stable branch after it. `--dry-run` runs the checks of any of these commands without changing anything; options are accepted before or after the version (`scripts/release.sh --dry-run 0.19.1`). See `.claude/skills/release/SKILL.md` for the full flow.
+
+**Semver-zero rule**: this package is on a 0.x line, so the MINOR component is the breaking-change boundary. `0.18 → 0.19` is a major bump and needs a new branch — the script refuses `minor`/`major` keywords without `--allow-major`. The first RC of a new line is `scripts/release.sh minor --allow-major`, cut after the previous line's stable branch was merged into the new dev branch (see "Starting a new line" in `docs/BRANCHING.md`).
 
 ### Bug fixing and Feature development
 
@@ -162,7 +171,7 @@ The project uses automated semantic versioning based on commit messages:
 | `feat!:`, `fix!:`, or `BREAKING CHANGE:` | **Major** version bump | 1.0.0 → 2.0.0 |
 | `docs:`, `style:`, `refactor:`, `test:`, `chore:`, `build:`, `ci:` | **No** version bump | Version stays the same |
 
-**Important**: Never manually edit version numbers in `pyproject.toml` or other files. Final releases are cut from the stable branch and release candidates from its matching `*-dev` branch using the release automation described above.
+**Important**: Never manually edit version numbers in `pyproject.toml` or other files. Release candidates and finals are both cut from the `*-dev` branch of their line using the release automation described above.
 
 ## Logging Configuration
 

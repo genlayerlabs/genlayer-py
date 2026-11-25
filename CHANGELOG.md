@@ -2,6 +2,36 @@
 
 <!-- version list -->
 
+## v0.19.1 (2026-11-25)
+
+### Bug Fixes
+
+- **chains**: Move testnet_bradbury to Bradbury Phase 3 and resync ABIs to consensus v0.6.0
+  ([`6d83f81`](https://github.com/genlayerlabs/genlayer-py/commit/6d83f81950f341f2e74d6d711dbdb1974174f09f))
+
+### Continuous Integration
+
+- **release**: Cut finals on the dev branch and promote by fast-forward
+  ([#129](https://github.com/genlayerlabs/genlayer-py/pull/129),
+  [`c9e632a`](https://github.com/genlayerlabs/genlayer-py/commit/c9e632a830d833c715d57bdf12487e198bf0642c))
+
+- **release**: Fail closed on unreadable release state and name /merge in the docs
+  ([#130](https://github.com/genlayerlabs/genlayer-py/pull/130),
+  [`ecf315c`](https://github.com/genlayerlabs/genlayer-py/commit/ecf315c6c90d0a20fa44e65c71ca038881f8b754))
+
+- **release**: Harden the dev-first release flow after review
+  ([#129](https://github.com/genlayerlabs/genlayer-py/pull/129),
+  [`c9e632a`](https://github.com/genlayerlabs/genlayer-py/commit/c9e632a830d833c715d57bdf12487e198bf0642c))
+
+- **release**: Never skip a version and require the previous final in history
+  ([#132](https://github.com/genlayerlabs/genlayer-py/pull/132),
+  [`a6a4608`](https://github.com/genlayerlabs/genlayer-py/commit/a6a460850be5f1d0528a29ce54cf9d1db5353439))
+
+- **release**: Repeat the previous-line check in --promote
+  ([#134](https://github.com/genlayerlabs/genlayer-py/pull/134),
+  [`9939787`](https://github.com/genlayerlabs/genlayer-py/commit/9939787a0a36a75e553c073b1f4549af8f6f1781))
+
+
 ## v0.19.0 (2026-11-23)
 
 ### Bug Fixes

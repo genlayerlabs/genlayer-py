@@ -1,12 +1,13 @@
 name: Publish Package to PyPI
 
-# Tag-driven publish. The release is cut by a human (or Claude via the
-# release skill) running scripts/release.sh on the owning version branch
-# — that script bumps pyproject.toml, updates CHANGELOG.md, commits,
-# tags vX.Y.Z, and pushes both the branch commit and the tag. This
-# workflow fires on the tag push, runs tests, sanity-checks the tag
-# matches pyproject.toml, builds, and publishes to PyPI. It never
-# bumps or tags by itself.
+# Tag-driven publish. Releases are cut by a human (or Claude via the
+# release skill) with scripts/release.sh. The release commit (version,
+# lockfile, CHANGELOG.md) is always made on the vX.Y-dev branch: an RC
+# is tagged there, a final is tagged by `release.sh --promote` after
+# the stable branch was fast-forwarded to that commit. This workflow
+# fires on the tag push, runs tests, checks that the tag matches
+# pyproject.toml and is the head of its owning branch, builds, and
+# publishes to PyPI. It never bumps or tags by itself.
 on:
   push:
     tags:

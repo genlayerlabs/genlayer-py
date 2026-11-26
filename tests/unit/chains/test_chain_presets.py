@@ -164,13 +164,37 @@ def test_clarke_is_an_exported_public_testnet():
     assert not is_studio_chain(testnet_clarke)
 
 
-def test_clarke_has_no_contracts_until_its_deployment_is_published():
-    for field in (
-        "consensus_main_contract",
-        "consensus_data_contract",
-        "fee_manager_contract",
-        "rounds_storage_contract",
-        "appeals_contract",
-        "staking_contract",
-    ):
-        assert getattr(testnet_clarke, field) is None
+CONTRACT_FIELDS = (
+    "consensus_main_contract",
+    "consensus_data_contract",
+    "fee_manager_contract",
+    "rounds_storage_contract",
+    "appeals_contract",
+    "staking_contract",
+)
+
+
+def test_clarke_targets_the_clarke_deployment():
+    assert testnet_clarke.id == 4221
+    assert testnet_clarke.rpc_urls == {
+        "default": {"http": ["https://rpc.testnet-chain.genlayer.com"]}
+    }
+    addresses = {
+        field: getattr(testnet_clarke, field)["address"] for field in CONTRACT_FIELDS
+    }
+    assert addresses == {
+        "consensus_main_contract": "0xa44222E0beDaB12329557499ae6E555b1c9D02ee",
+        "consensus_data_contract": "0x16Ef1E1EF400A7fE0e572445974b95DA17370de9",
+        "fee_manager_contract": "0xd072dce2439d46C1F972810C6593D744c919b48a",
+        "rounds_storage_contract": "0xefD3b249591a0fBe1cdf6d3b4e36e7D8Dee7d4C4",
+        "appeals_contract": "0xd6a836eb592Dd0b216f65bDc954Ca5bCff5DDaa2",
+        "staking_contract": "0x711d111510Af2Bb35c3929b709677a1E9f8ffce2",
+    }
+
+
+def test_clarke_shares_the_bradbury_phase_3_abis():
+    for field in CONTRACT_FIELDS:
+        assert (
+            getattr(testnet_clarke, field)["abi"]
+            is getattr(testnet_bradbury, field)["abi"]
+        )

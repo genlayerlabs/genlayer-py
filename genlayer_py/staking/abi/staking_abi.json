@@ -6,6 +6,16 @@
 	},
 	{
 		"inputs": [],
+		"name": "BoundedUnbanRequired",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "BulkUnbanJobActive",
+		"type": "error"
+	},
+	{
+		"inputs": [],
 		"name": "BurnTransferFailed",
 		"type": "error"
 	},
@@ -87,6 +97,22 @@
 	{
 		"inputs": [
 			{
+				"internalType": "uint256",
+				"name": "commit",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "slashSafeBefore",
+				"type": "uint256"
+			}
+		],
+		"name": "ExitTouchesSlashableCommit",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
 				"internalType": "address",
 				"name": "validator",
 				"type": "address"
@@ -117,6 +143,11 @@
 	},
 	{
 		"inputs": [],
+		"name": "InflationNotInitialized",
+		"type": "error"
+	},
+	{
+		"inputs": [],
 		"name": "InflationRequestFailed",
 		"type": "error"
 	},
@@ -137,6 +168,16 @@
 	},
 	{
 		"inputs": [],
+		"name": "InvalidBulkUnbanJob",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "InvalidDaoFeeBps",
+		"type": "error"
+	},
+	{
+		"inputs": [],
 		"name": "InvalidInflationThresholds",
 		"type": "error"
 	},
@@ -153,6 +194,11 @@
 	{
 		"inputs": [],
 		"name": "InvalidPrimingSelfStakeBps",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "InvalidSlashRewardRecipient",
 		"type": "error"
 	},
 	{
@@ -199,6 +245,22 @@
 		"type": "error"
 	},
 	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "requested",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "reservations",
+				"type": "uint256"
+			}
+		],
+		"name": "MaxValidatorsBelowReservations",
+		"type": "error"
+	},
+	{
 		"inputs": [],
 		"name": "MaxValidatorsCannotBeZero",
 		"type": "error"
@@ -217,6 +279,22 @@
 			}
 		],
 		"name": "MaxValidatorsExceedsSafeLimit",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "evictions",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "limit",
+				"type": "uint256"
+			}
+		],
+		"name": "MaxValidatorsReductionTooLarge",
 		"type": "error"
 	},
 	{
@@ -381,6 +459,11 @@
 	},
 	{
 		"inputs": [],
+		"name": "QuarantineIndexIncomplete",
+		"type": "error"
+	},
+	{
+		"inputs": [],
 		"name": "ReductionFactorCannotBeZero",
 		"type": "error"
 	},
@@ -393,11 +476,58 @@
 		"inputs": [
 			{
 				"internalType": "uint256",
+				"name": "heapSize",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "rosterCount",
+				"type": "uint256"
+			}
+		],
+		"name": "SeatHeapOutOfSync",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "util",
+				"type": "uint256"
+			}
+		],
+		"name": "SeatHeapUtilOverflow",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
 				"name": "epoch",
 				"type": "uint256"
 			}
 		],
 		"name": "SelectionAuthorityPinned",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "ServingLiabilityAlreadyActive",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "SlashRewardNotReady",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "SlashRewardNotSweepable",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "SlashRewardSwept",
 		"type": "error"
 	},
 	{
@@ -424,6 +554,17 @@
 			}
 		],
 		"name": "UnbanCapExceeded",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			}
+		],
+		"name": "UnindexedQuarantine",
 		"type": "error"
 	},
 	{
@@ -487,6 +628,17 @@
 		"type": "error"
 	},
 	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			}
+		],
+		"name": "ValidatorSlashInProgress",
+		"type": "error"
+	},
+	{
 		"inputs": [],
 		"name": "ValidatorWithdrawalExceedsStake",
 		"type": "error"
@@ -505,7 +657,7 @@
 		"anonymous": false,
 		"inputs": [
 			{
-				"indexed": false,
+				"indexed": true,
 				"internalType": "address",
 				"name": "validator",
 				"type": "address"
@@ -513,23 +665,123 @@
 			{
 				"indexed": false,
 				"internalType": "uint256",
-				"name": "newVStake",
+				"name": "targetEpoch",
+				"type": "uint256"
+			}
+		],
+		"name": "ActiveSetSeatAdmitted",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "displacedBy",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "targetEpoch",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "enum IGenLayerStaking.ActiveSetEvictionReason",
+				"name": "reason",
+				"type": "uint8"
+			}
+		],
+		"name": "ActiveSetSeatEvicted",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "jobId",
+				"type": "uint256"
+			}
+		],
+		"name": "BulkUnbanCanceled",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "jobId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "processed",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "removed",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "nextIndex",
 				"type": "uint256"
 			},
 			{
 				"indexed": false,
 				"internalType": "bool",
-				"name": "recordX",
+				"name": "done",
+				"type": "bool"
+			},
+			{
+				"indexed": false,
+				"internalType": "bool",
+				"name": "waitingForAllowance",
 				"type": "bool"
 			}
 		],
-		"name": "AdminStakeCorrected",
+		"name": "BulkUnbanProgress",
 		"type": "event"
 	},
 	{
 		"anonymous": false,
-		"inputs": [],
-		"name": "AllValidatorBansRemoved",
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "jobId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "end",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "historyVersion",
+				"type": "uint256"
+			}
+		],
+		"name": "BulkUnbanStarted",
 		"type": "event"
 	},
 	{
@@ -706,6 +958,31 @@
 		"anonymous": false,
 		"inputs": [
 			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "evicted",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "displacedBy",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "targetEpoch",
+				"type": "uint256"
+			}
+		],
+		"name": "EconomicCohortEvicted",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
 				"indexed": false,
 				"internalType": "uint256",
 				"name": "epoch",
@@ -790,6 +1067,19 @@
 			}
 		],
 		"name": "InflationReceived",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "retryAfter",
+				"type": "uint256"
+			}
+		],
+		"name": "InflationRequestRetryAfterSet",
 		"type": "event"
 	},
 	{
@@ -1024,6 +1314,19 @@
 		"anonymous": false,
 		"inputs": [
 			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "firstServiceEpoch",
+				"type": "uint256"
+			}
+		],
+		"name": "ServingLiabilityActivated",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
 				"indexed": false,
 				"internalType": "uint256",
 				"name": "daoFeeBps",
@@ -1123,11 +1426,24 @@
 			{
 				"indexed": false,
 				"internalType": "address",
-				"name": "gen",
+				"name": "governanceGesRegistry",
 				"type": "address"
 			}
 		],
-		"name": "SetGen",
+		"name": "SetGovernanceGesRegistry",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "governanceVotingPower",
+				"type": "address"
+			}
+		],
+		"name": "SetGovernanceVotingPower",
 		"type": "event"
 	},
 	{
@@ -1281,25 +1597,6 @@
 			}
 		],
 		"name": "SharelessStakeZeroed",
-		"type": "event"
-	},
-	{
-		"anonymous": false,
-		"inputs": [
-			{
-				"indexed": false,
-				"internalType": "uint256",
-				"name": "removed",
-				"type": "uint256"
-			},
-			{
-				"indexed": false,
-				"internalType": "uint256",
-				"name": "remaining",
-				"type": "uint256"
-			}
-		],
-		"name": "TemporaryValidatorBansRemovalProgress",
 		"type": "event"
 	},
 	{
@@ -1706,6 +2003,192 @@
 		"inputs": [
 			{
 				"indexed": true,
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "work",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "bool",
+				"name": "ready",
+				"type": "bool"
+			}
+		],
+		"name": "ValidatorSlashProgress",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "round",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "keeper",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "recipient",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "ValidatorSlashRewardClaimed",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "round",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "budget",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "totalWork",
+				"type": "uint256"
+			}
+		],
+		"name": "ValidatorSlashRewardReserved",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "round",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "caller",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "ValidatorSlashRewardSwept",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "round",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "keeper",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "work",
+				"type": "uint256"
+			}
+		],
+		"name": "ValidatorSlashWorkCredited",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "epoch",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "alpha",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "beta",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint64",
+				"name": "version",
+				"type": "uint64"
+			}
+		],
+		"name": "ValidatorWeightPolicyPromoted",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
 				"internalType": "uint256",
 				"name": "epoch",
 				"type": "uint256"
@@ -1966,6 +2449,13 @@
 	},
 	{
 		"inputs": [],
+		"name": "activateServingLiability",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
 		"name": "addressManager",
 		"outputs": [
 			{
@@ -2087,6 +2577,19 @@
 	{
 		"inputs": [
 			{
+				"internalType": "uint256",
+				"name": "jobId",
+				"type": "uint256"
+			}
+		],
+		"name": "cancelTemporaryUnban",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
 				"internalType": "uint64",
 				"name": "_attemptId",
 				"type": "uint64"
@@ -2103,9 +2606,100 @@
 		"type": "function"
 	},
 	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "round",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address payable",
+				"name": "recipient",
+				"type": "address"
+			}
+		],
+		"name": "claimValidatorSlashReward",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
 		"inputs": [],
 		"name": "clearEpochExtraMinDurationOverride",
 		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "escrow",
+				"type": "address"
+			}
+		],
+		"name": "configureInflationDelivery",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "jobId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "expectedIndex",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "maxWork",
+				"type": "uint256"
+			}
+		],
+		"name": "continueTemporaryUnban",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "processed",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "removed",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "nextIndex",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "done",
+				"type": "bool"
+			},
+			{
+				"internalType": "bool",
+				"name": "waitingForAllowance",
+				"type": "bool"
+			}
+		],
 		"stateMutability": "nonpayable",
 		"type": "function"
 	},
@@ -2219,14 +2813,14 @@
 			{
 				"components": [
 					{
-						"internalType": "uint120",
+						"internalType": "uint256",
 						"name": "quantity",
-						"type": "uint120"
+						"type": "uint256"
 					},
 					{
-						"internalType": "uint120",
+						"internalType": "uint256",
 						"name": "offset",
-						"type": "uint120"
+						"type": "uint256"
 					},
 					{
 						"internalType": "uint256",
@@ -2251,9 +2845,9 @@
 						"type": "uint256"
 					},
 					{
-						"internalType": "uint120",
+						"internalType": "uint256",
 						"name": "outstanding",
-						"type": "uint120"
+						"type": "uint256"
 					},
 					{
 						"internalType": "uint64",
@@ -2297,7 +2891,7 @@
 				"type": "address"
 			},
 			{
-				"internalType": "uint256",
+				"internalType": "EpochNum",
 				"name": "_epoch",
 				"type": "uint256"
 			}
@@ -2317,9 +2911,9 @@
 						"type": "uint256"
 					},
 					{
-						"internalType": "uint120",
+						"internalType": "uint256",
 						"name": "outstanding",
-						"type": "uint120"
+						"type": "uint256"
 					},
 					{
 						"internalType": "uint64",
@@ -2441,14 +3035,14 @@
 			{
 				"components": [
 					{
-						"internalType": "uint120",
+						"internalType": "uint256",
 						"name": "quantity",
-						"type": "uint120"
+						"type": "uint256"
 					},
 					{
-						"internalType": "uint120",
+						"internalType": "uint256",
 						"name": "offset",
-						"type": "uint120"
+						"type": "uint256"
 					},
 					{
 						"internalType": "uint256",
@@ -2473,9 +3067,9 @@
 						"type": "uint256"
 					},
 					{
-						"internalType": "uint120",
+						"internalType": "uint256",
 						"name": "outstanding",
-						"type": "uint120"
+						"type": "uint256"
 					},
 					{
 						"internalType": "uint64",
@@ -2519,7 +3113,7 @@
 				"type": "address"
 			},
 			{
-				"internalType": "uint256",
+				"internalType": "EpochNum",
 				"name": "_epoch",
 				"type": "uint256"
 			}
@@ -2539,9 +3133,9 @@
 						"type": "uint256"
 					},
 					{
-						"internalType": "uint120",
+						"internalType": "uint256",
 						"name": "outstanding",
-						"type": "uint120"
+						"type": "uint256"
 					},
 					{
 						"internalType": "uint64",
@@ -3132,7 +3726,7 @@
 				"type": "bytes32"
 			},
 			{
-				"internalType": "uint256",
+				"internalType": "Timestamp",
 				"name": "_txCreatedTimestamp",
 				"type": "uint256"
 			}
@@ -3443,7 +4037,7 @@
 	{
 		"inputs": [
 			{
-				"internalType": "uint256",
+				"internalType": "Timestamp",
 				"name": "_txCreatedTimestamp",
 				"type": "uint256"
 			}
@@ -3702,6 +4296,53 @@
 		"type": "function"
 	},
 	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "expectedIndex",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "maxWork",
+				"type": "uint256"
+			}
+		],
+		"name": "indexQuarantines",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "processed",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "nextIndex",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "done",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "inflationBurnCustody",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
 		"inputs": [],
 		"name": "inflationEpoch",
 		"outputs": [
@@ -3749,6 +4390,42 @@
 		"inputs": [
 			{
 				"internalType": "uint256",
+				"name": "epochTo",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "inauguralTimestamp",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "policy",
+				"type": "bytes32"
+			}
+		],
+		"name": "inflationInitTracked",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "inflationPolicyHash",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
 				"name": "_epoch",
 				"type": "uint256"
 			}
@@ -3756,6 +4433,68 @@
 		"name": "inflationReceive",
 		"outputs": [],
 		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "epochFrom",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "epochTo",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "policy",
+				"type": "bytes32"
+			}
+		],
+		"name": "inflationReceiveTracked",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "inflationReductionFactor",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "inflationRefundEscrow",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "inflationRequestRetryAfter",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
 		"type": "function"
 	},
 	{
@@ -4153,6 +4892,34 @@
 	},
 	{
 		"inputs": [],
+		"name": "pendingValidatorWeightParams",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "alpha",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "beta",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint64",
+				"name": "version",
+				"type": "uint64"
+			},
+			{
+				"internalType": "bool",
+				"name": "pending",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
 		"name": "permanentRestrictionVersion",
 		"outputs": [
 			{
@@ -4253,6 +5020,29 @@
 				"internalType": "uint256",
 				"name": "",
 				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "quarantineIndexProgress",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "nextIndex",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "end",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "done",
+				"type": "bool"
 			}
 		],
 		"stateMutability": "view",
@@ -4450,7 +5240,7 @@
 				"type": "uint256"
 			},
 			{
-				"internalType": "uint256",
+				"internalType": "Timestamp",
 				"name": "_txCreatedTimestamp",
 				"type": "uint256"
 			},
@@ -4539,6 +5329,307 @@
 	{
 		"inputs": [
 			{
+				"internalType": "uint256[]",
+				"name": "_registryIndexes",
+				"type": "uint256[]"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_quarantineFloor",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_judicialFloor",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_opensAt",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_closesAt",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_epoch",
+				"type": "uint256"
+			}
+		],
+		"name": "selectionBarredInWindow",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "barredBits",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"components": [
+					{
+						"internalType": "bytes32",
+						"name": "seed",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "uint256",
+						"name": "slot",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "number",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "count",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint64",
+						"name": "generation",
+						"type": "uint64"
+					},
+					{
+						"internalType": "address",
+						"name": "pointer",
+						"type": "address"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "runtimeCodeHash",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "snapshotHash",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "uint256",
+						"name": "maxUtil",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256[7]",
+						"name": "temporaryUnavailableBits",
+						"type": "uint256[7]"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "consumedRegistryIndexes",
+						"type": "uint256[]"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "priorSlotPenalizedRegistryIndexes",
+						"type": "uint256[]"
+					}
+				],
+				"internalType": "struct IGenLayerStaking.SnapshotSelectionRequest",
+				"name": "_request",
+				"type": "tuple"
+			},
+			{
+				"components": [
+					{
+						"internalType": "uint256",
+						"name": "quarantineVersion",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "judicialVersion",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "anchor",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "slotDuration",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "firstWindow",
+						"type": "uint256"
+					}
+				],
+				"internalType": "struct IGenLayerStaking.SelectionAsOf",
+				"name": "_asOf",
+				"type": "tuple"
+			},
+			{
+				"components": [
+					{
+						"internalType": "uint256",
+						"name": "phase",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "drawn",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "step",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "rand",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "position",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "stride",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "bound",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "quarantineVersion",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "judicialVersion",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "selectedPositions",
+						"type": "uint256[]"
+					}
+				],
+				"internalType": "struct IGenLayerStaking.SelectionDrawCursor",
+				"name": "_cursor",
+				"type": "tuple"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_drawCount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_maxSteps",
+				"type": "uint256"
+			}
+		],
+		"name": "selectionDrawPageFromSnapshotAuthority",
+		"outputs": [
+			{
+				"internalType": "uint256[]",
+				"name": "drawn",
+				"type": "uint256[]"
+			},
+			{
+				"components": [
+					{
+						"internalType": "uint256",
+						"name": "phase",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "drawn",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "step",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "rand",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "position",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "stride",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "bound",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "quarantineVersion",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "judicialVersion",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "selectedPositions",
+						"type": "uint256[]"
+					}
+				],
+				"internalType": "struct IGenLayerStaking.SelectionDrawCursor",
+				"name": "cursor",
+				"type": "tuple"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
 				"internalType": "uint256",
 				"name": "_epoch",
 				"type": "uint256"
@@ -4574,6 +5665,35 @@
 				"internalType": "uint256",
 				"name": "maxUtil",
 				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_epoch",
+				"type": "uint256"
+			}
+		],
+		"name": "selectionEpochWeightPolicy",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "alpha",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "beta",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint64",
+				"name": "version",
+				"type": "uint64"
 			}
 		],
 		"stateMutability": "view",
@@ -4704,7 +5824,7 @@
 				"type": "uint256"
 			},
 			{
-				"internalType": "uint256",
+				"internalType": "Timestamp",
 				"name": "_txCreatedTimestamp",
 				"type": "uint256"
 			},
@@ -4942,6 +6062,19 @@
 		"type": "function"
 	},
 	{
+		"inputs": [],
+		"name": "servingLiabilityFromEpoch",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
 		"inputs": [
 			{
 				"internalType": "uint256",
@@ -5062,19 +6195,6 @@
 		"inputs": [
 			{
 				"internalType": "address",
-				"name": "_gen",
-				"type": "address"
-			}
-		],
-		"name": "setGen",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
 				"name": "_idlenessPhase",
 				"type": "address"
 			}
@@ -5093,6 +6213,19 @@
 			}
 		],
 		"name": "setIncentivePercentage",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_retryAfter",
+				"type": "uint256"
+			}
+		],
+		"name": "setInflationRequestRetryAfter",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -5281,7 +6414,7 @@
 		"name": "sharesOf",
 		"outputs": [
 			{
-				"internalType": "uint256",
+				"internalType": "Shares",
 				"name": "",
 				"type": "uint256"
 			}
@@ -5305,12 +6438,25 @@
 		"name": "stakeOf",
 		"outputs": [
 			{
-				"internalType": "uint256",
+				"internalType": "Gen",
 				"name": "",
 				"type": "uint256"
 			}
 		],
 		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "startTemporaryUnban",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "jobId",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "nonpayable",
 		"type": "function"
 	},
 	{
@@ -5335,6 +6481,78 @@
 			}
 		],
 		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "round",
+				"type": "uint256"
+			}
+		],
+		"name": "sweepValidatorSlashReward",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "temporaryUnbanProgress",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "jobId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "nextIndex",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "end",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "historyVersion",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "removed",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "active",
+				"type": "bool"
+			},
+			{
+				"internalType": "bool",
+				"name": "done",
+				"type": "bool"
+			},
+			{
+				"internalType": "bool",
+				"name": "canceled",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
 		"type": "function"
 	},
 	{
@@ -5609,7 +6827,7 @@
 		"name": "validatorDeposit",
 		"outputs": [
 			{
-				"internalType": "uint256",
+				"internalType": "EpochNum",
 				"name": "epoch_",
 				"type": "uint256"
 			},
@@ -5626,9 +6844,9 @@
 						"type": "uint256"
 					},
 					{
-						"internalType": "uint120",
+						"internalType": "uint256",
 						"name": "outstanding",
-						"type": "uint120"
+						"type": "uint256"
 					},
 					{
 						"internalType": "uint64",
@@ -5674,7 +6892,7 @@
 				"type": "address"
 			},
 			{
-				"internalType": "uint256",
+				"internalType": "EpochNum",
 				"name": "_epoch",
 				"type": "uint256"
 			}
@@ -5694,9 +6912,9 @@
 						"type": "uint256"
 					},
 					{
-						"internalType": "uint120",
+						"internalType": "uint256",
 						"name": "outstanding",
-						"type": "uint120"
+						"type": "uint256"
 					},
 					{
 						"internalType": "uint64",
@@ -5750,7 +6968,7 @@
 		"inputs": [
 			{
 				"internalType": "uint256",
-				"name": "_amount",
+				"name": "_sharesWithdrawal",
 				"type": "uint256"
 			}
 		],
@@ -6015,7 +7233,7 @@
 				"type": "uint256"
 			},
 			{
-				"internalType": "uint256",
+				"internalType": "Timestamp",
 				"name": "_txCreatedTimestamp",
 				"type": "uint256"
 			},
@@ -6069,7 +7287,7 @@
 				"type": "uint256"
 			},
 			{
-				"internalType": "uint256",
+				"internalType": "Timestamp",
 				"name": "_txCreatedTimestamp",
 				"type": "uint256"
 			},
@@ -6167,7 +7385,7 @@
 				"type": "uint256"
 			},
 			{
-				"internalType": "uint256",
+				"internalType": "Timestamp",
 				"name": "_txCreatedTimestamp",
 				"type": "uint256"
 			},
@@ -6284,6 +7502,351 @@
 				"internalType": "address[]",
 				"name": "penalized",
 				"type": "address[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"components": [
+					{
+						"internalType": "bytes32",
+						"name": "seed",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "uint256",
+						"name": "slot",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "number",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "count",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint64",
+						"name": "generation",
+						"type": "uint64"
+					},
+					{
+						"internalType": "address",
+						"name": "pointer",
+						"type": "address"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "runtimeCodeHash",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "snapshotHash",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "uint256",
+						"name": "maxUtil",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256[7]",
+						"name": "temporaryUnavailableBits",
+						"type": "uint256[7]"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "consumedRegistryIndexes",
+						"type": "uint256[]"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "priorSlotPenalizedRegistryIndexes",
+						"type": "uint256[]"
+					}
+				],
+				"internalType": "struct IGenLayerStaking.SnapshotSelectionRequest",
+				"name": "_request",
+				"type": "tuple"
+			},
+			{
+				"components": [
+					{
+						"internalType": "uint256",
+						"name": "quarantineVersion",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "judicialVersion",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "anchor",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "slotDuration",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "firstWindow",
+						"type": "uint256"
+					}
+				],
+				"internalType": "struct IGenLayerStaking.SelectionAsOf",
+				"name": "_asOf",
+				"type": "tuple"
+			}
+		],
+		"name": "validatorSelectionFromSnapshotAuthorityAsOf",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "leader",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address[]",
+				"name": "validators",
+				"type": "address[]"
+			},
+			{
+				"internalType": "address[]",
+				"name": "penalized",
+				"type": "address[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"components": [
+					{
+						"internalType": "bytes32",
+						"name": "seed",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "uint256",
+						"name": "slot",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "number",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "count",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint64",
+						"name": "generation",
+						"type": "uint64"
+					},
+					{
+						"internalType": "address",
+						"name": "pointer",
+						"type": "address"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "runtimeCodeHash",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "snapshotHash",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "uint256",
+						"name": "maxUtil",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256[7]",
+						"name": "temporaryUnavailableBits",
+						"type": "uint256[7]"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "consumedRegistryIndexes",
+						"type": "uint256[]"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "priorSlotPenalizedRegistryIndexes",
+						"type": "uint256[]"
+					}
+				],
+				"internalType": "struct IGenLayerStaking.SnapshotSelectionRequest",
+				"name": "_request",
+				"type": "tuple"
+			}
+		],
+		"name": "validatorSelectionIndexesFromSnapshotAuthority",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "leader",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256[]",
+				"name": "registryIndexes",
+				"type": "uint256[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_validator",
+				"type": "address"
+			}
+		],
+		"name": "validatorSelfSharesOf",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			}
+		],
+		"name": "validatorSlashProgress",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "active",
+				"type": "bool"
+			},
+			{
+				"internalType": "uint256",
+				"name": "historyEnd",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "settlementNonce",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "phase",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "index",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "round",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "keeper",
+				"type": "address"
+			}
+		],
+		"name": "validatorSlashReward",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "work",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "totalWork",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "budget",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "closed",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			}
+		],
+		"name": "validatorSlashRewardRound",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
 			}
 		],
 		"stateMutability": "view",
@@ -6503,7 +8066,7 @@
 		"name": "validatorWithdrawal",
 		"outputs": [
 			{
-				"internalType": "uint256",
+				"internalType": "EpochNum",
 				"name": "epoch_",
 				"type": "uint256"
 			},
@@ -6520,9 +8083,9 @@
 						"type": "uint256"
 					},
 					{
-						"internalType": "uint120",
+						"internalType": "uint256",
 						"name": "outstanding",
-						"type": "uint120"
+						"type": "uint256"
 					},
 					{
 						"internalType": "uint64",
@@ -6561,7 +8124,7 @@
 				"type": "address"
 			},
 			{
-				"internalType": "uint256",
+				"internalType": "EpochNum",
 				"name": "_epoch",
 				"type": "uint256"
 			}
@@ -6581,9 +8144,9 @@
 						"type": "uint256"
 					},
 					{
-						"internalType": "uint120",
+						"internalType": "uint256",
 						"name": "outstanding",
-						"type": "uint120"
+						"type": "uint256"
 					},
 					{
 						"internalType": "uint64",

@@ -123,7 +123,7 @@ def test_studio_presets_have_distinct_chain_ids():
     assert len({localnet.id, studio_devnet.id, studionet.id}) == 3
 
 
-def test_bradbury_targets_the_phase_2_deployment():
+def test_bradbury_targets_the_phase_3_deployment():
     assert testnet_bradbury.id == 4221
     assert not is_studio_chain(testnet_bradbury)
     assert testnet_bradbury.rpc_urls == {
@@ -145,11 +145,11 @@ def test_bradbury_targets_the_phase_2_deployment():
         )
     }
     assert addresses == {
-        "consensus_main_contract": "0x2E2766cbc3E5e61Ce93bBcdCBb3eAcB82082A019",
-        "consensus_data_contract": "0xc5FA6f82BEe53598825d6edf7E3e24613082c75B",
-        "fee_manager_contract": "0x7678587A847712f2A96082AC07883A88D0fc7245",
-        "rounds_storage_contract": "0x4038d4F72C7aAbA5a442cC0dA946012B9E3f4B8a",
-        "appeals_contract": "0xdc953c3bCf8837987853ca05a78D52fFC3E18651",
-        "staking_contract": "0xD8fBa96C0dBB0257028dBc0107060b958e5c7113",
+        "consensus_main_contract": "0x0f4F0e05475723790E4a2ed0598370783C300926",
+        "consensus_data_contract": "0x2247b85b7ca7fb1Fea990b4aFAB4328D9c597f28",
+        "fee_manager_contract": "0x8E8B6194020dB1CbEf9C6c9dcFeE8FfF1e5E33c3",
+        "rounds_storage_contract": "0xa6bdB728B82c23786D6e3CAfc0B97235490A64Fb",
+        "appeals_contract": "0x10F2d70ABB8F588f96bEB1a02c99163EB75A2CF1",
+        "staking_contract": "0xcE16862EAf10B97A0619BeBb662991fb4a52e346",
     }
     assert testnet_bradbury.staking_contract["abi"] is STAKING_ABI

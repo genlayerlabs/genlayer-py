@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## Unreleased (next development train; subject to owner approval)
+
+### Typing compatibility
+
+- Ship the PEP 561 `py.typed` marker. Type checkers now inspect installed SDK
+  annotations rather than treating SDK imports as `Any`; this can introduce
+  new errors in downstream CI. See [the typing audit](docs/TYPING.md) for known
+  limitations before adoption.
+- Describe `ContractMethod` as a `TypedDict`, matching the schema RPC's dictionary
+  representation instead of the previous plain-class annotation.
+
 ## v0.19.0-rc.3 (2026-11-10)
 
 ### Bug Fixes

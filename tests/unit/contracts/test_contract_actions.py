@@ -752,6 +752,34 @@ def test_encode_submit_appeal_still_requires_a_decision_id_on_the_train_shape():
         contract_actions._encode_submit_appeal_data(self=client, transaction_id=TX_ID)
 
 
+def test_prepare_transaction_serializes_chain_id_for_gas_estimation():
+    make_request = Mock(return_value={"result": "0x5208"})
+    client = SimpleNamespace(
+        chain=SimpleNamespace(id=4221),
+        get_current_nonce=Mock(return_value=7),
+        provider=SimpleNamespace(make_request=make_request),
+        w3=SimpleNamespace(
+            to_wei=Web3.to_wei,
+            eth=SimpleNamespace(get_block=Mock(return_value={"baseFeePerGas": 100})),
+        ),
+    )
+
+    transaction = contract_actions._prepare_transaction(
+        self=client,
+        sender=SENDER,
+        recipient=RECIPIENT,
+        data="0x1234",
+    )
+
+    method, = make_request.call_args.args
+    estimate, = make_request.call_args.kwargs["params"]
+    assert method == "eth_estimateGas"
+    assert estimate["chainId"] == "0x107d"
+    assert "gas" not in estimate
+    assert transaction["chainId"] == 4221
+    assert transaction["gas"] == "0x5208"
+
+
 def test_send_consensus_call_signs_for_canonical_local_studio_chain():
     wait_for_transaction_receipt = Mock(return_value=SimpleNamespace(status=1))
     sign_transaction = Mock(return_value=SimpleNamespace(raw_transaction=b"\x12\x34"))

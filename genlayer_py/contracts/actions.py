@@ -1173,7 +1173,7 @@ def _prepare_transaction(
         "chainId": self.chain.id,
     }
     transaction["gas"] = self.provider.make_request(
-        "eth_estimateGas", params=[transaction]
+        "eth_estimateGas", params=[{**transaction, "chainId": hex(self.chain.id)}]
     )["result"]
     return transaction
 

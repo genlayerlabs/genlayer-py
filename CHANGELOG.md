@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v0.19.2 (2026-11-26)
+
+### Features
+
+- **chains**: Add testnet_clarke preset with placeholder coordinates 🚧✨
+  ([`6c6dd09`](https://github.com/genlayerlabs/genlayer-py/commit/6c6dd09f7173dda4943647d838fb0921289acd73))
+
+- **chains**: Point testnet_clarke at the deployed Clarke contracts ✨
+  ([`415251c`](https://github.com/genlayerlabs/genlayer-py/commit/415251c6cc2effcfa39a5118b2f16331b4170ad2))
+
+
 ## v0.19.1 (2026-11-25)
 
 ### Bug Fixes

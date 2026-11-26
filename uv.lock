@@ -434,7 +434,7 @@ wheels = [
 
 [[package]]
 name = "genlayer-py"
-version = "0.19.1"
+version = "0.19.2"
 source = { editable = "." }
 dependencies = [
     { name = "web3" },

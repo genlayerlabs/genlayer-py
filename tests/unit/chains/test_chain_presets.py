@@ -13,6 +13,7 @@ from genlayer_py.chains.studio_devnet import (
 from genlayer_py.chains.studionet import studionet
 from genlayer_py.chains.testnet_asimov import testnet_asimov
 from genlayer_py.chains.testnet_bradbury import testnet_bradbury
+from genlayer_py.chains.testnet_clarke import testnet_clarke
 from genlayer_py.staking.abi import STAKING_ABI
 from genlayer_py.chains.utils import is_studio_chain
 from genlayer_py.types import GenLayerChain
@@ -153,3 +154,23 @@ def test_bradbury_targets_the_phase_3_deployment():
         "staking_contract": "0xcE16862EAf10B97A0619BeBb662991fb4a52e346",
     }
     assert testnet_bradbury.staking_contract["abi"] is STAKING_ABI
+
+
+def test_clarke_is_an_exported_public_testnet():
+    assert "testnet_clarke" in chain_exports
+    assert genlayer_py.testnet_clarke is testnet_clarke
+    assert testnet_clarke.testnet
+    assert not testnet_clarke.is_studio
+    assert not is_studio_chain(testnet_clarke)
+
+
+def test_clarke_has_no_contracts_until_its_deployment_is_published():
+    for field in (
+        "consensus_main_contract",
+        "consensus_data_contract",
+        "fee_manager_contract",
+        "rounds_storage_contract",
+        "appeals_contract",
+        "staking_contract",
+    ):
+        assert getattr(testnet_clarke, field) is None

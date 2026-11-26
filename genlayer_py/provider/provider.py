@@ -4,7 +4,7 @@ from typing import Any, Union, List
 from requests import HTTPError
 import requests
 from genlayer_py.exceptions import GenLayerError
-import time
+import uuid
 
 
 class GenLayerProvider(BaseProvider):
@@ -23,7 +23,7 @@ class GenLayerProvider(BaseProvider):
     ) -> RPCResponse:
         payload = {
             "jsonrpc": "2.0",
-            "id": int(time.time() * 1000),
+            "id": str(uuid.uuid4()),
             "method": method,
             "params": params,
         }

@@ -419,7 +419,9 @@ For detailed information on how to use GenLayerPY SDK, please refer to our [docu
 
 ## Contributing
 
-We welcome contributions to GenLayerPY SDK! Whether it's new features, improved infrastructure, or better documentation, your input is valuable. Please read our [CONTRIBUTING](https://github.com/genlayerlabs/genlayer-py/blob/main/CONTRIBUTING.md) guide for guidelines on how to submit your contributions.
+We welcome contributions to GenLayerPY SDK! Whether it's new features, improved infrastructure, or better documentation, your input is valuable. Start with the [contributor guide](https://github.com/genlayerlabs/genlayer-py/blob/main/docs/contributing/README.md).
+
+The SDK logs to the `genlayer_py` logger, disabled by default; see [logging](https://github.com/genlayerlabs/genlayer-py/blob/main/docs/contributing/howto/logging.md) to enable it.
 
 ## License
 

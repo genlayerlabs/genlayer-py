@@ -173,7 +173,7 @@ require_green_e2e() {
 $E2E_CHECK on $sha is '$state' (not success).
 
 Open the promotion PR $dev -> $stable if there is none, run E2E on it
-(comment /run-e2e all) and wait for the check to pass on this commit.
+(comment /run-e2e) and wait for the check to pass on this commit.
 EOF
     exit 1
   fi
@@ -263,7 +263,7 @@ v$previous_final, the newest final of an earlier line, is not in the history
 of the release commit of $version ($sha).
 Revert that commit on $dev, merge $previous_stable into $dev, run
 'scripts/release.sh $version' again and let the checks run on the new head
-(see "Starting a new line" in docs/BRANCHING.md).
+(see docs/contributing/howto/releasing/new-line.md).
 EOF
           exit 1
         fi
@@ -331,7 +331,7 @@ Release commits are made on the dev branch of the line (v0.19-dev for
 v0.19.x): release candidates are tagged there, and finals are promoted
 to the stable branch with 'scripts/release.sh --promote <X.Y.Z>'.
 A line without a dev branch needs one first (create vX.Y-dev from vX.Y).
-See docs/BRANCHING.md.
+See docs/contributing/explanation/release-trains.md.
 EOF
   exit 1
 fi
@@ -417,15 +417,15 @@ if [ -n "$previous_final" ] &&
     cat >&2 <<EOF
 v$previous_final, the newest final of an earlier line, is not in the history
 of $branch. The first final of this line ($line_base) is derived from it:
-merge that line's stable branch into $branch first (see "Starting a new
-line" in docs/BRANCHING.md).
+merge that line's stable branch into $branch first (see
+docs/contributing/howto/releasing/new-line.md).
 EOF
     exit 1
   fi
   cat >&2 <<EOF
 Warning: v$previous_final, the newest final of an earlier line, is not in the
 history of $branch. Merge that line's stable branch into $branch before the
-final $line_base (see "Starting a new line" in docs/BRANCHING.md).
+final $line_base (see docs/contributing/howto/releasing/new-line.md).
 EOF
 fi
 
@@ -536,7 +536,8 @@ EOF
 elif [ "$kind" = "final" ]; then
   cat >&2 <<EOF
 $stable does not exist on origin. The promotion PR needs it as its base:
-create it from a commit that is already in $branch (see docs/BRANCHING.md).
+create it from a commit that is already in $branch (see
+docs/contributing/howto/releasing/new-line.md).
 EOF
   exit 1
 fi
@@ -624,7 +625,7 @@ Next:
   1. Hold every merge into $branch until step 3 is done: a commit landing
      after this one forces a new release commit and a new E2E run.
   2. Open the promotion PR $branch -> $stable (or reuse the open one) and
-     run E2E on it: comment /run-e2e all.
+     run E2E on it: comment /run-e2e.
   3. When Tests and $E2E_CHECK are green on $release_sha:
        scripts/release.sh --promote $next_version
 
